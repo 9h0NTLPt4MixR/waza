@@ -144,21 +144,21 @@ func (g *triggerHeuristicGrader) scorePrompt(prompt string) (score float64, phra
 	}
 
 	tokenScore := float64(len(matched)) / float64(len(promptTokens))
-	phraseScore = g.bestPhraseScore(prompt)
+	phraseScore = g.bestPhraseScore(prompt, promptTokens)
 	if phraseScore > tokenScore {
 		return phraseScore, phraseScore, matched
 	}
 	return tokenScore, phraseScore, matched
 }
 
-func (g *triggerHeuristicGrader) bestPhraseScore(prompt string) float64 {
+func (g *triggerHeuristicGrader) bestPhraseScore(prompt string, promptTokens []string) float64 {
 	if len(g.triggerPhrases) == 0 {
 		return 0
 	}
 
 	promptLower := strings.ToLower(prompt)
 	promptTokenSet := make(map[string]struct{})
-	for _, token := range tokenize(prompt) {
+	for _, token := range promptTokens {
 		promptTokenSet[token] = struct{}{}
 	}
 
@@ -264,7 +264,7 @@ func tokenize(input string) []string {
 var stopWords = map[string]struct{}{
 	"the": {}, "and": {}, "for": {}, "with": {}, "this": {}, "that": {}, "from": {},
 	"into": {}, "your": {}, "you": {}, "are": {}, "was": {}, "were": {}, "what": {},
-	"when": {}, "where": {}, "how": {}, "why": {}, "not": {}, "can": {}, "should": {},
-	"use": {}, "using": {}, "about": {}, "have": {}, "has": {}, "had": {}, "but": {},
-	"all": {}, "any": {}, "too": {}, "out": {}, "get": {}, "let": {}, "help": {},
+	"where": {}, "how": {}, "why": {}, "not": {}, "can": {}, "should": {},
+	"using": {}, "about": {}, "have": {}, "has": {}, "had": {}, "but": {},
+	"all": {}, "any": {}, "too": {}, "out": {}, "get": {}, "let": {},
 }

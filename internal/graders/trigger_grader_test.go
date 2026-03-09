@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/microsoft/waza/internal/models"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -169,4 +170,24 @@ Use this skill for Azure deployment workflows.
 `
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
 	return path
+}
+
+func TestTriggerHeuristicGrader_NilGradingContext(t *testing.T) {
+	g, err := NewTriggerHeuristicGrader("nil-ctx-test", TriggerHeuristicGraderParams{
+		SkillPath: writeTestSkillFile(t),
+		Mode:      "positive",
+	})
+	require.NoError(t, err)
+
+	// nil context returns zero score, not an error
+	result, err := g.Grade(context.Background(), nil)
+	require.NoError(t, err)
+	assert.Equal(t, float64(0), result.Score)
+	assert.False(t, result.Passed)
+
+	// nil TestCase also returns zero score
+	result, err = g.Grade(context.Background(), &Context{})
+	require.NoError(t, err)
+	assert.Equal(t, float64(0), result.Score)
+	assert.False(t, result.Passed)
 }
