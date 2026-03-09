@@ -230,6 +230,7 @@ func countPhrasesAfterPattern(text, pat string) int {
 		return 0
 	}
 	after := text[idx+len(pat):]
+	upperAfter := strings.ToUpper(after)
 	// Stop at any subsequent section header to avoid double-counting across sections.
 	for _, stop := range []string{
 		"USE FOR:", "WHEN:", "DO NOT USE FOR:", "NOT FOR:",
@@ -238,8 +239,9 @@ func countPhrasesAfterPattern(text, pat string) int {
 		if strings.EqualFold(stop, pat) {
 			continue // don't stop at the pattern we're counting
 		}
-		if si := strings.Index(strings.ToUpper(after), strings.ToUpper(stop)); si >= 0 {
+		if si := strings.Index(upperAfter, strings.ToUpper(stop)); si >= 0 {
 			after = after[:si]
+			upperAfter = upperAfter[:si]
 		}
 	}
 	segments := strings.Split(after, ",")

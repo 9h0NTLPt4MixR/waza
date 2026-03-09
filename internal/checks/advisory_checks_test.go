@@ -467,7 +467,7 @@ name: test
 			expectBlockWarn: true,
 		},
 		{
-			name: "code block exactly 50 lines - OK",
+			name: "code block exactly 48 lines - OK",
 			rawContent: `---
 name: test
 ---

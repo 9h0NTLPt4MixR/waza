@@ -161,6 +161,9 @@ var constraintKeywords = []string{
 // duplicateStepPattern matches "Step 1:" blocks; assumes content is lowercase
 var duplicateStepPattern = regexp.MustCompile(`(?m)^step\s+1\s*:`)
 
+// numberedStepsPattern matches lines like "1. step text"
+var numberedStepsPattern = regexp.MustCompile(`(?m)^\s*\d+\.\s+`)
+
 func (*NegativeDeltaRiskChecker) Check(sk skill.Skill) (*CheckResult, error) {
 	content := strings.ToLower(sk.RawContent)
 	var risks []string
@@ -474,7 +477,7 @@ func (*BodyStructureChecker) Check(sk skill.Skill) (*CheckResult, error) {
 	content := strings.ToLower(skillBodyContent(sk))
 
 	hasCodeBlocks := strings.Contains(content, "```")
-	hasNumberedSteps := regexp.MustCompile(`(?m)^\s*\d+\.\s+`).MatchString(content)
+	hasNumberedSteps := numberedStepsPattern.MatchString(content)
 
 	hasExamples := false
 	for _, pattern := range examplePatterns {
