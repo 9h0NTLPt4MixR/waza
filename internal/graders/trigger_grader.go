@@ -90,6 +90,15 @@ func (g *triggerHeuristicGrader) Grade(ctx context.Context, gradingContext *Cont
 		}
 
 		prompt := gradingContext.TestCase.Stimulus.Message
+		if prompt == "" {
+			return &models.GraderResults{
+				Name:     g.name,
+				Type:     models.GraderKindTrigger,
+				Score:    0,
+				Passed:   false,
+				Feedback: "prompt is empty; trigger grader cannot score",
+			}, nil
+		}
 		score, phraseScore, matchedKeywords := g.scorePrompt(prompt)
 
 		passed := score >= g.threshold
