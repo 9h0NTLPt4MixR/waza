@@ -165,6 +165,7 @@ func buildCoverageReport(root string, discoverPaths []string) (*coverageReport, 
 		case !hasEval:
 			report.Uncovered++
 		case tasks > 0 && len(graders) >= 2:
+			// Full: eval spec has tasks and multiple grader types
 			coverage = "✅ Full"
 			report.Covered++
 		default:
@@ -181,7 +182,7 @@ func buildCoverageReport(root string, discoverPaths []string) (*coverageReport, 
 	}
 
 	if report.TotalSkills > 0 {
-		report.CoveragePct = float64(report.Covered+report.Partial) * 100 / float64(report.TotalSkills)
+		report.CoveragePct = float64(report.Covered) * 100 / float64(report.TotalSkills)
 	}
 	return report, nil
 }
@@ -339,7 +340,7 @@ func inferSkillNameFromEvalPath(evalPath string) string {
 
 func renderCoverageText(w io.Writer, report *coverageReport) {
 	fmt.Fprintln(w, "📊 Eval Coverage Grid")                                                                               //nolint:errcheck
-	fmt.Fprintf(w, "Coverage: %.1f%% (%d/%d)\n\n", report.CoveragePct, report.Covered+report.Partial, report.TotalSkills) //nolint:errcheck
+	fmt.Fprintf(w, "Coverage: %.1f%% (%d/%d fully covered)\n\n", report.CoveragePct, report.Covered, report.TotalSkills) //nolint:errcheck
 
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(tw, "Skill\tTasks\tGraders\tCoverage") //nolint:errcheck

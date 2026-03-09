@@ -59,7 +59,7 @@ graders:
 	assert.Equal(t, 1, report.Covered)
 	assert.Equal(t, 1, report.Partial)
 	assert.Equal(t, 0, report.Uncovered)
-	assert.InDelta(t, 100.0, report.CoveragePct, 0.1)
+	assert.InDelta(t, 50.0, report.CoveragePct, 0.1)
 
 	rows := map[string]coverageSkillRow{}
 	for _, row := range report.Skills {
