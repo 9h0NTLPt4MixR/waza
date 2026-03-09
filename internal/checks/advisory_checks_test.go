@@ -155,7 +155,7 @@ func TestProceduralContentChecker(t *testing.T) {
 		passed bool
 	}{
 		{
-			name:   "has action verb",
+			name:   "has lead word",
 			desc:   "This skill extracts data from PDF files",
 			passed: true,
 		},

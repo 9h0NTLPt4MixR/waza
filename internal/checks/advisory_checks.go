@@ -216,15 +216,15 @@ func (*ProceduralContentChecker) Name() string { return "procedural-content" }
 
 // ProceduralContentData holds the structured output.
 type ProceduralContentData struct {
-	Status          CheckStatus
-	HasActionVerbs  bool
-	HasProcedureKWs bool
+	Status             CheckStatus
+	HasCommonLeadWords bool
+	HasProcedureKWs    bool
 }
 
 // GetStatus implements StatusHolder.
 func (d *ProceduralContentData) GetStatus() CheckStatus { return d.Status }
 
-var actionVerbs = []string{
+var commonLeadWords = []string{
 	"process", "extract", "deploy", "configure", "analyze",
 	"create", "build", "run", "execute", "validate",
 	"check", "test", "install", "set up", "implement",
@@ -239,22 +239,22 @@ var procedureKeywords = []string{
 func (*ProceduralContentChecker) Check(sk skill.Skill) (*CheckResult, error) {
 	desc := strings.ToLower(strings.TrimSpace(sk.Frontmatter.Description))
 
-	hasAction := containsAnyWord(desc, actionVerbs)
+	hasLeadWord := containsAnyWord(desc, commonLeadWords)
 	hasProc := containsAnyWord(desc, procedureKeywords)
 
-	if !hasAction && !hasProc {
+	if !hasLeadWord && !hasProc {
 		return &CheckResult{
 			Name:    "procedural-content",
 			Passed:  false,
-			Summary: "Description lacks procedural language (no action verbs or procedure keywords found)",
-			Data:    &ProceduralContentData{Status: StatusWarning, HasActionVerbs: false, HasProcedureKWs: false},
+			Summary: "Description lacks procedural language (no common lead words or procedure keywords found)",
+			Data:    &ProceduralContentData{Status: StatusWarning, HasCommonLeadWords: false, HasProcedureKWs: false},
 		}, nil
 	}
 	return &CheckResult{
 		Name:    "procedural-content",
 		Passed:  true,
 		Summary: "Description contains procedural language",
-		Data:    &ProceduralContentData{Status: StatusOK, HasActionVerbs: hasAction, HasProcedureKWs: hasProc},
+		Data:    &ProceduralContentData{Status: StatusOK, HasCommonLeadWords: hasLeadWord, HasProcedureKWs: hasProc},
 	}, nil
 }
 
@@ -376,6 +376,8 @@ type CrossModelDensityData struct {
 // GetStatus implements StatusHolder.
 func (d *CrossModelDensityData) GetStatus() CheckStatus { return d.Status }
 
+// commonActionVerbs are verbs commonly starting a description.
+// Note: Includes "when" which acts as a conditional lead.
 var commonActionVerbs = []string{
 	"use", "when", "help", "enable", "provide", "support", "create",
 	"build", "run", "execute", "analyze", "process", "extract", "deploy",
@@ -467,6 +469,8 @@ var examplePatterns = []string{
 	"## example", "### example", "**example", "for example:",
 }
 
+// errorHandlingPatterns matches common error handling keywords or section headers.
+// These are broad matches (substring) to catch various styles.
 var errorHandlingPatterns = []string{
 	"## error", "error handling", "## troubleshooting", "troubleshooting",
 	"common issues", "known limitations",
