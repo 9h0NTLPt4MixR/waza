@@ -28,9 +28,9 @@ func newDiffCmd() *cobra.Command {
 		Short: "Compare SKILL.md token budgets against a base ref",
 		Long: `Compare token budgets for SKILL.md files between a base git ref and current changes.
 
-By default, compares origin/main to the working tree and reports per-skill deltas.
-Skill roots include configured paths.skills from .waza.yaml plus skills/ and
-.github/skills/.`,
+By default the base ref is origin/main, falling back to main when origin/main
+is not available. Skill roots include configured paths.skills from .waza.yaml
+plus skills/ and .github/skills/.`,
 		Args:          cobra.MaximumNArgs(1),
 		RunE:          runDiff,
 		SilenceErrors: true,
@@ -92,6 +92,7 @@ func runDiff(cmd *cobra.Command, args []string) error {
 		return errors.New("not a git repository; diff command requires git")
 	}
 
+	// Prefers origin/main, falls back to main.
 	baseRef := defaultDiffBaseRef
 	if len(args) == 1 {
 		baseRef = args[0]
@@ -110,7 +111,7 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	}
 	passed := true
 	for _, d := range diffs {
-		if d.ThresholdExceeded {
+		if d.ThresholdExceeded || d.OverLimit {
 			passed = false
 			break
 		}
@@ -142,7 +143,7 @@ func runDiff(cmd *cobra.Command, args []string) error {
 
 	if !passed {
 		cmd.SilenceUsage = true
-		return fmt.Errorf("token diff threshold exceeded for one or more skills (threshold %.1f%%)", threshold)
+		return fmt.Errorf("token budget exceeded for one or more skills")
 	}
 	return nil
 }

@@ -38,7 +38,7 @@ func TestDiff_ThresholdAndSkillRoots(t *testing.T) {
 
 	err := cmd.Execute()
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "threshold exceeded")
+	require.Contains(t, err.Error(), "budget exceeded")
 	require.Contains(t, out.String(), "skills/alpha")
 	require.Contains(t, out.String(), ".github/skills/beta")
 	require.Contains(t, out.String(), "⚠️")
@@ -68,13 +68,14 @@ tokens:
 	cmd.SetErr(new(bytes.Buffer))
 	cmd.SetArgs([]string{"main", "--format", "json", "--threshold", "500"})
 
-	require.NoError(t, cmd.Execute())
+	err := cmd.Execute()
+	require.Error(t, err, "should fail because skill is over its absolute token limit")
 
 	var report diffReport
 	require.NoError(t, json.Unmarshal(out.Bytes(), &report))
 	require.Equal(t, "main", report.BaseRef)
 	require.Equal(t, "WORKING", report.HeadRef)
-	require.True(t, report.Passed)
+	require.False(t, report.Passed, "Passed should be false when a skill is over its absolute limit")
 	require.Len(t, report.Skills, 1)
 	require.Equal(t, "custom-skills/delta", report.Skills[0].Path)
 	require.Equal(t, 5, report.Skills[0].Limit)
