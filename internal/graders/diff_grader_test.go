@@ -105,6 +105,36 @@ func TestDiffGrader_UpdateSnapshots_NoChangesFlow(t *testing.T) {
 	assert.Contains(t, result.Feedback, "1 unchanged")
 }
 
+func TestDiffGrader_UpdateSnapshots_CreatesParentDirs(t *testing.T) {
+	workspaceDir := t.TempDir()
+	contextDir := t.TempDir()
+
+	require.NoError(t, os.WriteFile(filepath.Join(workspaceDir, "out.txt"), []byte("hello\n"), 0o644))
+
+	// Snapshot path includes a subdirectory that doesn't exist yet.
+	grader, err := NewDiffGrader(DiffGraderArgs{
+		Name: "diff",
+		ExpectedFiles: []ExpectedFile{
+			{
+				Path:     "out.txt",
+				Snapshot: filepath.Join("snapshots", "nested", "out.txt"),
+			},
+		},
+		ContextDir:      contextDir,
+		UpdateSnapshots: true,
+	})
+	require.NoError(t, err)
+
+	result, err := grader.Grade(context.Background(), &Context{WorkspaceDir: workspaceDir})
+	require.NoError(t, err)
+	assert.True(t, result.Passed)
+	assert.Contains(t, result.Feedback, "1 created")
+
+	created, err := os.ReadFile(filepath.Join(contextDir, "snapshots", "nested", "out.txt"))
+	require.NoError(t, err)
+	assert.Equal(t, "hello\n", string(created))
+}
+
 func TestDiffGrader_UpdateSnapshots_BlocksPathTraversal(t *testing.T) {
 	workspaceDir := t.TempDir()
 	contextDir := t.TempDir()

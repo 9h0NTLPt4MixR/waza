@@ -253,12 +253,17 @@ func resolvePathWithSymlinks(path string) (string, error) {
 		return "", err
 	}
 
-	resolvedDir, dirErr := filepath.EvalSymlinks(filepath.Dir(path))
+	// Walk up the path until we find an existing ancestor, then rebuild
+	// the unresolved tail. This handles snapshot paths whose parent
+	// directories haven't been created yet (e.g. "snapshots/nested/out.txt").
+	dir := filepath.Dir(path)
+	base := filepath.Base(path)
+	resolvedDir, dirErr := resolvePathWithSymlinks(dir)
 	if dirErr != nil {
-		return "", dirErr
+		return "", fmt.Errorf("Invalid snapshot file %s: %w", path, dirErr)
 	}
 
-	return filepath.Join(resolvedDir, filepath.Base(path)), nil
+	return filepath.Join(resolvedDir, base), nil
 }
 
 // checkContains validates that required line fragments are present or absent in the file.
