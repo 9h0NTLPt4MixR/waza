@@ -393,6 +393,8 @@ func (dg *diffGrader) writeSnapshot(snapshotPath, content string) error {
 	return os.WriteFile(snapshotPath, []byte(content), 0o644)
 }
 
+// countChangedLines returns the number of lines that differ between two strings.
+// Note that this uses position-based diffing, not LCS/histogram, so it's sensitive to insertion order.
 func countChangedLines(before, after string) int {
 	normalize := func(s string) []string {
 		s = strings.ReplaceAll(s, "\r\n", "\n")
