@@ -344,6 +344,8 @@ Compare results from multiple evaluation runs side by side — per-task score de
 
 Generate a skill-to-eval coverage grid showing which skills are fully covered, partially covered, or missing evals.
 
+**Note**: Full coverage requires tasks and 2+ grader types. The coverage percentage reflects only fully covered skills.
+
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--format <fmt>` | `-f` | Output format: `text`, `markdown`, or `json` (default: `text`) |
