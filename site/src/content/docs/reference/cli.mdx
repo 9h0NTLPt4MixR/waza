@@ -45,7 +45,7 @@ waza run [eval.yaml | skill-name]
 | `--cache` | | bool | false | Enable result caching |
 | `--cache-dir` | | string | `.waza-cache` | Cache directory path |
 | `--format` | `-f` | string | `default` | Output format: `default`, `github-comment` |
-| `--reporter` | | string[] | | Output reporters: `json`, `junit:<path>` (repeatable) |
+| `--reporter` | | string[] | | Output reporters: `json`, `junit:&lt;path&gt;` (repeatable) |
 | `--timeout` | | int | 300 | Task timeout in seconds |
 | `--baseline` | | bool | false | A/B testing mode — runs each task twice (without skill = baseline, with skill = normal) and computes improvement scores |
 | `--update-snapshots` | | bool | false | Update or create `diff` grader snapshot files to match current workspace output |
@@ -194,10 +194,10 @@ waza eval new <skill-name>
 ```
 
 Creates:
-- `evals/<skill-name>/eval.yaml`
-- `evals/<skill-name>/tasks/positive-trigger-1.yaml`
-- `evals/<skill-name>/tasks/positive-trigger-2.yaml`
-- `evals/<skill-name>/tasks/negative-trigger-1.yaml`
+- `evals/&lt;skill-name&gt;/eval.yaml`
+- `evals/&lt;skill-name&gt;/tasks/positive-trigger-1.yaml`
+- `evals/&lt;skill-name&gt;/tasks/positive-trigger-2.yaml`
+- `evals/&lt;skill-name&gt;/tasks/negative-trigger-1.yaml`
 
 ### Flags
 
@@ -309,7 +309,7 @@ waza suggest <skill-path>
 | `--model` | Model to use for suggestions (default: project default model) |
 | `--dry-run` | Print suggestions to stdout (default) |
 | `--apply` | Write suggested files to disk |
-| `--output-dir` | Output directory (default: `<skill-path>/evals`) |
+| `--output-dir` | Output directory (default: `&lt;skill-path&gt;/evals`) |
 | `--format` | Output format: `yaml` (default), `json` |
 
 ### Examples
@@ -456,7 +456,7 @@ waza results list --format json
 
 | Flag | Description |
 |------|-------------|
-| `--limit <n>` | Maximum results to display (default: 10) |
+| `--limit &lt;n&gt;` | Maximum results to display (default: 10) |
 | `--format` | Output format: `table` or `json` (default: `table`) |
 
 ### waza results compare
