@@ -3,7 +3,7 @@
 Token limits are resolved in priority order:
 
 1. **`.waza.yaml`** `tokens.limits` section — primary, workspace-level config
-2. **`.token-limits.json`** in the skill directory — fallback for standalone use
+2. **`.token-limits.json`** in the skill directory — deprecated; migrate to .waza.yaml
 3. **Built-in defaults** when neither config exists
 
 You can also configure `tokens.warningThreshold` and `tokens.fallbackLimit` in `.waza.yaml`.
@@ -24,9 +24,9 @@ tokens:
       "README.md": 3000
 ```
 
-## .token-limits.json (fallback)
+## .token-limits.json (deprecated)
 
-The `.token-limits.json` file can still define token budgets per skill directory. It is checked when `.waza.yaml` does not provide limits.
+The `.token-limits.json` file can still define token budgets per skill directory, but it is deprecated. It is checked when `.waza.yaml` does not provide limits, and its use emits a warning. Users should migrate to `.waza.yaml`.
 
 ## File Structure
 

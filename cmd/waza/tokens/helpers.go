@@ -147,7 +147,8 @@ func resolveLimitsConfig(skillDir string) (cfg checks.TokenLimitsConfig, usedLeg
 }
 
 // hasConfiguredTokenLimits reports whether a TokenLimitsConfig contains any
-// non-nil limit maps (defaults or overrides).
+// non-nil limit maps (defaults or overrides). Empty but non-nil maps are
+// treated as configured.
 func hasConfiguredTokenLimits(limits *projectconfig.TokenLimitsConfig) bool {
 	if limits == nil {
 		return false
