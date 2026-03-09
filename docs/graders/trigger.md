@@ -1,6 +1,4 @@
-# `trigger` Grader
-
-Heuristic grader for validating whether a prompt should activate a skill.
+### `trigger` - Heuristic grader for validating whether a prompt should activate a skill.
 
 ## Use Cases
 
