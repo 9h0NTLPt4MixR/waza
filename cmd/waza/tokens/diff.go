@@ -28,8 +28,8 @@ func newDiffCmd() *cobra.Command {
 		Short: "Compare SKILL.md token budgets against a base ref",
 		Long: `Compare token budgets for SKILL.md files between a base git ref and current changes.
 
-By default the base ref is origin/main, falling back to main when origin/main
-is not available. Skill roots include configured paths.skills from .waza.yaml
+By default the base ref is origin/main (falling back to main and then HEAD).
+Skill roots include configured paths.skills from .waza.yaml
 plus skills/ and .github/skills/.`,
 		Args:          cobra.MaximumNArgs(1),
 		RunE:          runDiff,
@@ -92,15 +92,19 @@ func runDiff(cmd *cobra.Command, args []string) error {
 		return errors.New("not a git repository; diff command requires git")
 	}
 
-	// Prefers origin/main, falls back to main.
+	// Prefers origin/main, falls back to main and then HEAD.
 	baseRef := defaultDiffBaseRef
 	if len(args) == 1 {
 		baseRef = args[0]
 		if !git.RefExists(rootDir, baseRef) {
 			return fmt.Errorf("unknown base ref %q", baseRef)
 		}
-	} else if !git.RefExists(rootDir, baseRef) && git.RefExists(rootDir, "main") {
-		baseRef = "main"
+	} else if !git.RefExists(rootDir, baseRef) {
+		if git.RefExists(rootDir, "main") {
+			baseRef = "main"
+		} else {
+			baseRef = "HEAD"
+		}
 	}
 	headRef := git.WorkingTreeRef
 
