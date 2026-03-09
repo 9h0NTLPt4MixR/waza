@@ -25,7 +25,7 @@ func newCheckCmd() *cobra.Command {
 
 Limits are resolved in priority order:
   1. .waza.yaml tokens.limits section (primary — workspace-level config)
-  2. .token-limits.json in the skill directory (legacy fallback; deprecation warning shown)
+  2. .token-limits.json in the skill directory (deprecated; migrate to .waza.yaml)
   3. Built-in defaults when neither config exists
 
 Paths may be files or directories (scanned recursively for .md/.mdx files).

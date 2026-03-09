@@ -7,6 +7,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/microsoft/waza/internal/projectconfig"
 	"github.com/stretchr/testify/require"
 )
 
@@ -116,4 +117,28 @@ func TestResolveLimitsConfig_OverridesOnly(t *testing.T) {
 	require.False(t, usedLegacy, "should not flag legacy when .waza.yaml has overrides")
 	require.NotNil(t, cfg.Defaults, "defaults map should be initialized even when only overrides are set")
 	require.Equal(t, 4000, cfg.Overrides["special.md"])
+}
+
+// --- hasConfiguredTokenLimits tests ---
+
+func TestHasConfiguredTokenLimits(t *testing.T) {
+	tests := []struct {
+		name   string
+		limits *projectconfig.TokenLimitsConfig
+		want   bool
+	}{
+		{"nil", nil, false},
+		{"empty struct", &projectconfig.TokenLimitsConfig{}, false},
+		{"defaults only", &projectconfig.TokenLimitsConfig{Defaults: map[string]int{"*.md": 100}}, true},
+		{"overrides only", &projectconfig.TokenLimitsConfig{Overrides: map[string]int{"x.md": 50}}, true},
+		{"both", &projectconfig.TokenLimitsConfig{
+			Defaults:  map[string]int{"*.md": 100},
+			Overrides: map[string]int{"x.md": 50},
+		}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, hasConfiguredTokenLimits(tt.limits))
+		})
+	}
 }
