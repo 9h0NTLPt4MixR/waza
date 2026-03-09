@@ -390,6 +390,8 @@ func runCommandForSpec(cmd *cobra.Command, sp skillSpecPath) ([]modelResult, err
 	if workers > 0 {
 		spec.Config.Workers = workers
 	}
+	// Dual-path: when invoked via CLI, use Changed() so default 0 doesn't
+	// override spec; when cmd is nil (tests), fall back to trials > 0.
 	shouldOverrideTrials := trials > 0
 	if cmd != nil {
 		shouldOverrideTrials = cmd.Flags().Changed("trials")
