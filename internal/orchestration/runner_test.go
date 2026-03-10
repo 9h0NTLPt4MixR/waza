@@ -180,7 +180,7 @@ func TestBuildExecutionRequest_TimeoutOverride(t *testing.T) {
 	assert.Equal(t, float64(300), req.Timeout.Seconds(), "test case timeout should override spec timeout")
 }
 
-func TestComputeTestStats_ErrorRunsCountAsFailed(t *testing.T) {
+func TestComputeTestStats_ErrorRunsAreSeparateFromFailed(t *testing.T) {
 	runner := &TestRunner{}
 	runs := []models.RunResult{
 		{
@@ -198,7 +198,7 @@ func TestComputeTestStats_ErrorRunsCountAsFailed(t *testing.T) {
 	stats := runner.computeTestStats(runs)
 	require.NotNil(t, stats)
 	assert.Equal(t, 1, stats.PassedRuns)
-	assert.Equal(t, 1, stats.FailedRuns)
+	assert.Equal(t, 0, stats.FailedRuns, "Error runs should not count as FailedRuns")
 	assert.Equal(t, 1, stats.ErrorRuns)
 	assert.Equal(t, 0.5, stats.PassRate)
 }

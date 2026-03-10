@@ -373,17 +373,23 @@ func TestComputeTestStats_FlakinessPercent(t *testing.T) {
 				"check": {Passed: false, Score: 0},
 			},
 		},
+		{
+			Status:     models.StatusError,
+			DurationMs: 5,
+			// Error runs might have nil validations
+			Validations: nil,
+		},
 	}
 
 	stats := runner.computeTestStats(runs)
 	require.NotNil(t, stats)
-	assert.Equal(t, 3, stats.TotalRuns)
+	assert.Equal(t, 4, stats.TotalRuns)
 	assert.Equal(t, 2, stats.PassedRuns)
 	assert.Equal(t, 1, stats.FailedRuns)
-	assert.Equal(t, 0, stats.ErrorRuns)
-	assert.InDelta(t, 66.6667, stats.PassRate*100, 0.1)
+	assert.Equal(t, 1, stats.ErrorRuns)
+	assert.InDelta(t, 50.0, stats.PassRate*100, 0.1)
 	assert.True(t, stats.Flaky)
-	assert.InDelta(t, 33.3333, stats.FlakinessPercent, 0.1)
+	assert.InDelta(t, 50.0, stats.FlakinessPercent, 0.1)
 }
 
 func TestRunTest_CacheHitAndTranscriptWrite(t *testing.T) {

@@ -2186,3 +2186,65 @@ tasks:
 	assert.True(t, verbose, "verbose should be true from .waza.yaml (not overridden)")
 	assert.True(t, sessionLog, "session-log should be true from .waza.yaml (not overridden)")
 }
+
+
+func TestRunCommandForSpec_NilCmd_OverridesTrials(t *testing.T) {
+// Setup
+tmp := t.TempDir()
+specPath := filepath.Join(tmp, "eval.yaml")
+taskPath := filepath.Join(tmp, "task.yaml")
+
+// Create task file
+require.NoError(t, os.WriteFile(taskPath, []byte(`
+id: t1
+prompts: ["test"]
+`), 0644))
+
+// Create spec file pointing to task file
+specYAML := fmt.Sprintf(`
+name: test-spec
+skill: test-skill
+version: 1.0.0
+config:
+  trials_per_task: 1
+  timeout_seconds: 10
+  executor: mock
+  model: mock-model
+tasks:
+  - %s
+graders:
+  - type: text
+    name: check
+metrics: []
+`, filepath.Base(taskPath))
+
+require.NoError(t, os.WriteFile(specPath, []byte(specYAML), 0644))
+
+// Save/Restore globals
+oldTrials := trials
+oldOutputPath := outputPath
+oldContextDir := contextDir
+oldFormat := format
+defer func() {
+trials = oldTrials
+outputPath = oldOutputPath
+contextDir = oldContextDir
+format = oldFormat
+}()
+
+// Set flags
+trials = 3
+outputPath = ""
+contextDir = tmp // Use temp dir so task.yaml is found
+format = "default"
+
+// Call
+results, err := runCommandForSpec(nil, skillSpecPath{specPath: specPath})
+require.NoError(t, err)
+require.Len(t, results, 1)
+require.NotNil(t, results[0].outcome)
+
+// Check overrides
+require.Len(t, results[0].outcome.TestOutcomes, 1)
+assert.Len(t, results[0].outcome.TestOutcomes[0].Runs, 3)
+}

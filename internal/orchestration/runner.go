@@ -1322,7 +1322,6 @@ func (r *TestRunner) computeTestStats(runs []models.RunResult) *models.TestStats
 		case models.StatusFailed:
 			failed++
 		case models.StatusError:
-			failed++
 			errored++
 		default:
 			if run.AllValidationsPassed() {
