@@ -49,7 +49,7 @@ Issues:
   ✅ module-count: Found 0 reference module(s)
   ✅ complexity: Complexity: compact (14 tokens, 0 modules)
   ✅ negative-delta-risk: No negative delta risk patterns detected
-  ⚠️ procedural-content: Description lacks procedural language (no action verbs or procedure keywords found)
+  ⚠️ procedural-content: Description lacks procedural language (no common lead words or procedure keywords found)
   ✅ over-specificity: No over-specificity patterns detected
   ✅ cross-model-density: Advisory 16: first sentence doesn't lead with action verb (reduces clarity)
   ⚠️ body-structure: Advisory 17: body structure quality — body lacks actionable instructions (no code blocks, numbered steps, or commands); no examples section found; no error handling or troubleshooting section found

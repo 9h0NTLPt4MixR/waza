@@ -113,6 +113,8 @@ type HeuristicScorer struct {
 	TokenLimit int
 	// SkillCount is the total number of skills in the catalog (for context-dependent scoring).
 	// Optional; if 0, context-dependent checks are skipped.
+	// TODO: Callers should plumb the catalog skill count from workspace detection
+	// to enable context-dependent anti-trigger risk scaling in production runs.
 	SkillCount int
 }
 

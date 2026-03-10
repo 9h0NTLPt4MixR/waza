@@ -392,6 +392,15 @@ func (*SpecSecurityChecker) Check(sk skill.Skill) (*CheckResult, error) {
 		checkMap("", sk.FrontmatterRaw)
 	}
 
+	if len(violations) == 0 && sk.FrontmatterRaw == nil {
+		return &CheckResult{
+			Name:    "spec-security",
+			Passed:  true,
+			Summary: "No security risks detected (name prefix check only; raw frontmatter not available)",
+			Data:    &ScoreCheckData{Status: StatusOK},
+		}, nil
+	}
+
 	if len(violations) > 0 {
 		return &CheckResult{
 			Name:    "spec-security",
