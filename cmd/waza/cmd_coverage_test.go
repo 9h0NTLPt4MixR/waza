@@ -171,6 +171,15 @@ func TestRootCommand_HasCoverageSubcommand(t *testing.T) {
 	assert.True(t, found, "root command should have 'coverage' subcommand")
 }
 
+func TestBuildCoverageReport_RejectsFilePath(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "notadir.txt")
+	require.NoError(t, os.WriteFile(f, []byte("hello"), 0o644))
+
+	_, err := buildCoverageReport(f, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "is not a directory")
+}
+
 func writeSkill(t *testing.T, root, relDir, skillName string) {
 	t.Helper()
 	dir := filepath.Join(root, relDir)

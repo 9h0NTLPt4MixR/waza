@@ -50,7 +50,7 @@ func newCoverageCommand() *cobra.Command {
 
 By default, this command scans:
   - skills/ and .github/skills for SKILL.md files
-  - evals/ and skill directories for eval.yaml files
+  - evals/ and skill directories for eval.yaml/eval.yml files
 
 Use --path to add additional directories to scan for eval and skill files.`,
 		Args: cobra.MaximumNArgs(1),
@@ -91,8 +91,12 @@ func buildCoverageReport(root string, discoverPaths []string) (*coverageReport, 
 	if err != nil {
 		return nil, fmt.Errorf("resolving root path: %w", err)
 	}
-	if _, err := os.Stat(absRoot); err != nil {
+	info, err := os.Stat(absRoot)
+	if err != nil {
 		return nil, fmt.Errorf("invalid root path %q: %w", root, err)
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("root path %q is not a directory", root)
 	}
 
 	skillPaths, err := discoverSkillFiles(absRoot, discoverPaths)
