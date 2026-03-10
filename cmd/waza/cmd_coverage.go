@@ -339,7 +339,7 @@ func inferSkillNameFromEvalPath(evalPath string) string {
 }
 
 func renderCoverageText(w io.Writer, report *coverageReport) {
-	fmt.Fprintln(w, "📊 Eval Coverage Grid")                                                                               //nolint:errcheck
+	fmt.Fprintln(w, "📊 Eval Coverage Grid")                                                                              //nolint:errcheck
 	fmt.Fprintf(w, "Coverage: %.1f%% (%d/%d fully covered)\n\n", report.CoveragePct, report.Covered, report.TotalSkills) //nolint:errcheck
 
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
