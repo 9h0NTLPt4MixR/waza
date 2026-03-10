@@ -195,7 +195,7 @@ Run an evaluation benchmark from a spec file.
 | `--task <glob>` | | Filter tasks by name/ID pattern (repeatable) |
 | `--parallel` | | Run tasks concurrently |
 | `--workers <n>` | | Concurrent workers (default: 4, requires `--parallel`) |
-| `--trials <n>` | | Run each task `n` times to detect flakiness (overrides `config.trials_per_task` only when explicitly provided) |
+| `--trials <n>` | | Run each task `n` times to detect flakiness (omit to use `config.trials_per_task`; if provided, `n` must be >= 1) |
 | `--interpret` | | Print plain-language result interpretation |
 | `--format <fmt>` | | Output format: `default` or `github-comment` (default: `default`) |
 | `--cache` | | Enable result caching to speed up repeated runs |

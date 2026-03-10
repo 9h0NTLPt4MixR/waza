@@ -2187,21 +2187,22 @@ tasks:
 	assert.True(t, sessionLog, "session-log should be true from .waza.yaml (not overridden)")
 }
 
-
 func TestRunCommandForSpec_NilCmd_OverridesTrials(t *testing.T) {
-// Setup
-tmp := t.TempDir()
-specPath := filepath.Join(tmp, "eval.yaml")
-taskPath := filepath.Join(tmp, "task.yaml")
+	// Setup
+	tmp := t.TempDir()
+	specPath := filepath.Join(tmp, "eval.yaml")
+	taskPath := filepath.Join(tmp, "task.yaml")
 
-// Create task file
-require.NoError(t, os.WriteFile(taskPath, []byte(`
+	// Create task file
+	require.NoError(t, os.WriteFile(taskPath, []byte(`
 id: t1
-prompts: ["test"]
+name: test-task
+inputs:
+  prompt: test
 `), 0644))
 
-// Create spec file pointing to task file
-specYAML := fmt.Sprintf(`
+	// Create spec file pointing to task file
+	specYAML := fmt.Sprintf(`
 name: test-spec
 skill: test-skill
 version: 1.0.0
@@ -2218,33 +2219,33 @@ graders:
 metrics: []
 `, filepath.Base(taskPath))
 
-require.NoError(t, os.WriteFile(specPath, []byte(specYAML), 0644))
+	require.NoError(t, os.WriteFile(specPath, []byte(specYAML), 0644))
 
-// Save/Restore globals
-oldTrials := trials
-oldOutputPath := outputPath
-oldContextDir := contextDir
-oldFormat := format
-defer func() {
-trials = oldTrials
-outputPath = oldOutputPath
-contextDir = oldContextDir
-format = oldFormat
-}()
+	// Save/Restore globals
+	oldTrials := trials
+	oldOutputPath := outputPath
+	oldContextDir := contextDir
+	oldFormat := format
+	defer func() {
+		trials = oldTrials
+		outputPath = oldOutputPath
+		contextDir = oldContextDir
+		format = oldFormat
+	}()
 
-// Set flags
-trials = 3
-outputPath = ""
-contextDir = tmp // Use temp dir so task.yaml is found
-format = "default"
+	// Set flags
+	trials = 3
+	outputPath = ""
+	contextDir = tmp // Use temp dir so task.yaml is found
+	format = "default"
 
-// Call
-results, err := runCommandForSpec(nil, skillSpecPath{specPath: specPath})
-require.NoError(t, err)
-require.Len(t, results, 1)
-require.NotNil(t, results[0].outcome)
+	// Call
+	results, err := runCommandForSpec(nil, skillSpecPath{specPath: specPath})
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	require.NotNil(t, results[0].outcome)
 
-// Check overrides
-require.Len(t, results[0].outcome.TestOutcomes, 1)
-assert.Len(t, results[0].outcome.TestOutcomes[0].Runs, 3)
+	// Check overrides
+	require.Len(t, results[0].outcome.TestOutcomes, 1)
+	assert.Len(t, results[0].outcome.TestOutcomes[0].Runs, 3)
 }
