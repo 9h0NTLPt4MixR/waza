@@ -34,9 +34,10 @@ type coverageReport struct {
 }
 
 type evalSpecLite struct {
-	Skill   string                `yaml:"skill"`
-	Tasks   []string              `yaml:"tasks"`
-	Graders []models.GraderConfig `yaml:"graders"`
+	Skill     string                `yaml:"skill"`
+	Tasks     []string              `yaml:"tasks"`
+	TasksFrom string                `yaml:"tasks_from,omitempty"`
+	Graders   []models.GraderConfig `yaml:"graders"`
 }
 
 func newCoverageCommand() *cobra.Command {
@@ -131,7 +132,11 @@ func buildCoverageReport(root string, discoverPaths []string) (*coverageReport, 
 			continue
 		}
 		evalBySkill[skillName] = append(evalBySkill[skillName], evalPath)
-		tasksBySkill[skillName] += len(spec.Tasks)
+		taskCount := len(spec.Tasks)
+		if taskCount == 0 && spec.TasksFrom != "" {
+			taskCount = 1 // tasks_from references an external file; count as having tasks
+		}
+		tasksBySkill[skillName] += taskCount
 		if _, ok := gradersBySkill[skillName]; !ok {
 			gradersBySkill[skillName] = make(map[string]struct{})
 		}

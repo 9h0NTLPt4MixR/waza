@@ -180,6 +180,26 @@ func TestBuildCoverageReport_RejectsFilePath(t *testing.T) {
 	assert.Contains(t, err.Error(), "is not a directory")
 }
 
+func TestBuildCoverageReport_TasksFromCountsAsTasks(t *testing.T) {
+	root := t.TempDir()
+	writeSkill(t, root, filepath.Join("skills", "from-skill"), "from-skill")
+	writeEval(t, root, filepath.Join("evals", "from-skill", "eval.yaml"), `
+skill: from-skill
+tasks_from: tasks/
+graders:
+  - type: prompt
+    name: judge
+  - type: diff
+    name: snapshot
+`)
+
+	report, err := buildCoverageReport(root, nil)
+	require.NoError(t, err)
+	require.Len(t, report.Skills, 1)
+	assert.Equal(t, "✅ Full", report.Skills[0].Coverage)
+	assert.Equal(t, 1, report.Skills[0].Tasks)
+}
+
 func writeSkill(t *testing.T, root, relDir, skillName string) {
 	t.Helper()
 	dir := filepath.Join(root, relDir)
