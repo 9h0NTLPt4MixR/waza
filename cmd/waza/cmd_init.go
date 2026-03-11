@@ -491,7 +491,7 @@ func initCommandE(cmd *cobra.Command, args []string, noSkill bool, flagSkillsDir
 	// --- Phase 5: Create/verify project structure ---
 	wazaConfigContent := ""
 	if needConfigPrompt {
-		wazaConfigContent = generateWazaConfig(string(engine), model, skillsPath, evalsPath, resultsPath)
+		wazaConfigContent = generateWazaConfig(engine, model, skillsPath, evalsPath, resultsPath)
 	}
 
 	configLabel := fmt.Sprintf("Project defaults (%s, %s)", engine, model)
@@ -682,12 +682,12 @@ func initReadme(projectName string) string {
 // generateWazaConfig produces the .waza.yaml content by marshaling a ProjectConfig struct.
 // projectconfig.New() populates all defaults, so most fields will appear in the output;
 // omitempty only omits truly zero/nil values (e.g. empty judgeModel). No hand-coded comments.
-func generateWazaConfig(engine, model, skillsPath, evalsPath, resultsPath string) string {
+func generateWazaConfig(engine models.EngineType, model, skillsPath, evalsPath, resultsPath string) string {
 	cfg := projectconfig.New()
 	cfg.Paths.Skills = skillsPath
 	cfg.Paths.Evals = evalsPath
 	cfg.Paths.Results = resultsPath
-	cfg.Defaults.Engine = engine
+	cfg.Defaults.Engine = string(engine)
 	cfg.Defaults.Model = model
 
 	var buf bytes.Buffer

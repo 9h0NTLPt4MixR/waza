@@ -9,6 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/microsoft/waza/internal/models"
 )
 
 func TestInitCommand_CreatesProjectStructure(t *testing.T) {
@@ -441,7 +443,7 @@ func TestRootCommand_HasInitSubcommand(t *testing.T) {
 }
 
 func TestGenerateWazaConfig(t *testing.T) {
-	content := generateWazaConfig("mock", "gpt-5", "my-skills/", "my-evals/", "output/")
+	content := generateWazaConfig(models.EngineTypeMock, "gpt-5", "my-skills/", "my-evals/", "output/")
 	assert.Contains(t, content, "skills: my-skills/")
 	assert.Contains(t, content, "evals: my-evals/")
 	assert.Contains(t, content, "results: output/")
