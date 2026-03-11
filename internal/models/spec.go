@@ -37,7 +37,7 @@ type Config struct {
 	Concurrent     bool           `yaml:"parallel" json:"concurrent"`
 	Workers        int            `yaml:"max_workers,omitempty" json:"workers,omitempty"`
 	StopOnError    bool           `yaml:"fail_fast,omitempty" json:"stop_on_error,omitempty"`
-	EngineType     string         `yaml:"executor" json:"engine_type"`
+	EngineType     EngineType     `yaml:"executor" json:"engine_type"`
 	ModelID        string         `yaml:"model" json:"model_id"`
 	SkillPaths     []string       `yaml:"skill_directories,omitempty" json:"skill_paths,omitempty"`
 	RequiredSkills []string       `yaml:"required_skills,omitempty" json:"required_skills,omitempty"`

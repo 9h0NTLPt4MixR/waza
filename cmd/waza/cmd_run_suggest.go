@@ -68,7 +68,7 @@ func generateEvalAnalysis(
 		}
 	}
 
-	if spec.Config.EngineType != "copilot-sdk" {
+	if spec.Config.EngineType != models.EngineTypeCopilotSDK {
 		return generateFakeSuggestionReport(spec, len(failingTests), len(failedTriggers)), nil
 	}
 

@@ -87,7 +87,7 @@ func ConvertToJUnit(outcome *models.EvaluationOutcome) *JUnitTestSuites {
 		Properties: []JUnitProperty{
 			{Name: "skill", Value: outcome.SkillTested},
 			{Name: "model", Value: outcome.Setup.ModelID},
-			{Name: "engine", Value: outcome.Setup.EngineType},
+			{Name: "engine", Value: string(outcome.Setup.EngineType)},
 			{Name: "score", Value: fmt.Sprintf("%.4f", outcome.Digest.AggregateScore)},
 		},
 	}

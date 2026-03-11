@@ -15,6 +15,7 @@ import (
 	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
 
+	"github.com/microsoft/waza/internal/models"
 	"github.com/microsoft/waza/internal/projectconfig"
 	"github.com/microsoft/waza/internal/scaffold"
 	"github.com/microsoft/waza/internal/workspace"
@@ -228,10 +229,11 @@ func initCommandE(cmd *cobra.Command, args []string, noSkill bool, flagSkillsDir
 	needSkillPrompt := !noSkill
 
 	// --- Phase 1: Configuration (if .waza.yaml missing) ---
-	var engine, model string
+	var engine models.EngineType
+	var model string
 	var skillsPath, evalsPath, resultsPath string
 	var createSkill, scaffoldMissing bool
-	engine = projectconfig.DefaultEngine
+	engine = models.EngineTypeCopilotSDK
 	model = projectconfig.DefaultModel
 	skillsPath = projectconfig.DefaultSkillsDir
 	evalsPath = projectconfig.DefaultEvalsDir
@@ -241,7 +243,7 @@ func initCommandE(cmd *cobra.Command, args []string, noSkill bool, flagSkillsDir
 	// match the project's actual config instead of hardcoded defaults.
 	if !needConfigPrompt {
 		if cfg, err := projectconfig.Load(absDir); err == nil {
-			engine = cfg.Defaults.Engine
+			engine = models.EngineType(cfg.Defaults.Engine)
 			model = cfg.Defaults.Model
 			skillsPath = cfg.Paths.Skills
 			evalsPath = cfg.Paths.Evals
@@ -317,23 +319,23 @@ func initCommandE(cmd *cobra.Command, args []string, noSkill bool, flagSkillsDir
 
 			engineForm := huh.NewForm(
 				huh.NewGroup(
-					huh.NewSelect[string]().
+					huh.NewSelect[models.EngineType]().
 						Title("Default evaluation engine").
 						Description("Choose how evals are executed").
 						Options(
-							huh.NewOption("Copilot SDK — real model execution", "copilot-sdk"),
-							huh.NewOption("Mock — fast iteration, no API calls", "mock"),
+							huh.NewOption("Copilot SDK — real model execution", models.EngineTypeCopilotSDK),
+							huh.NewOption("Mock — fast iteration, no API calls", models.EngineTypeMock),
 						).
 						Value(&engine),
 				),
 			).WithInput(cmd.InOrStdin()).WithOutput(out)
 
 			if err := engineForm.Run(); err != nil {
-				engine = projectconfig.DefaultEngine
+				engine = models.EngineTypeCopilotSDK
 			}
 
 			// Model selector (hidden when engine ≠ copilot-sdk)
-			if engine == "copilot-sdk" {
+			if engine == models.EngineTypeCopilotSDK {
 				modelForm := huh.NewForm(
 					huh.NewGroup(
 						huh.NewSelect[string]().
@@ -420,7 +422,7 @@ func initCommandE(cmd *cobra.Command, args []string, noSkill bool, flagSkillsDir
 			}
 
 			if scaffoldMissing {
-				scaffoldMissingEvals(absDir, evalsPath, inventory, engine, model)
+				scaffoldMissingEvals(absDir, evalsPath, inventory, string(engine), model)
 				// Re-display inventory showing updated state
 				inventory = displayInventory(out, absDir,
 					workspace.WithSkillsDir(skillsPath),
@@ -472,7 +474,7 @@ func initCommandE(cmd *cobra.Command, args []string, noSkill bool, flagSkillsDir
 		scaffoldMissing = skillsMissingEvals > 0
 
 		if scaffoldMissing {
-			scaffoldMissingEvals(absDir, evalsPath, inventory, engine, model)
+			scaffoldMissingEvals(absDir, evalsPath, inventory, string(engine), model)
 			// Re-display inventory after scaffolding
 			inventory = displayInventory(out, absDir,
 				workspace.WithSkillsDir(skillsPath),
@@ -489,7 +491,7 @@ func initCommandE(cmd *cobra.Command, args []string, noSkill bool, flagSkillsDir
 	// --- Phase 5: Create/verify project structure ---
 	wazaConfigContent := ""
 	if needConfigPrompt {
-		wazaConfigContent = generateWazaConfig(engine, model, skillsPath, evalsPath, resultsPath)
+		wazaConfigContent = generateWazaConfig(string(engine), model, skillsPath, evalsPath, resultsPath)
 	}
 
 	configLabel := fmt.Sprintf("Project defaults (%s, %s)", engine, model)
@@ -567,7 +569,7 @@ func scaffoldMissingEvals(absDir, evalsDir string, inventory []skillEntry, engin
 		for _, d := range []string{tasksDir, fixturesDir} {
 			os.MkdirAll(d, 0o755) //nolint:errcheck
 		}
-		os.WriteFile(filepath.Join(evalDir, "eval.yaml"), []byte(scaffold.EvalYAML(inv.Name, engine, model)), 0o644) //nolint:errcheck
+		os.WriteFile(filepath.Join(evalDir, "eval.yaml"), []byte(scaffold.EvalYAML(inv.Name, string(engine), model)), 0o644) //nolint:errcheck
 		for name, content := range scaffold.TaskFiles(inv.Name) {
 			os.WriteFile(filepath.Join(tasksDir, name), []byte(content), 0o644) //nolint:errcheck
 		}

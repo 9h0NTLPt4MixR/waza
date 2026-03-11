@@ -46,7 +46,7 @@ func CacheKey(spec *models.BenchmarkSpec, task *models.TestCase, fixtureDir stri
 	if err := writeString(h, spec.Config.ModelID); err != nil {
 		return "", err
 	}
-	if err := writeString(h, spec.Config.EngineType); err != nil {
+	if err := writeString(h, string(spec.Config.EngineType)); err != nil {
 		return "", err
 	}
 	if err := writeInt(h, spec.Config.TimeoutSec); err != nil {

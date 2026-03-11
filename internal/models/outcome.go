@@ -54,11 +54,11 @@ type EvaluationOutcome struct {
 }
 
 type OutcomeSetup struct {
-	RunsPerTest int    `json:"runs_per_test"`
-	ModelID     string `json:"model_id"`
-	EngineType  string `json:"engine_type"`
-	TimeoutSec  int    `json:"timeout_sec"`
-	JudgeModel  string `json:"judge_model,omitempty"`
+	RunsPerTest int        `json:"runs_per_test"`
+	ModelID     string     `json:"model_id"`
+	EngineType  EngineType `json:"engine_type"`
+	TimeoutSec  int        `json:"timeout_sec"`
+	JudgeModel  string     `json:"judge_model,omitempty"`
 }
 
 type OutcomeDigest struct {

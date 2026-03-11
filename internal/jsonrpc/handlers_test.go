@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/microsoft/waza/internal/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -112,7 +113,7 @@ tasks:
 	require.NoError(t, json.Unmarshal(data, &result))
 	assert.Equal(t, "my-eval", result.Name)
 	assert.Equal(t, "my-skill", result.SkillName)
-	assert.Equal(t, "mock", result.Config.EngineType)
+	assert.Equal(t, models.EngineTypeMock, result.Config.EngineType)
 }
 
 func TestHandler_EvalValidate_Valid(t *testing.T) {

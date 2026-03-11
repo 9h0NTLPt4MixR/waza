@@ -578,9 +578,9 @@ func runSingleModel(cmd *cobra.Command, spec *models.BenchmarkSpec, specPath str
 	var engine execution.AgentEngine
 
 	switch spec.Config.EngineType {
-	case "mock":
+	case models.EngineTypeMock:
 		engine = execution.NewMockEngine(spec.Config.ModelID)
-	case "copilot-sdk":
+	case models.EngineTypeCopilotSDK:
 		engine = execution.NewCopilotEngineBuilder(spec.Config.ModelID, nil).Build()
 	default:
 		return nil, fmt.Errorf("unknown engine type: %s", spec.Config.EngineType)
@@ -632,7 +632,7 @@ func runSingleModel(cmd *cobra.Command, spec *models.BenchmarkSpec, specPath str
 		switch event.EventType {
 		case orchestration.EventBenchmarkStart:
 			ev = session.NewEvent(session.EventSessionStart,
-				session.SessionStartData(specPath, spec.Config.ModelID, spec.Config.EngineType, event.TotalTests))
+				session.SessionStartData(specPath, spec.Config.ModelID, string(spec.Config.EngineType), event.TotalTests))
 		case orchestration.EventTestStart:
 			ev = session.NewEvent(session.EventTaskStart,
 				session.TaskStartData(event.TestName, event.TestNum, event.TotalTests))
@@ -710,7 +710,7 @@ func runSingleModel(cmd *cobra.Command, spec *models.BenchmarkSpec, specPath str
 		return outcome, fmt.Errorf("loading trigger tests: %w", err)
 	} else if triggerSpec != nil {
 		var tm *models.TriggerMetrics
-		if spec.Config.EngineType == "mock" {
+		if spec.Config.EngineType == models.EngineTypeMock {
 			// return perfect results
 			var results []models.TriggerResult
 			for _, p := range triggerSpec.ShouldTriggerPrompts {
