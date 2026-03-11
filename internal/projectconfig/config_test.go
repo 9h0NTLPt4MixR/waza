@@ -15,7 +15,7 @@ func TestNew_ReturnsAllDefaults(t *testing.T) {
 	assertEqual(t, "Paths.Results", "results/", cfg.Paths.Results)
 
 	// Defaults
-	assertEqual(t, "Defaults.Engine", "copilot-sdk", cfg.Defaults.Engine)
+	assertEqual(t, "Defaults.Engine", "copilot-sdk", string(cfg.Defaults.Engine))
 	assertEqual(t, "Defaults.Model", "claude-sonnet-4.6", cfg.Defaults.Model)
 	assertEqual(t, "Defaults.JudgeModel", "", cfg.Defaults.JudgeModel)
 	assertEqualInt(t, "Defaults.Timeout", 300, cfg.Defaults.Timeout)
@@ -94,7 +94,7 @@ graders:
 	assertEqual(t, "Paths.Skills", "custom-skills/", cfg.Paths.Skills)
 	assertEqual(t, "Paths.Evals", "custom-evals/", cfg.Paths.Evals)
 	assertEqual(t, "Paths.Results", "custom-results/", cfg.Paths.Results)
-	assertEqual(t, "Defaults.Engine", "mock", cfg.Defaults.Engine)
+	assertEqual(t, "Defaults.Engine", "mock", string(cfg.Defaults.Engine))
 	assertEqual(t, "Defaults.Model", "gpt-4o", cfg.Defaults.Model)
 	assertEqual(t, "Defaults.JudgeModel", "claude-sonnet-4.6", cfg.Defaults.JudgeModel)
 	assertEqualInt(t, "Defaults.Timeout", 600, cfg.Defaults.Timeout)
@@ -137,7 +137,7 @@ defaults:
 	}
 
 	// Overridden
-	assertEqual(t, "Defaults.Engine", "mock", cfg.Defaults.Engine)
+	assertEqual(t, "Defaults.Engine", "mock", string(cfg.Defaults.Engine))
 	assertEqual(t, "Defaults.Model", "gpt-4o-mini", cfg.Defaults.Model)
 
 	// Defaults preserved
@@ -158,7 +158,7 @@ func TestLoad_MissingFile_ReturnsDefaults(t *testing.T) {
 
 	// Should be identical to New()
 	defaults := New()
-	assertEqual(t, "Defaults.Engine", defaults.Defaults.Engine, cfg.Defaults.Engine)
+	assertEqual(t, "Defaults.Engine", string(defaults.Defaults.Engine), string(cfg.Defaults.Engine))
 	assertEqual(t, "Defaults.Model", defaults.Defaults.Model, cfg.Defaults.Model)
 	assertEqualInt(t, "Defaults.Timeout", defaults.Defaults.Timeout, cfg.Defaults.Timeout)
 	assertEqualInt(t, "Server.Port", defaults.Server.Port, cfg.Server.Port)
@@ -195,7 +195,7 @@ defaults:
 		t.Fatalf("Load() error: %v", err)
 	}
 
-	assertEqual(t, "Defaults.Engine", "found-it", cfg.Defaults.Engine)
+	assertEqual(t, "Defaults.Engine", "found-it", string(cfg.Defaults.Engine))
 	// Other defaults still populated
 	assertEqual(t, "Defaults.Model", "claude-sonnet-4.6", cfg.Defaults.Model)
 }

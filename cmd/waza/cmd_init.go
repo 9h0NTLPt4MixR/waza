@@ -243,7 +243,7 @@ func initCommandE(cmd *cobra.Command, args []string, noSkill bool, flagSkillsDir
 	// match the project's actual config instead of hardcoded defaults.
 	if !needConfigPrompt {
 		if cfg, err := projectconfig.Load(absDir); err == nil {
-			engine = models.EngineType(cfg.Defaults.Engine)
+			engine = cfg.Defaults.Engine
 			model = cfg.Defaults.Model
 			skillsPath = cfg.Paths.Skills
 			evalsPath = cfg.Paths.Evals
@@ -687,7 +687,7 @@ func generateWazaConfig(engine models.EngineType, model, skillsPath, evalsPath, 
 	cfg.Paths.Skills = skillsPath
 	cfg.Paths.Evals = evalsPath
 	cfg.Paths.Results = resultsPath
-	cfg.Defaults.Engine = string(engine)
+	cfg.Defaults.Engine = engine
 	cfg.Defaults.Model = model
 
 	var buf bytes.Buffer

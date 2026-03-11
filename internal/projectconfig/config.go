@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/microsoft/waza/internal/models"
 )
 
 // Default values for project configuration. These are the single source of
@@ -49,7 +51,7 @@ type PathsConfig struct {
 
 // DefaultsConfig holds default execution parameters.
 type DefaultsConfig struct {
-	Engine     string `yaml:"engine,omitempty"`
+	Engine     models.EngineType `yaml:"engine,omitempty"`
 	Model      string `yaml:"model,omitempty"`
 	JudgeModel string `yaml:"judgeModel,omitempty"`
 	Timeout    int    `yaml:"timeout,omitempty"`

@@ -54,7 +54,7 @@ func ReadProjectDefaults() (engine, model string) {
 	if err != nil {
 		return "copilot-sdk", "claude-sonnet-4.6"
 	}
-	return cfg.Defaults.Engine, cfg.Defaults.Model
+	return string(cfg.Defaults.Engine), cfg.Defaults.Model
 }
 
 // EvalYAML returns a default eval.yaml template for the given skill name.
