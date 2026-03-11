@@ -114,3 +114,7 @@ web/blob-report/
 
 # Internal research docs
 docs/research/
+
+# Session logs and cache (generated at runtime)
+*.jsonl
+.override-cache/
