@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/microsoft/waza/internal/models"
 )
 
 func TestNew_ReturnsAllDefaults(t *testing.T) {
@@ -15,7 +17,7 @@ func TestNew_ReturnsAllDefaults(t *testing.T) {
 	assertEqual(t, "Paths.Results", "results/", cfg.Paths.Results)
 
 	// Defaults
-	assertEqual(t, "Defaults.Engine", "copilot-sdk", string(cfg.Defaults.Engine))
+	assertEqual(t, "Defaults.Engine", string(models.EngineTypeCopilotSDK), string(cfg.Defaults.Engine))
 	assertEqual(t, "Defaults.Model", "claude-sonnet-4.6", cfg.Defaults.Model)
 	assertEqual(t, "Defaults.JudgeModel", "", cfg.Defaults.JudgeModel)
 	assertEqualInt(t, "Defaults.Timeout", 300, cfg.Defaults.Timeout)
@@ -94,7 +96,7 @@ graders:
 	assertEqual(t, "Paths.Skills", "custom-skills/", cfg.Paths.Skills)
 	assertEqual(t, "Paths.Evals", "custom-evals/", cfg.Paths.Evals)
 	assertEqual(t, "Paths.Results", "custom-results/", cfg.Paths.Results)
-	assertEqual(t, "Defaults.Engine", "mock", string(cfg.Defaults.Engine))
+	assertEqual(t, "Defaults.Engine", string(models.EngineTypeMock), string(cfg.Defaults.Engine))
 	assertEqual(t, "Defaults.Model", "gpt-4o", cfg.Defaults.Model)
 	assertEqual(t, "Defaults.JudgeModel", "claude-sonnet-4.6", cfg.Defaults.JudgeModel)
 	assertEqualInt(t, "Defaults.Timeout", 600, cfg.Defaults.Timeout)
@@ -137,7 +139,7 @@ defaults:
 	}
 
 	// Overridden
-	assertEqual(t, "Defaults.Engine", "mock", string(cfg.Defaults.Engine))
+	assertEqual(t, "Defaults.Engine", string(models.EngineTypeMock), string(cfg.Defaults.Engine))
 	assertEqual(t, "Defaults.Model", "gpt-4o-mini", cfg.Defaults.Model)
 
 	// Defaults preserved

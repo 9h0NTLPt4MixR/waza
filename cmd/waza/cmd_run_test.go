@@ -48,7 +48,7 @@ func resetRunGlobals() {
 
 // helper creates a valid minimal eval spec YAML in a temp dir,
 // including a matching task file, and returns the spec path.
-func createTestSpec(t *testing.T, engine string) string {
+func createTestSpec(t *testing.T, engine models.EngineType) string {
 	t.Helper()
 	dir := t.TempDir()
 
@@ -69,7 +69,7 @@ config:
   trials_per_task: 1
   timeout_seconds: 30
   parallel: false
-  executor: ` + engine + `
+  executor: ` + string(engine) + `
   model: test-model
 tasks:
   - "tasks/*.yaml"
@@ -80,7 +80,7 @@ tasks:
 }
 
 // helper creates a valid eval spec that deterministically fails via a regex grader.
-func createFailingTestSpec(t *testing.T, engine string) string {
+func createFailingTestSpec(t *testing.T, engine models.EngineType) string {
 	t.Helper()
 	dir := t.TempDir()
 
@@ -101,7 +101,7 @@ config:
   trials_per_task: 1
   timeout_seconds: 30
   parallel: false
-  executor: ` + engine + `
+  executor: ` + string(engine) + `
   model: test-model
 graders:
   - type: regex
@@ -266,7 +266,7 @@ tasks:
 func TestRunCommand_MockEngineRun(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 
 	cmd := newRunCommand()
 	cmd.SetArgs([]string{specPath})
@@ -282,7 +282,7 @@ func TestRunCommand_MockEngineRun(t *testing.T) {
 func TestRunCommand_MockEngineVerbose(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 
 	cmd := newRunCommand()
 	cmd.SetArgs([]string{specPath, "--verbose"})
@@ -294,7 +294,7 @@ func TestRunCommand_MockEngineVerbose(t *testing.T) {
 func TestRunCommand_OutputJSON(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 	outFile := filepath.Join(t.TempDir(), "results.json")
 
 	cmd := newRunCommand()
@@ -317,7 +317,7 @@ func TestRunCommand_OutputJSON(t *testing.T) {
 func TestRunCommand_ReporterJUnit(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 	junitFile := filepath.Join(t.TempDir(), "results.xml")
 
 	cmd := newRunCommand()
@@ -351,7 +351,7 @@ func TestRunCommand_ReporterFlagParsed(t *testing.T) {
 func TestRunCommand_ReporterUnknown(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 
 	cmd := newRunCommand()
 	cmd.SetArgs([]string{specPath, "--reporter", "csv"})
@@ -364,7 +364,7 @@ func TestRunCommand_ReporterUnknown(t *testing.T) {
 func TestRunCommand_ContextDirFlag(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 
 	// Pass an explicit --context-dir (the spec already has fixtures alongside it,
 	// but the flag should override without error).
@@ -379,7 +379,7 @@ func TestRunCommand_ContextDirFlag(t *testing.T) {
 func TestRunCommand_TranscriptDirWritesTaskFile(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 	transcriptOutDir := filepath.Join(t.TempDir(), "transcripts")
 
 	cmd := newRunCommand()
@@ -438,7 +438,7 @@ func TestRunCommand_TaskFlagParsed(t *testing.T) {
 func TestRunCommand_TaskFilterRunsMock(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 
 	cmd := newRunCommand()
 	cmd.SetArgs([]string{specPath, "--task", "Test Task"})
@@ -452,7 +452,7 @@ func TestRunCommand_TaskFilterRunsMock(t *testing.T) {
 func TestRunCommand_TaskFilterNoMatch(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 
 	cmd := newRunCommand()
 	cmd.SetArgs([]string{specPath, "--task", "nonexistent-task"})
@@ -506,7 +506,7 @@ func TestRunCommand_TrialsFlagParsed(t *testing.T) {
 func TestRunCommand_TrialsFlagInvalidValue(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 	cmd := newRunCommand()
 	cmd.SetArgs([]string{specPath, "--trials", "0"})
 	cmd.SetOut(io.Discard)
@@ -520,7 +520,7 @@ func TestRunCommand_TrialsFlagInvalidValue(t *testing.T) {
 func TestRunCommand_TrialsOverridesSpec(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 	outFile := filepath.Join(t.TempDir(), "results.json")
 	cmd := newRunCommand()
 	cmd.SetArgs([]string{specPath, "--trials", "3", "--output", outFile})
@@ -544,7 +544,7 @@ func TestRunCommand_TrialsOverridesSpec(t *testing.T) {
 func TestRunCommand_ParallelRunsMock(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 
 	cmd := newRunCommand()
 	cmd.SetArgs([]string{specPath, "--parallel", "--workers", "2"})
@@ -559,7 +559,7 @@ func TestRunCommand_ParallelOverridesSpec(t *testing.T) {
 	resetRunGlobals()
 
 	// The test spec has parallel: false. The --parallel flag should override it.
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 	outFile := filepath.Join(t.TempDir(), "results.json")
 
 	cmd := newRunCommand()
@@ -596,7 +596,7 @@ func TestRunCommand_InterpretFlagParsed(t *testing.T) {
 func TestRunCommand_InterpretRunsMock(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 
 	cmd := newRunCommand()
 	cmd.SetArgs([]string{specPath, "--interpret"})
@@ -725,7 +725,7 @@ func TestRunCommand_FormatFlagDefault(t *testing.T) {
 func TestRunCommand_FormatGitHubComment(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 
 	cmd := newRunCommand()
 	cmd.SetArgs([]string{specPath, "--format", "github-comment"})
@@ -739,7 +739,7 @@ func TestRunCommand_FormatGitHubComment(t *testing.T) {
 func TestRunCommand_FormatInvalid(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 
 	cmd := newRunCommand()
 	cmd.SetArgs([]string{specPath, "--format", "invalid-format"})
@@ -889,7 +889,7 @@ tasks:
 func TestRunCommand_MultiModelExecution(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 	outDir := t.TempDir()
 	outFile := filepath.Join(outDir, "results.json")
 
@@ -925,7 +925,7 @@ func TestRunCommand_MultiModelExecution(t *testing.T) {
 func TestRunCommand_NoModelFlagPreservesYAML(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock") // spec has model: test-model
+	specPath := createTestSpec(t, models.EngineTypeMock) // spec has model: test-model
 	outFile := filepath.Join(t.TempDir(), "results.json")
 
 	cmd := newRunCommand()
@@ -950,7 +950,7 @@ func TestRunCommand_NoModelFlagPreservesYAML(t *testing.T) {
 func TestRunCommand_ModelNameInOutputJSON(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 	outFile := filepath.Join(t.TempDir(), "results.json")
 
 	cmd := newRunCommand()
@@ -977,7 +977,7 @@ func TestRunCommand_ModelNameInOutputJSON(t *testing.T) {
 func TestRunCommand_SingleModelMatchingSpecIsNoop(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock") // model: test-model
+	specPath := createTestSpec(t, models.EngineTypeMock) // model: test-model
 	outFile := filepath.Join(t.TempDir(), "results.json")
 
 	// Passing --model with the same value as the spec should behave
@@ -1004,7 +1004,7 @@ func TestRunCommand_SingleModelMatchingSpecIsNoop(t *testing.T) {
 func TestRunCommand_MultiModelComparisonTablePrinted(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 
 	// Capture stdout to verify the comparison table is printed.
 	oldStdout := os.Stdout
@@ -1041,7 +1041,7 @@ func TestRunCommand_MultiModelComparisonTablePrinted(t *testing.T) {
 func TestRunCommand_RecommendFlagPrintsRecommendation(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 
 	// Capture stdout to verify RECOMMENDATION output.
 	oldStdout := os.Stdout
@@ -1077,7 +1077,7 @@ func TestRunCommand_RecommendFlagPrintsRecommendation(t *testing.T) {
 func TestRunCommand_RecommendSetsMetadata(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 	outDir := t.TempDir()
 	outFile := filepath.Join(outDir, "results.json")
 
@@ -1114,7 +1114,7 @@ func TestRunCommand_RecommendSetsMetadata(t *testing.T) {
 func TestRunCommand_SuggestFlagSkipsReportWhenAllPass(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 
 	cmd := newRunCommand()
 	cmd.SetArgs([]string{specPath, "--suggest"})
@@ -1134,7 +1134,7 @@ func TestRunCommand_SuggestFlagSkipsReportWhenAllPass(t *testing.T) {
 func TestRunCommand_SuggestSkipsMetadataWhenAllPass(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 	outFile := filepath.Join(t.TempDir(), "results.json")
 
 	cmd := newRunCommand()
@@ -1162,7 +1162,7 @@ func TestRunCommand_SuggestSkipsMetadataWhenAllPass(t *testing.T) {
 func TestRunCommand_SuggestSetsMetadataWhenFailuresExist(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createFailingTestSpec(t, "mock")
+	specPath := createFailingTestSpec(t, models.EngineTypeMock)
 	outFile := filepath.Join(t.TempDir(), "results.json")
 
 	cmd := newRunCommand()
@@ -1193,7 +1193,7 @@ func TestRunCommand_SuggestSetsMetadataWhenFailuresExist(t *testing.T) {
 func TestRunCommand_DuplicateModelRejected(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 
 	cmd := newRunCommand()
 	cmd.SetArgs([]string{
@@ -1893,7 +1893,7 @@ func TestRunCommand_OutputDirMutualExclusion(t *testing.T) {
 	defer resetRunGlobals()
 
 	cmd := newRunCommand()
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 	cmd.SetArgs([]string{
 		"--output", "results.json",
 		"--output-dir", "results-dir",
@@ -1909,7 +1909,7 @@ func TestRunCommand_OutputDirSingleSkill(t *testing.T) {
 	resetRunGlobals()
 	defer resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 	outDir := filepath.Join(t.TempDir(), "results")
 
 	cmd := newRunCommand()

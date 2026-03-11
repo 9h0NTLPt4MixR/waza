@@ -1,6 +1,10 @@
 package session
 
-import "time"
+import (
+	"time"
+
+	"github.com/microsoft/waza/internal/models"
+)
 
 // EventType identifies the kind of session event.
 type EventType string
@@ -31,11 +35,11 @@ func NewEvent(t EventType, data map[string]any) Event {
 }
 
 // SessionStartData returns event data for a session start.
-func SessionStartData(specPath, model, engine string, taskCount int) map[string]any {
+func SessionStartData(specPath, model string, engine models.EngineType, taskCount int) map[string]any {
 	return map[string]any{
 		"spec_path":  specPath,
 		"model":      model,
-		"engine":     engine,
+		"engine":     string(engine),
 		"task_count": taskCount,
 	}
 }

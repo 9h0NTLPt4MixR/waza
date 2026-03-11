@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/microsoft/waza/internal/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -25,7 +26,7 @@ import (
 func TestRunSingleModel_ShutdownOnSuccess(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 
 	cmd := newRunCommand()
 	cmd.SetArgs([]string{specPath})
@@ -85,7 +86,7 @@ tasks:
 func TestRunSingleModel_ShutdownOnInvalidFormat(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 
 	cmd := newRunCommand()
 	cmd.SetArgs([]string{specPath, "--format", "bogus-format"})
@@ -139,7 +140,7 @@ tasks:
 func TestRunSingleModel_ShutdownWithMultipleModels(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 
 	cmd := newRunCommand()
 	cmd.SetArgs([]string{
@@ -159,7 +160,7 @@ func TestRunSingleModel_ShutdownWithMultipleModels(t *testing.T) {
 func TestRunSingleModel_ShutdownWithOutputWrite(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 	outFile := filepath.Join(t.TempDir(), "results.json")
 
 	cmd := newRunCommand()
@@ -179,7 +180,7 @@ func TestRunSingleModel_ShutdownWithOutputWrite(t *testing.T) {
 func TestRunSingleModel_ShutdownWithGitHubCommentFormat(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 
 	cmd := newRunCommand()
 	cmd.SetArgs([]string{specPath, "--format", "github-comment"})
@@ -193,7 +194,7 @@ func TestRunSingleModel_ShutdownWithGitHubCommentFormat(t *testing.T) {
 func TestRunSingleModel_ShutdownWithCacheEnabled(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 	cacheDir := filepath.Join(t.TempDir(), "cache")
 
 	cmd := newRunCommand()
@@ -208,7 +209,7 @@ func TestRunSingleModel_ShutdownWithCacheEnabled(t *testing.T) {
 func TestRunSingleModel_ShutdownWithVerbose(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 
 	cmd := newRunCommand()
 	cmd.SetArgs([]string{specPath, "--verbose"})

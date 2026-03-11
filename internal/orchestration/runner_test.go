@@ -64,7 +64,7 @@ func TestBuildExecutionRequest_SkillPaths(t *testing.T) {
 				},
 				SkillName: "test-skill",
 				Config: models.Config{
-					EngineType: "mock",
+					EngineType: models.EngineTypeMock,
 					ModelID:    "gpt-4",
 					SkillPaths: tt.skillPaths,
 					TimeoutSec: 60,
@@ -116,7 +116,7 @@ func TestBuildExecutionRequest_BasicFields(t *testing.T) {
 		},
 		SkillName: "my-skill",
 		Config: models.Config{
-			EngineType: "mock",
+			EngineType: models.EngineTypeMock,
 			ModelID:    "gpt-4",
 			TimeoutSec: 120,
 		},
@@ -154,7 +154,7 @@ func TestBuildExecutionRequest_TimeoutOverride(t *testing.T) {
 		},
 		SkillName: "my-skill",
 		Config: models.Config{
-			EngineType: "mock",
+			EngineType: models.EngineTypeMock,
 			ModelID:    "gpt-4",
 			TimeoutSec: 120,
 		},
@@ -242,7 +242,7 @@ description: Validate Azure config
 			},
 			SkillName: "azure-deploy",
 			Config: models.Config{
-				EngineType:     "mock",
+				EngineType:     models.EngineTypeMock,
 				ModelID:        "gpt-4",
 				TimeoutSec:     60,
 				RunsPerTest:    1,
@@ -265,7 +265,7 @@ description: Validate Azure config
 			},
 			SkillName: "azure-deploy",
 			Config: models.Config{
-				EngineType:     "mock",
+				EngineType:     models.EngineTypeMock,
 				ModelID:        "gpt-4",
 				TimeoutSec:     60,
 				RunsPerTest:    1,
@@ -292,7 +292,7 @@ description: Validate Azure config
 			},
 			SkillName: "azure-deploy",
 			Config: models.Config{
-				EngineType:     "mock",
+				EngineType:     models.EngineTypeMock,
 				ModelID:        "gpt-4",
 				TimeoutSec:     60,
 				RunsPerTest:    1,
@@ -315,7 +315,7 @@ description: Validate Azure config
 			},
 			SkillName: "azure-deploy",
 			Config: models.Config{
-				EngineType:  "mock",
+				EngineType:  models.EngineTypeMock,
 				ModelID:     "gpt-4",
 				TimeoutSec:  60,
 				RunsPerTest: 1,
@@ -338,7 +338,7 @@ description: Validate Azure config
 			},
 			SkillName: "azure-deploy",
 			Config: models.Config{
-				EngineType:     "mock",
+				EngineType:     models.EngineTypeMock,
 				ModelID:        "gpt-4",
 				TimeoutSec:     60,
 				RunsPerTest:    1,
@@ -362,7 +362,7 @@ description: Validate Azure config
 			},
 			SkillName: "azure-deploy",
 			Config: models.Config{
-				EngineType:     "mock",
+				EngineType:     models.EngineTypeMock,
 				ModelID:        "gpt-4",
 				TimeoutSec:     60,
 				RunsPerTest:    1,

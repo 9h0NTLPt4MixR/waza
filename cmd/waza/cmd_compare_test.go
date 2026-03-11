@@ -35,7 +35,7 @@ func sampleOutcome(modelID string, score float64, successRate float64, taskScore
 		Setup: models.OutcomeSetup{
 			RunsPerTest: 1,
 			ModelID:     modelID,
-			EngineType:  "mock",
+			EngineType:  models.EngineTypeMock,
 			TimeoutSec:  30,
 		},
 		Digest: models.OutcomeDigest{

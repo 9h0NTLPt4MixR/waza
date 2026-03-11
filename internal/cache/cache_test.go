@@ -20,7 +20,7 @@ func TestCacheKey(t *testing.T) {
 		SkillName: "test-skill",
 		Config: models.Config{
 			ModelID:    "gpt-4",
-			EngineType: "copilot-sdk",
+			EngineType: models.EngineTypeCopilotSDK,
 			TimeoutSec: 300,
 		},
 		Graders: []models.GraderConfig{
@@ -66,7 +66,7 @@ func TestCacheKey_DifferentModelChangesKey(t *testing.T) {
 		SkillName:    "skill",
 		Config: models.Config{
 			ModelID:    "gpt-4",
-			EngineType: "copilot-sdk",
+			EngineType: models.EngineTypeCopilotSDK,
 			TimeoutSec: 300,
 		},
 	}
@@ -76,7 +76,7 @@ func TestCacheKey_DifferentModelChangesKey(t *testing.T) {
 		SkillName:    "skill",
 		Config: models.Config{
 			ModelID:    "gpt-4o", // Different model
-			EngineType: "copilot-sdk",
+			EngineType: models.EngineTypeCopilotSDK,
 			TimeoutSec: 300,
 		},
 	}
@@ -104,7 +104,7 @@ func TestCacheKey_DifferentSkillPathsChangesKey(t *testing.T) {
 		SkillName:    "skill",
 		Config: models.Config{
 			ModelID:    "gpt-4",
-			EngineType: "copilot-sdk",
+			EngineType: models.EngineTypeCopilotSDK,
 			TimeoutSec: 300,
 			SkillPaths: []string{"skills/my-skill"},
 		},
@@ -115,7 +115,7 @@ func TestCacheKey_DifferentSkillPathsChangesKey(t *testing.T) {
 		SkillName:    "skill",
 		Config: models.Config{
 			ModelID:    "gpt-4",
-			EngineType: "copilot-sdk",
+			EngineType: models.EngineTypeCopilotSDK,
 			TimeoutSec: 300,
 			SkillPaths: []string{}, // No skills (baseline pass)
 		},
@@ -144,7 +144,7 @@ func TestCacheKey_DifferentFixturesChangesKey(t *testing.T) {
 		SkillName:    "skill",
 		Config: models.Config{
 			ModelID:    "gpt-4",
-			EngineType: "copilot-sdk",
+			EngineType: models.EngineTypeCopilotSDK,
 			TimeoutSec: 300,
 		},
 	}
@@ -329,7 +329,7 @@ func TestCacheKey_FixtureOrdering(t *testing.T) {
 		SkillName:    "skill",
 		Config: models.Config{
 			ModelID:    "gpt-4",
-			EngineType: "copilot-sdk",
+			EngineType: models.EngineTypeCopilotSDK,
 			TimeoutSec: 300,
 		},
 	}
@@ -381,7 +381,7 @@ func TestCacheKey_MissingFixtures(t *testing.T) {
 		SkillName:    "skill",
 		Config: models.Config{
 			ModelID:    "gpt-4",
-			EngineType: "copilot-sdk",
+			EngineType: models.EngineTypeCopilotSDK,
 			TimeoutSec: 300,
 		},
 	}
@@ -410,7 +410,7 @@ func TestCacheKey_DifferentRunsPerTaskChangesKey(t *testing.T) {
 		SkillName:    "skill",
 		Config: models.Config{
 			ModelID:     "gpt-4",
-			EngineType:  "copilot-sdk",
+			EngineType:  models.EngineTypeCopilotSDK,
 			TimeoutSec:  300,
 			RunsPerTest: 3,
 		},
@@ -421,7 +421,7 @@ func TestCacheKey_DifferentRunsPerTaskChangesKey(t *testing.T) {
 		SkillName:    "skill",
 		Config: models.Config{
 			ModelID:     "gpt-4",
-			EngineType:  "copilot-sdk",
+			EngineType:  models.EngineTypeCopilotSDK,
 			TimeoutSec:  300,
 			RunsPerTest: 5, // Different runs
 		},
@@ -450,7 +450,7 @@ func TestCacheKey_NoHashCollision(t *testing.T) {
 		SkillName:    "cd",
 		Config: models.Config{
 			ModelID:     "gpt-4",
-			EngineType:  "copilot-sdk",
+			EngineType:  models.EngineTypeCopilotSDK,
 			TimeoutSec:  300,
 			RunsPerTest: 1,
 		},
@@ -461,7 +461,7 @@ func TestCacheKey_NoHashCollision(t *testing.T) {
 		SkillName:    "d",
 		Config: models.Config{
 			ModelID:     "gpt-4",
-			EngineType:  "copilot-sdk",
+			EngineType:  models.EngineTypeCopilotSDK,
 			TimeoutSec:  300,
 			RunsPerTest: 1,
 		},

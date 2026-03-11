@@ -632,7 +632,7 @@ func runSingleModel(cmd *cobra.Command, spec *models.BenchmarkSpec, specPath str
 		switch event.EventType {
 		case orchestration.EventBenchmarkStart:
 			ev = session.NewEvent(session.EventSessionStart,
-				session.SessionStartData(specPath, spec.Config.ModelID, string(spec.Config.EngineType), event.TotalTests))
+				session.SessionStartData(specPath, spec.Config.ModelID, spec.Config.EngineType, event.TotalTests))
 		case orchestration.EventTestStart:
 			ev = session.NewEvent(session.EventTaskStart,
 				session.TaskStartData(event.TestName, event.TestNum, event.TotalTests))

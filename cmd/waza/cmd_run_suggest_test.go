@@ -58,7 +58,7 @@ func TestMaybeGenerateSuggestionReport_SkipsWhenNoFailures(t *testing.T) {
 	spec := &models.BenchmarkSpec{
 		SkillName: "test-skill",
 		Config: models.Config{
-			EngineType: "mock",
+			EngineType: models.EngineTypeMock,
 			ModelID:    "test-model",
 		},
 	}
@@ -150,7 +150,7 @@ func TestBuildRunSuggestionPrompt_IncludesOnlyFailureEvidence(t *testing.T) {
 	spec := &models.BenchmarkSpec{
 		SkillName: "test-skill",
 		Config: models.Config{
-			EngineType: "copilot-sdk",
+			EngineType: models.EngineTypeCopilotSDK,
 			ModelID:    "gpt-4o",
 			SkillPaths: []string{skillDir},
 		},
@@ -257,7 +257,7 @@ func TestBuildRunSuggestionPrompt_OmitsBenchmarkSectionWhenNoBenchmarkFailures(t
 	spec := &models.BenchmarkSpec{
 		SkillName: "test-skill",
 		Config: models.Config{
-			EngineType: "copilot-sdk",
+			EngineType: models.EngineTypeCopilotSDK,
 			ModelID:    "gpt-4o",
 		},
 	}
@@ -281,7 +281,7 @@ func TestBuildRunSuggestionPrompt_OmitsTriggerSectionWhenNoTriggerFailures(t *te
 	spec := &models.BenchmarkSpec{
 		SkillName: "test-skill",
 		Config: models.Config{
-			EngineType: "copilot-sdk",
+			EngineType: models.EngineTypeCopilotSDK,
 			ModelID:    "gpt-4o",
 		},
 	}
@@ -308,7 +308,7 @@ func TestBuildRunSuggestionPrompt_IncludesGraderDocs(t *testing.T) {
 	spec := &models.BenchmarkSpec{
 		SkillName: "test-skill",
 		Config: models.Config{
-			EngineType: "copilot-sdk",
+			EngineType: models.EngineTypeCopilotSDK,
 			ModelID:    "gpt-4o",
 		},
 		Graders: []models.GraderConfig{

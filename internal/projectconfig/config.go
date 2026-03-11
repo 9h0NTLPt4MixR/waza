@@ -127,7 +127,7 @@ func New() *ProjectConfig {
 			Results: DefaultResultsDir,
 		},
 		Defaults: DefaultsConfig{
-			Engine:     DefaultEngine,
+			Engine:     models.EngineTypeCopilotSDK,
 			Model:      DefaultModel,
 			JudgeModel: "",
 			Timeout:    DefaultTimeout,

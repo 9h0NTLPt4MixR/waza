@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/microsoft/waza/internal/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -89,7 +90,7 @@ tasks:
 func TestRunCommand_ExplicitPath_BackwardCompat(t *testing.T) {
 	resetRunGlobals()
 
-	specPath := createTestSpec(t, "mock")
+	specPath := createTestSpec(t, models.EngineTypeMock)
 
 	cmd := newRunCommand()
 	cmd.SetArgs([]string{specPath})

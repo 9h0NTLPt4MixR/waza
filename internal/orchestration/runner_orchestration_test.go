@@ -67,7 +67,7 @@ graders:
 		Config: models.Config{
 			RunsPerTest: 2,
 			TimeoutSec:  30,
-			EngineType:  "mock",
+			EngineType:  models.EngineTypeMock,
 			ModelID:     "mock-model",
 			GroupBy:     "model",
 		},
@@ -163,7 +163,7 @@ inputs:
 		Config: models.Config{
 			RunsPerTest: 1,
 			TimeoutSec:  30,
-			EngineType:  "mock",
+			EngineType:  models.EngineTypeMock,
 			ModelID:     "mock-model",
 			Concurrent:  true,
 			Workers:     2,
@@ -394,7 +394,7 @@ func TestRunTest_CacheHitAndTranscriptWrite(t *testing.T) {
 		Config: models.Config{
 			RunsPerTest: 1,
 			TimeoutSec:  30,
-			EngineType:  "mock",
+			EngineType:  models.EngineTypeMock,
 			ModelID:     "mock-model",
 		},
 		Graders: []models.GraderConfig{

@@ -169,7 +169,7 @@ config:
 	if spec.Config.TimeoutSec != 300 {
 		t.Errorf("Expected timeout=300, got %d", spec.Config.TimeoutSec)
 	}
-	if spec.Config.EngineType != "mock" {
+	if spec.Config.EngineType != EngineTypeMock {
 		t.Errorf("Expected engine='mock', got '%s'", spec.Config.EngineType)
 	}
 }

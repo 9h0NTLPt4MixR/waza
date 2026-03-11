@@ -22,7 +22,7 @@ func newTestOutcome() *models.EvaluationOutcome {
 		Setup: models.OutcomeSetup{
 			RunsPerTest: 1,
 			ModelID:     "gpt-4o",
-			EngineType:  "mock",
+			EngineType:  models.EngineTypeMock,
 			TimeoutSec:  60,
 		},
 		Digest: models.OutcomeDigest{
@@ -165,7 +165,7 @@ func TestConvertToJUnit_Properties(t *testing.T) {
 
 	assert.Equal(t, "code-explainer", propMap["skill"])
 	assert.Equal(t, "gpt-4o", propMap["model"])
-	assert.Equal(t, "mock", propMap["engine"])
+	assert.Equal(t, string(models.EngineTypeMock), propMap["engine"])
 	assert.Contains(t, propMap["score"], "0.75")
 }
 

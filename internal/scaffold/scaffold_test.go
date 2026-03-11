@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/microsoft/waza/internal/models"
 	"github.com/microsoft/waza/internal/validation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -63,7 +64,7 @@ func TestTitleCase(t *testing.T) {
 }
 
 func TestEvalYAML(t *testing.T) {
-	content := EvalYAML("code-analyzer", "copilot-sdk", "claude-sonnet-4.6")
+	content := EvalYAML("code-analyzer", string(models.EngineTypeCopilotSDK), "claude-sonnet-4.6")
 
 	assert.Contains(t, content, "name: code-analyzer-eval")
 	assert.Contains(t, content, "skill: code-analyzer")
@@ -75,7 +76,7 @@ func TestEvalYAML(t *testing.T) {
 }
 
 func TestEvalYAML_CustomEngine(t *testing.T) {
-	content := EvalYAML("my-skill", "mock", "gpt-4o")
+	content := EvalYAML("my-skill", string(models.EngineTypeMock), "gpt-4o")
 
 	assert.Contains(t, content, "executor: mock")
 	assert.Contains(t, content, "model: gpt-4o")
@@ -108,7 +109,7 @@ func TestReadProjectDefaults(t *testing.T) {
 
 	// No .waza.yaml → defaults
 	engine, model := ReadProjectDefaults()
-	assert.Equal(t, "copilot-sdk", engine)
+	assert.Equal(t, string(models.EngineTypeCopilotSDK), engine)
 	assert.Equal(t, "claude-sonnet-4.6", model)
 }
 
@@ -123,12 +124,12 @@ func TestReadProjectDefaults_WithConfig(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, ".waza.yaml"), []byte(wazaConfig), 0o644))
 
 	engine, model := ReadProjectDefaults()
-	assert.Equal(t, "mock", engine)
+	assert.Equal(t, string(models.EngineTypeMock), engine)
 	assert.Equal(t, "gpt-4o", model)
 }
 
 func TestEvalYAML_SchemaCompliant(t *testing.T) {
-	content := EvalYAML("test-skill", "mock", "gpt-4o")
+	content := EvalYAML("test-skill", string(models.EngineTypeMock), "gpt-4o")
 	errs := validation.ValidateEvalBytes([]byte(content))
 	require.Empty(t, errs, "scaffolded eval.yaml should pass schema validation: %v", errs)
 }

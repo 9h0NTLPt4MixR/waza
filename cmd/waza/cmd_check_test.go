@@ -10,6 +10,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
+	"github.com/microsoft/waza/internal/models"
 	"github.com/microsoft/waza/internal/scaffold"
 	"github.com/microsoft/waza/internal/scoring"
 	"github.com/microsoft/waza/internal/validation"
@@ -467,7 +468,7 @@ This skill analyzes code and provides explanations.
 	require.NoError(t, os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skillContent), 0o644))
 
 	// eval.yaml from scaffold
-	evalContent := scaffold.EvalYAML(skillName, "mock", "gpt-4o")
+	evalContent := scaffold.EvalYAML(skillName, string(models.EngineTypeMock), "gpt-4o")
 	require.NoError(t, os.WriteFile(filepath.Join(evalsDir, "eval.yaml"), []byte(evalContent), 0o644))
 
 	// Task files from scaffold
@@ -515,7 +516,7 @@ func TestCheckCommand_ScaffoldedEvalMatchesSchema(t *testing.T) {
 	skillName := "schema-scaffold-test"
 
 	// Write scaffold eval.yaml
-	evalContent := scaffold.EvalYAML(skillName, "mock", "gpt-4o")
+	evalContent := scaffold.EvalYAML(skillName, string(models.EngineTypeMock), "gpt-4o")
 	evalPath := filepath.Join(dir, "eval.yaml")
 	require.NoError(t, os.WriteFile(evalPath, []byte(evalContent), 0o644))
 

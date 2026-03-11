@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/microsoft/waza/internal/models"
 )
 
 func TestNewEvent(t *testing.T) {
@@ -54,7 +56,7 @@ func TestEventJSON(t *testing.T) {
 }
 
 func TestSessionStartData(t *testing.T) {
-	d := SessionStartData("/path/eval.yaml", "gpt-4o", "copilot-sdk", 5)
+	d := SessionStartData("/path/eval.yaml", "gpt-4o", models.EngineTypeCopilotSDK, 5)
 	if d["spec_path"] != "/path/eval.yaml" {
 		t.Errorf("spec_path = %v", d["spec_path"])
 	}
@@ -93,7 +95,7 @@ func TestJSONLogger(t *testing.T) {
 	}
 
 	events := []Event{
-		NewEvent(EventSessionStart, SessionStartData("eval.yaml", "gpt-4o", "mock", 2)),
+		NewEvent(EventSessionStart, SessionStartData("eval.yaml", "gpt-4o", models.EngineTypeMock, 2)),
 		NewEvent(EventTaskStart, TaskStartData("task-1", 1, 2)),
 		NewEvent(EventTaskComplete, TaskCompleteData("task-1", "passed", 1.0, 500)),
 		NewEvent(EventSessionEnd, SessionCompleteData(2, 2, 0, 0, 1000)),
@@ -214,7 +216,7 @@ func TestReadEvents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewJSONLogger: %v", err)
 	}
-	logger.Log(NewEvent(EventSessionStart, SessionStartData("e.yaml", "m", "mock", 1))) //nolint:errcheck
+	logger.Log(NewEvent(EventSessionStart, SessionStartData("e.yaml", "m", models.EngineTypeMock, 1))) //nolint:errcheck
 	logger.Log(NewEvent(EventTaskStart, TaskStartData("t1", 1, 1)))                     //nolint:errcheck
 	logger.Log(NewEvent(EventTaskComplete, TaskCompleteData("t1", "passed", 1.0, 100))) //nolint:errcheck
 	logger.Log(NewEvent(EventSessionEnd, SessionCompleteData(1, 1, 0, 0, 100)))         //nolint:errcheck
@@ -257,7 +259,7 @@ not valid json
 func TestRenderTimeline(t *testing.T) {
 	base := time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC)
 	events := []Event{
-		{Timestamp: base, Type: EventSessionStart, Data: SessionStartData("e.yaml", "gpt-4o", "mock", 2)},
+		{Timestamp: base, Type: EventSessionStart, Data: SessionStartData("e.yaml", "gpt-4o", models.EngineTypeMock, 2)},
 		{Timestamp: base.Add(100 * time.Millisecond), Type: EventTaskStart, Data: TaskStartData("task-1", 1, 2)},
 		{Timestamp: base.Add(200 * time.Millisecond), Type: EventGraderResult, Data: GraderResultData("text", "text", true, 1.0, "ok")},
 		{Timestamp: base.Add(300 * time.Millisecond), Type: EventTaskComplete, Data: TaskCompleteData("task-1", "passed", 1.0, 200)},

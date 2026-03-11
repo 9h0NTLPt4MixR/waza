@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/microsoft/waza/internal/models"
 	"github.com/microsoft/waza/internal/projectconfig"
 )
 
@@ -48,11 +49,11 @@ func TitleCase(s string) string {
 func ReadProjectDefaults() (engine, model string) {
 	dir, err := os.Getwd()
 	if err != nil {
-		return "copilot-sdk", "claude-sonnet-4.6"
+		return string(models.EngineTypeCopilotSDK), "claude-sonnet-4.6"
 	}
 	cfg, err := projectconfig.Load(dir)
 	if err != nil {
-		return "copilot-sdk", "claude-sonnet-4.6"
+		return string(models.EngineTypeCopilotSDK), "claude-sonnet-4.6"
 	}
 	return string(cfg.Defaults.Engine), cfg.Defaults.Model
 }
