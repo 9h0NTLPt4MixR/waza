@@ -114,3 +114,7 @@ web/blob-report/
 
 # Internal research docs
 docs/research/
+
+# Waza session recording files
+*-session.jsonl
+.override-cache/
