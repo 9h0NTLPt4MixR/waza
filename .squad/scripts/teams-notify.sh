@@ -5,9 +5,12 @@
 #
 # Event types: work_complete | pr_opened | pr_merged | issue_closed | decisions
 #
-# Sends Adaptive Card notifications when jq is available. Falls back to plain
-# HTML format when jq is not installed (Adaptive Cards require proper JSON
-# escaping that can't be done safely without jq).
+# Uses BOTH Adaptive Cards and HTML depending on event type:
+#   Adaptive Cards (rich, structured) → work_complete, pr_merged, decisions
+#   Simple HTML    (lightweight, quick) → pr_opened, issue_closed
+#
+# Falls back to all-HTML when jq is not installed (Adaptive Cards require
+# proper JSON escaping that can't be done safely without jq).
 #
 # Reads channel config from .squad/identity/teams-config.json relative to TEAM_ROOT.
 # Uses `az rest` to POST messages to the configured Teams channel.
@@ -25,27 +28,29 @@ CONFIG_FILE="$TEAM_ROOT/.squad/identity/teams-config.json"
 
 show_help() {
     cat <<'EOF'
-teams-notify.sh — Send Adaptive Card notifications to a Microsoft Teams channel
+teams-notify.sh — Send notifications to a Microsoft Teams channel
 
 USAGE:
     teams-notify.sh <event_type> <message>
     teams-notify.sh --help
 
 EVENT TYPES:
-    work_complete   Squad member finished a task (green accent)
-    pr_opened       Pull request was opened (blue accent)
-    pr_merged       Pull request was merged (green accent)
-    issue_closed    GitHub issue was closed (purple accent)
-    decisions       Team decision was recorded (orange accent)
+    work_complete   Squad member finished a task      → Adaptive Card (green)
+    pr_opened       Pull request was opened            → Simple HTML
+    pr_merged       Pull request was merged             → Adaptive Card (green)
+    issue_closed    GitHub issue was closed             → Simple HTML
+    decisions       Team decision was recorded          → Adaptive Card (orange)
 
 ARGUMENTS:
     event_type      One of the event types listed above
     message         The notification message body (string)
 
 FORMAT:
-    When jq is available, sends rich Adaptive Card (v1.4) notifications
-    with structured fields, accent colors, and professional layout.
-    Falls back to plain HTML when jq is not installed.
+    Milestone events (work_complete, pr_merged, decisions) use rich
+    Adaptive Card (v1.4) notifications with structured fields and
+    accent colors. Status events (pr_opened, issue_closed) use
+    lightweight HTML for quick, low-noise updates.
+    Falls back to all-HTML when jq is not installed.
 
 ENVIRONMENT:
     TEAM_ROOT       Root of the team directory (default: auto-detected)
@@ -173,30 +178,61 @@ case "$EVENT_TYPE" in
     work_complete)
         CARD_TITLE="🏗️ Squad Work Complete"
         CARD_STYLE="good"        # green accent
+        FORMAT="card"
         ;;
     pr_opened)
         CARD_TITLE="📋 Pull Request Opened"
         CARD_STYLE="accent"      # blue accent
+        FORMAT="html"
         ;;
     pr_merged)
         CARD_TITLE="✅ Pull Request Merged"
         CARD_STYLE="good"        # green accent
+        FORMAT="card"
         ;;
     issue_closed)
         CARD_TITLE="🎯 Issue Closed"
         CARD_STYLE="emphasis"    # purple/dark accent
+        FORMAT="html"
         ;;
     decisions)
         CARD_TITLE="📌 Team Decision"
         CARD_STYLE="warning"     # orange accent
+        FORMAT="card"
         ;;
 esac
 
+# If jq is unavailable, force all events to HTML (cards need jq for safe JSON)
+if ! $USE_JQ; then
+    FORMAT="html"
+fi
+
 # --- Build request body -------------------------------------------------------
 
-if $USE_JQ; then
-    # Build Adaptive Card (v1.4) with structured layout
-    CARD_JSON=$(jq -n \
+build_html_body() {
+    # Simple HTML — for status/progress events (pr_opened, issue_closed)
+    escape_html() {
+        local text="$1"
+        text="${text//&/&amp;}"
+        text="${text//</&lt;}"
+        text="${text//>/&gt;}"
+        text="${text//\"/&quot;}"
+        echo "$text"
+    }
+
+    local safe_msg
+    safe_msg=$(escape_html "$MESSAGE")
+    local html="<h3>${CARD_TITLE}</h3><p>${safe_msg}</p><hr/><p style=\"color:gray;font-size:small;\">Waza Squad · ${TIMESTAMP}</p>"
+
+    # Manual JSON — escape embedded quotes
+    local escaped="${html//\"/\\\"}"
+    echo "{\"body\":{\"contentType\":\"html\",\"content\":\"${escaped}\"}}"
+}
+
+build_card_body() {
+    # Adaptive Card (v1.4) — for milestone events (work_complete, pr_merged, decisions)
+    local card_json
+    card_json=$(jq -n \
         --arg title "$CARD_TITLE" \
         --arg message "$MESSAGE" \
         --arg timestamp "$TIMESTAMP" \
@@ -247,11 +283,9 @@ if $USE_JQ; then
             ]
         }')
 
-    # Wrap card in Graph API message format.
-    # The attachment content must be a JSON string, not an object —
-    # jq --arg handles the serialization automatically.
-    REQUEST_BODY=$(jq -n \
-        --arg card_content "$CARD_JSON" \
+    # Wrap card in Graph API message format
+    jq -n \
+        --arg card_content "$card_json" \
         '{
             "body": {
                 "contentType": "html",
@@ -265,24 +299,13 @@ if $USE_JQ; then
                     "content": $card_content
                 }
             ]
-        }')
+        }'
+}
+
+if [[ "$FORMAT" == "card" ]]; then
+    REQUEST_BODY=$(build_card_body)
 else
-    # Fallback: plain HTML (no Adaptive Cards without jq — escaping is unsafe)
-    escape_html() {
-        local text="$1"
-        text="${text//&/&amp;}"
-        text="${text//</&lt;}"
-        text="${text//>/&gt;}"
-        text="${text//\"/&quot;}"
-        echo "$text"
-    }
-
-    SAFE_MESSAGE=$(escape_html "$MESSAGE")
-    HTML_CONTENT="<h3>${CARD_TITLE}</h3><p>${SAFE_MESSAGE}</p><hr/><p style=\"color:gray;font-size:small;\">Sent by Waza Squad</p>"
-
-    # Manual JSON construction — escape embedded quotes
-    ESCAPED_CONTENT="${HTML_CONTENT//\"/\\\"}"
-    REQUEST_BODY="{\"body\":{\"contentType\":\"html\",\"content\":\"${ESCAPED_CONTENT}\"}}"
+    REQUEST_BODY=$(build_html_body)
 fi
 
 # --- Send notification --------------------------------------------------------
@@ -300,5 +323,6 @@ if ! az rest \
     exit 0
 fi
 
-echo "Teams notification sent: $EVENT_TYPE (Adaptive Card)" >&2
+FORMAT_LABEL=$( [[ "$FORMAT" == "card" ]] && echo "Adaptive Card" || echo "HTML" )
+echo "Teams notification sent: $EVENT_TYPE ($FORMAT_LABEL)" >&2
 exit 0
