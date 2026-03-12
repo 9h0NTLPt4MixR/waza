@@ -3,6 +3,7 @@ package models
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -300,4 +301,62 @@ config:
 			t.Errorf("Expected empty judge_model, got '%s'", spec.Config.JudgeModel)
 		}
 	})
+}
+
+func TestGraderConfig_UnknownField_Error(t *testing.T) {
+	// GraderConfig should return an error when unknown top-level fields are present,
+	// because they likely belong under 'config:'.
+	tempDir := t.TempDir()
+	yamlContent := `name: misconfig
+skill: test-skill
+config:
+  trials_per_task: 1
+  timeout_seconds: 60
+  executor: mock
+graders:
+  - name: my-grader
+    type: code
+    assertions:
+      - "len(output) > 0"
+`
+	specPath := filepath.Join(tempDir, "spec.yaml")
+	if err := os.WriteFile(specPath, []byte(yamlContent), 0o644); err != nil {
+		t.Fatalf("write spec file: %v", err)
+	}
+
+	_, err := LoadBenchmarkSpec(specPath)
+	if err == nil {
+		t.Fatal("expected error for unknown field 'assertions' at grader root level, got nil")
+	}
+	if !strings.Contains(err.Error(), "assertions") || !strings.Contains(err.Error(), "config") {
+		t.Errorf("expected error to mention 'assertions' and 'config:', got: %v", err)
+	}
+}
+
+func TestGraderConfig_CodeGrader_NoAssertions_Error(t *testing.T) {
+	// A 'code' grader without assertions should fail validation.
+	tempDir := t.TempDir()
+	yamlContent := `name: no-assertions
+skill: test-skill
+config:
+  trials_per_task: 1
+  timeout_seconds: 60
+  executor: mock
+graders:
+  - name: my-grader
+    type: code
+    config: {}
+`
+	specPath := filepath.Join(tempDir, "spec.yaml")
+	if err := os.WriteFile(specPath, []byte(yamlContent), 0o644); err != nil {
+		t.Fatalf("write spec file: %v", err)
+	}
+
+	_, err := LoadBenchmarkSpec(specPath)
+	if err == nil {
+		t.Fatal("expected error for code grader with no assertions, got nil")
+	}
+	if !strings.Contains(err.Error(), "assertions") {
+		t.Errorf("expected error to mention 'assertions', got: %v", err)
+	}
 }

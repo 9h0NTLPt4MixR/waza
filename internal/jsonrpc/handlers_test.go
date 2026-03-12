@@ -96,6 +96,9 @@ config:
 graders:
   - type: code
     name: check-output
+    config:
+      assertions:
+        - "len(output) > 0"
 tasks:
   - "tasks/*.yaml"
 `

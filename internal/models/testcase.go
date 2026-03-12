@@ -69,6 +69,16 @@ type ValidatorInline struct {
 	Parameters GraderParameters `yaml:"config,omitempty" json:"parameters,omitempty"`
 }
 
+// knownValidatorInlineFields is the set of valid top-level YAML keys for a ValidatorInline.
+var knownValidatorInlineFields = map[string]bool{
+	"name":       true,
+	"type":       true,
+	"assertions": true,
+	"rubric":     true,
+	"weight":     true,
+	"config":     true,
+}
+
 func (v *ValidatorInline) UnmarshalYAML(node *yaml.Node) error {
 	type rawValidatorInline struct {
 		Identifier string     `yaml:"name"`
@@ -82,6 +92,20 @@ func (v *ValidatorInline) UnmarshalYAML(node *yaml.Node) error {
 	var raw rawValidatorInline
 	if err := node.Decode(&raw); err != nil {
 		return err
+	}
+
+	// Check for unknown top-level keys that likely belong under 'config:'.
+	if node.Kind == yaml.MappingNode {
+		for i := 0; i < len(node.Content)-1; i += 2 {
+			key := node.Content[i].Value
+			if !knownValidatorInlineFields[key] {
+				name := raw.Identifier
+				if name == "" {
+					name = "(unnamed)"
+				}
+				return fmt.Errorf("unknown field %q in grader %q; did you mean to place it under 'config:'?", key, name)
+			}
+		}
 	}
 
 	params, err := decodeGraderParameters(raw.Kind, &raw.Parameters)
@@ -99,6 +123,24 @@ func (v *ValidatorInline) UnmarshalYAML(node *yaml.Node) error {
 	return nil
 }
 
+// Validate checks that the inline validator configuration is semantically valid.
+func (v *ValidatorInline) Validate() error {
+	switch v.Kind {
+	case GraderKindInlineScript:
+		params, ok := v.Parameters.(InlineScriptGraderParameters)
+		configAssertions := ok && len(params.Assertions) > 0
+		rootAssertions := len(v.Checks) > 0
+
+		if rootAssertions && !configAssertions {
+			return fmt.Errorf("grader %q: 'assertions' must be placed under 'config:', not at the root level", v.Identifier)
+		}
+		if !configAssertions && !rootAssertions {
+			return fmt.Errorf("grader %q (type %q) has no assertions; add them under 'config.assertions'", v.Identifier, v.Kind)
+		}
+	}
+	return nil
+}
+
 // LoadTestCase loads a test case from YAML
 func LoadTestCase(path string) (*TestCase, error) {
 	data, err := os.ReadFile(path)
@@ -109,6 +151,12 @@ func LoadTestCase(path string) (*TestCase, error) {
 	var tc TestCase
 	if err := yaml.Unmarshal(data, &tc); err != nil {
 		return nil, err
+	}
+
+	for i := range tc.Validators {
+		if err := tc.Validators[i].Validate(); err != nil {
+			return nil, err
+		}
 	}
 
 	// Note: Active field defaults to nil when not specified in YAML.

@@ -58,6 +58,19 @@ type GraderConfig struct {
 	Parameters GraderParameters `yaml:"config,omitempty" json:"parameters,omitempty"`
 }
 
+// knownGraderConfigFields is the set of valid top-level YAML keys for a GraderConfig.
+// Any key outside this set indicates a misconfiguration (e.g. a config-level field
+// placed at the wrong nesting level).
+var knownGraderConfigFields = map[string]bool{
+	"type":   true,
+	"name":   true,
+	"script": true,
+	"rubric": true,
+	"model":  true,
+	"weight": true,
+	"config": true,
+}
+
 func (g *GraderConfig) UnmarshalYAML(node *yaml.Node) error {
 	type rawGraderConfig struct {
 		Kind       GraderKind `yaml:"type"`
@@ -74,6 +87,20 @@ func (g *GraderConfig) UnmarshalYAML(node *yaml.Node) error {
 		return err
 	}
 
+	// Check for unknown top-level keys that likely belong under 'config:'.
+	if node.Kind == yaml.MappingNode {
+		for i := 0; i < len(node.Content)-1; i += 2 {
+			key := node.Content[i].Value
+			if !knownGraderConfigFields[key] {
+				name := raw.Identifier
+				if name == "" {
+					name = "(unnamed)"
+				}
+				return fmt.Errorf("unknown field %q in grader %q; did you mean to place it under 'config:'?", key, name)
+			}
+		}
+	}
+
 	params, err := decodeGraderParameters(raw.Kind, &raw.Parameters)
 	if err != nil {
 		return fmt.Errorf("invalid grader config for %q (type %q): %w", raw.Identifier, raw.Kind, err)
@@ -87,6 +114,18 @@ func (g *GraderConfig) UnmarshalYAML(node *yaml.Node) error {
 	g.Weight = raw.Weight
 	g.Parameters = params
 
+	return nil
+}
+
+// Validate checks that the grader configuration is semantically valid.
+func (g *GraderConfig) Validate() error {
+	switch g.Kind {
+	case GraderKindInlineScript:
+		params, ok := g.Parameters.(InlineScriptGraderParameters)
+		if !ok || len(params.Assertions) == 0 {
+			return fmt.Errorf("grader %q (type %q) has no assertions; add them under 'config.assertions'", g.Identifier, g.Kind)
+		}
+	}
 	return nil
 }
 
@@ -134,6 +173,11 @@ func (s *BenchmarkSpec) Validate() error {
 	}
 	if s.Config.TimeoutSec < 1 {
 		return fmt.Errorf("timeout_seconds must be at least 1, got %d", s.Config.TimeoutSec)
+	}
+	for i := range s.Graders {
+		if err := s.Graders[i].Validate(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
