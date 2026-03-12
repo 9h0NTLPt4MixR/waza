@@ -104,6 +104,8 @@ All code roles now use `claude-opus-4.6`. Docs/Scribe/diversity use `gemini-3-pr
 - PR conflict resolution for `copilot/migrate-copilot-client-usage` in `internal/execution/copilot_test.go` should keep the `TestCopilotExecute_InitializePropagatesStartError` variant from main to preserve startup error propagation coverage.
 - Teams Graph API channel messages POST to `/v1.0/teams/{groupId}/channels/{channelId}/messages` with body `{body:{contentType:"html",content:"..."}}`. `az rest` auto-injects bearer tokens for graph.microsoft.com endpoints.
 - Squad notification scripts live in `.squad/scripts/` and config in `.squad/identity/teams-config.json`. The notify script always exits 0 to be safe for caller pipelines.
+- `gh api repos/:owner/:repo/compare/{base}...{head}` gives `ahead_by` count and per-commit author info — ideal for summarizing new commits without cloning or fetching refs locally.
+- State-file-based deduplication (tracking known PR/issue numbers) is more reliable than timestamp-based filtering when GitHub API results may be paginated or delayed.
 
 ## 2026-03-12: Teams Notification System
 
@@ -112,3 +114,9 @@ Created `.squad/scripts/teams-notify.sh` and `.squad/scripts/teams-test.sh` for 
 **Key decisions:** Always exit 0 (failures never block automation), jq with grep/sed fallback for JSON, HTML content escaping for security, config-driven event filtering, TEAM_ROOT auto-detection.
 
 **Outcome:** Test notification verified in Teams channel. System ready for production use by Scribe and all agents.
+
+### Ralph Watch — Local Watchdog (PR pending on squad/teams-notifications)
+- **Date:** 2026-03-12
+- **Files:** `.squad/scripts/ralph-watch.sh`, `.squad/skills/teams-notify/SKILL.md`
+- **What:** Created local watchdog script that polls GitHub every N minutes (default 10) via `gh` CLI. Detects merged PRs, closed issues, and new commits on main. Calls `teams-notify.sh` for each new event. State tracked in `.squad/identity/.ralph-watch-state.json` to avoid duplicate notifications. First run seeds state from current repo activity. Graceful Ctrl+C shutdown with summary. Updated SKILL.md with watchdog documentation.
+- **Key learning:** Using `gh api repos/:owner/:repo/compare` for commit diffs avoids needing local git state. State-file dedup by PR/issue number is more robust than timestamp filtering.
