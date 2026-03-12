@@ -104,3 +104,11 @@ All code roles now use `claude-opus-4.6`. Docs/Scribe/diversity use `gemini-3-pr
 - PR conflict resolution for `copilot/migrate-copilot-client-usage` in `internal/execution/copilot_test.go` should keep the `TestCopilotExecute_InitializePropagatesStartError` variant from main to preserve startup error propagation coverage.
 - Teams Graph API channel messages POST to `/v1.0/teams/{groupId}/channels/{channelId}/messages` with body `{body:{contentType:"html",content:"..."}}`. `az rest` auto-injects bearer tokens for graph.microsoft.com endpoints.
 - Squad notification scripts live in `.squad/scripts/` and config in `.squad/identity/teams-config.json`. The notify script always exits 0 to be safe for caller pipelines.
+
+## 2026-03-12: Teams Notification System
+
+Created `.squad/scripts/teams-notify.sh` and `.squad/scripts/teams-test.sh` for Microsoft Teams notifications via Graph API. System sends milestone updates (work batches, PRs, issues, decisions) to the "Waza Squad" Teams channel.
+
+**Key decisions:** Always exit 0 (failures never block automation), jq with grep/sed fallback for JSON, HTML content escaping for security, config-driven event filtering, TEAM_ROOT auto-detection.
+
+**Outcome:** Test notification verified in Teams channel. System ready for production use by Scribe and all agents.

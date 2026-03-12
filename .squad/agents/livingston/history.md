@@ -125,3 +125,11 @@ The Teams notification system that the squad uses to communicate milestones to t
 - Added troubleshooting decision tree with specific `az` commands to test
 - Clarified graceful degradation (no errors, no noise when disabled)
 - Included configuration checklist with pre-flight items
+
+## 2026-03-12: Teams Notification Skill Documentation
+
+Created `.squad/skills/teams-notify/SKILL.md` for the Teams notification system. Documented purpose, all event types, usage patterns, configuration, examples, and troubleshooting.
+
+**Integration points:** Scribe calls this for work batch notifications. Coordinator can use for orchestration milestones. All agents can trigger for their work.
+
+**Outcome:** Comprehensive documentation complete and integrated.
