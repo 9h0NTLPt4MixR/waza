@@ -16,6 +16,9 @@ fi
 MESSAGE="${1:-🧪 Waza Squad notifications are working!}"
 
 echo "Sending test notification to Teams..."
+# NOTE: teams-notify.sh always exits 0 by design, so we cannot detect delivery
+# failures from its exit code.  Check the Teams channel manually to confirm the
+# message was actually delivered.
 "$NOTIFY_SCRIPT" work_complete "$MESSAGE"
 
 echo "Done. Check the Waza Squad channel in Teams."

@@ -64,6 +64,10 @@ logs/
 *.pem
 *.key
 secrets.yaml
+
+# Ralph watch state (auto-generated, user-specific)
+.squad/identity/.ralph-watch-state.json
+
 azure-functions-eval/
 transcript.json
 azure-validate-eval/

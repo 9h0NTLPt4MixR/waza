@@ -476,7 +476,7 @@ Created `.squad/scripts/teams-notify.sh` for sending squad notifications to the 
 
 - `.squad/scripts/teams-notify.sh` — Main notification script
 - `.squad/scripts/teams-test.sh` — Test/verification companion
-- `.squad/identity/teams-config.json` — Channel config (pre-existing)
+- `.squad/identity/teams-config.json` — Channel config (introduced in this PR)
 
 
 ## 2026-03-12: Microsoft Teams Notifications via Graph API
@@ -490,7 +490,7 @@ Created `.squad/scripts/teams-notify.sh` for sending squad notifications to the 
 **Components:**
 - **Script:** `.squad/scripts/teams-notify.sh` — Main notification sender
 - **Test:** `.squad/scripts/teams-test.sh` — Verification tool
-- **Config:** `.squad/identity/teams-config.json` — Channel config (pre-existing)
+- **Config:** `.squad/identity/teams-config.json` — Channel config (introduced in this PR)
 - **Skill:** `.squad/skills/teams-notify/SKILL.md` — Usage documentation
 
 **Design Decisions:**

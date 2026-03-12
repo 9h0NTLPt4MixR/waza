@@ -18,7 +18,10 @@
 # Exit behavior: Always exits 0 to never break the caller's workflow.
 # Errors are logged to stderr as warnings.
 
-set -euo pipefail
+# NOTE: No `set -e` or `set -o pipefail` — this script's contract is to always
+# exit 0 so it never breaks the caller's workflow.  Individual commands that
+# can legitimately fail are guarded with `|| true` or explicit checks.
+set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEAM_ROOT="${TEAM_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
@@ -85,7 +88,7 @@ fi
 EVENT_TYPE="$1"
 MESSAGE="$2"
 
-VALID_EVENTS="work_complete pr_opened pr_merged issue_closed decisions"
+VALID_EVENTS="work_complete pr_opened pr_merged issue_closed decisions ralph_status"
 if ! echo "$VALID_EVENTS" | grep -qw "$EVENT_TYPE"; then
     echo "Warning: Unknown event type '$EVENT_TYPE'. Valid: $VALID_EVENTS" >&2
     exit 0
@@ -200,6 +203,11 @@ case "$EVENT_TYPE" in
         CARD_STYLE="warning"     # orange accent
         FORMAT="card"
         ;;
+    ralph_status)
+        CARD_TITLE="📊 Sensei Status"
+        CARD_STYLE="accent"      # blue accent
+        FORMAT="html"
+        ;;
 esac
 
 # If jq is unavailable, force all events to HTML (cards need jq for safe JSON)
@@ -224,9 +232,14 @@ build_html_body() {
     safe_msg=$(escape_html "$MESSAGE")
     local html="<h3>${CARD_TITLE}</h3><p>${safe_msg}</p><hr/><p style=\"color:gray;font-size:small;\">Waza Squad · ${TIMESTAMP}</p>"
 
-    # Manual JSON — escape embedded quotes
-    local escaped="${html//\"/\\\"}"
-    echo "{\"body\":{\"contentType\":\"html\",\"content\":\"${escaped}\"}}"
+    # Use jq for proper JSON escaping if available, otherwise manual fallback
+    if $USE_JQ; then
+        jq -n --arg content "$html" '{"body":{"contentType":"html","content":$content}}'
+    else
+        local escaped="${html//\\/\\\\}"
+        escaped="${escaped//\"/\\\"}"
+        echo "{\"body\":{\"contentType\":\"html\",\"content\":\"${escaped}\"}}"
+    fi
 }
 
 build_card_body() {
@@ -283,9 +296,9 @@ build_card_body() {
             ]
         }')
 
-    # Wrap card in Graph API message format
+    # Wrap card in Graph API message format (--argjson keeps card as object, not string)
     jq -n \
-        --arg card_content "$card_json" \
+        --argjson card_content "$card_json" \
         '{
             "body": {
                 "contentType": "html",

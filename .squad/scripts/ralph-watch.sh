@@ -208,7 +208,7 @@ check_merged_prs() {
     count=$(echo "$new_prs" | jq 'length')
 
     if [[ "$count" -gt 0 ]]; then
-        echo "$new_prs" | jq -c '.[]' | while read -r pr; do
+        while read -r pr; do
             local num title author
             num=$(echo "$pr" | jq -r '.number')
             title=$(echo "$pr" | jq -r '.title')
@@ -217,7 +217,7 @@ check_merged_prs() {
             echo "   📦 PR #${num} merged: ${title} (by ${author})"
             "$NOTIFY_SCRIPT" pr_merged "PR #${num} merged: ${title} (by ${author})" 2>/dev/null || true
             TOTAL_PR_MERGED=$((TOTAL_PR_MERGED + 1))
-        done
+        done < <(echo "$new_prs" | jq -c '.[]')
     fi
 
     # Return the new PR numbers for state update
@@ -240,7 +240,7 @@ check_closed_issues() {
     count=$(echo "$new_issues" | jq 'length')
 
     if [[ "$count" -gt 0 ]]; then
-        echo "$new_issues" | jq -c '.[]' | while read -r issue; do
+        while read -r issue; do
             local num title
             num=$(echo "$issue" | jq -r '.number')
             title=$(echo "$issue" | jq -r '.title')
@@ -248,7 +248,7 @@ check_closed_issues() {
             echo "   ✅ Issue #${num} closed: ${title}"
             "$NOTIFY_SCRIPT" issue_closed "Issue #${num} closed: ${title}" 2>/dev/null || true
             TOTAL_ISSUE_CLOSED=$((TOTAL_ISSUE_CLOSED + 1))
-        done
+        done < <(echo "$new_issues" | jq -c '.[]')
     fi
 
     echo "$new_issues" | jq -c '[.[].number]'

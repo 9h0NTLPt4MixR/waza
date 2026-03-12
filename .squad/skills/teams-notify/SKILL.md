@@ -35,7 +35,7 @@ No webhooks, no Power Automate, no additional app registration required — just
          ↓
     Formats message: "PR #42 merged to main"
          ↓
-    POST /me/teamwork/sendActivityNotification
+    POST /v1.0/teams/{groupId}/channels/{channelId}/messages
          ↓
     Message appears in Teams channel
 ```
@@ -51,9 +51,9 @@ No webhooks, no Power Automate, no additional app registration required — just
 
 ```json
 {
-  "enabled": true,
-  "group_id": "450e4e32-11f8-4436-a9b4-4990ae16fe58",
-  "channel_id": "19:288df9bbfec84a1da3aec636c7b829a5@thread.tacv2",
+  "enabled": false,
+  "group_id": "your-group-id-here",
+  "channel_id": "19:your-channel-id-here@thread.tacv2",
   "channel_name": "Waza Squad",
   "notify_on": {
     "work_complete": true,
@@ -226,7 +226,7 @@ az login
 3. Test with `az rest` directly:
    ```bash
    az rest --method post \
-     --uri "https://graph.microsoft.com/v1.0/teams/{group_id}/channels/{channel_id}/messages" \
+     --url "https://graph.microsoft.com/v1.0/teams/{group_id}/channels/{channel_id}/messages" \
      --body '{"body":{"content":"test"}}'
    ```
    If this works, the IDs are correct.
@@ -238,7 +238,7 @@ az login
 **Fix:**
 - Ensure the script exists: `ls -la .squad/scripts/teams-notify.sh`
 - Make it executable: `chmod +x .squad/scripts/teams-notify.sh`
-- Call from the repository root: `cd /Users/shboyer/github/waza && .squad/scripts/teams-notify.sh ...`
+- Call from the repository root: `cd $TEAM_ROOT && .squad/scripts/teams-notify.sh ...`
 
 ---
 
@@ -246,8 +246,9 @@ az login
 
 **The notification system is entirely optional.** If Teams integration is not configured or disabled:
 
-- Squad workflows **continue normally** — no errors, no retries, no noise
+- Squad workflows **continue normally** — no errors, no retries
 - The script exits cleanly (`enabled: false` → skip → exit 0)
+- Warnings are logged to stderr when something goes wrong (e.g., missing config, API failure), but the exit code is always 0
 - No impact on development velocity or CI/CD pipelines
 - Can be enabled later without code changes — just edit `.squad/identity/teams-config.json`
 

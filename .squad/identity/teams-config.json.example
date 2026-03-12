@@ -2,7 +2,7 @@
   "enabled": false,
   "group_id": "your-group-id-here",
   "channel_id": "19:your-channel-id-here@thread.tacv2",
-  "channel_name": "Waza Squad",
+  "channel_name": "Your Channel Name",
   "notify_on": {
     "work_complete": true,
     "pr_opened": true,

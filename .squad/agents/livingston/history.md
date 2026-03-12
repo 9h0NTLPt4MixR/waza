@@ -115,8 +115,8 @@ The Teams notification system that the squad uses to communicate milestones to t
 **File paths:**
 - Skill document: `.squad/skills/teams-notify/SKILL.md`
 - Configuration: `.squad/identity/teams-config.json`
-- Script location (for user reference): `.squad/scripts/teams-notify.sh` (not yet created; documented as expected location)
-- Graph API endpoint: `/me/teamwork/sendActivityNotification` (documented in See Also)
+- Script: `.squad/scripts/teams-notify.sh`
+- Graph API endpoint: `/v1.0/teams/{groupId}/channels/{channelId}/messages`
 
 **Clarity improvements over requirements:**
 - Added mermaid-like flow diagram to show architecture
