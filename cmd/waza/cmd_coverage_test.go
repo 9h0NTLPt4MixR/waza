@@ -95,14 +95,16 @@ graders:
 	assert.Equal(t, "✅ Full", report.Skills[0].Coverage)
 }
 
-func TestBuildCoverageReport_ReturnsParseErrors(t *testing.T) {
+func TestBuildCoverageReport_WarnsOnParseErrors(t *testing.T) {
 	root := t.TempDir()
 	writeSkill(t, root, filepath.Join("skills", "alpha"), "alpha")
 	writeEval(t, root, filepath.Join("evals", "alpha", "eval.yaml"), "skill: [bad")
 
-	_, err := buildCoverageReport(root, nil)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to parse 1 eval files")
+	report, err := buildCoverageReport(root, nil)
+	require.NoError(t, err, "parse failures should warn, not error")
+	require.NotNil(t, report)
+	assert.Equal(t, 1, report.TotalSkills)
+	assert.Equal(t, 0, report.Covered)
 }
 
 func TestRenderCoverageMarkdown(t *testing.T) {

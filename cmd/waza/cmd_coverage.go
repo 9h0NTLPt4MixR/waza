@@ -149,7 +149,7 @@ func buildCoverageReport(root string, discoverPaths []string) (*coverageReport, 
 	}
 	if len(parseFailures) > 0 {
 		sort.Strings(parseFailures)
-		return nil, fmt.Errorf("failed to parse %d eval files: %s", len(parseFailures), strings.Join(parseFailures, "; "))
+		fmt.Fprintf(os.Stderr, "warning: failed to parse %d eval file(s): %s\n", len(parseFailures), strings.Join(parseFailures, "; "))
 	}
 
 	skillNames := make([]string, 0, len(skillPaths))
@@ -351,7 +351,9 @@ func renderCoverageText(w io.Writer, report *coverageReport) {
 	fmt.Fprintln(w, "📊 Eval Coverage Grid")                                                                              //nolint:errcheck
 	fmt.Fprintf(w, "Coverage: %.1f%% (%d/%d fully covered)\n\n", report.CoveragePct, report.Covered, report.TotalSkills) //nolint:errcheck
 
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	// Use placeholders for emoji to avoid tabwriter alignment issues
+	var buf strings.Builder
+	tw := tabwriter.NewWriter(&buf, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(tw, "Skill\tTasks\tGraders\tCoverage") //nolint:errcheck
 	fmt.Fprintln(tw, "-----\t-----\t-------\t--------") //nolint:errcheck
 	for _, row := range report.Skills {
@@ -359,9 +361,19 @@ func renderCoverageText(w io.Writer, report *coverageReport) {
 		if len(row.Graders) > 0 {
 			graders = strings.Join(row.Graders, ", ")
 		}
-		fmt.Fprintf(tw, "%s\t%d\t%s\t%s\n", row.Skill, row.Tasks, graders, row.Coverage) //nolint:errcheck
+		coverage := row.Coverage
+		coverage = strings.Replace(coverage, "✅", "{CHECK}", 1)
+		coverage = strings.Replace(coverage, "⚠️", "{WARN}", 1)
+		coverage = strings.Replace(coverage, "❌", "{CROSS}", 1)
+		fmt.Fprintf(tw, "%s\t%d\t%s\t%s\n", row.Skill, row.Tasks, graders, coverage) //nolint:errcheck
 	}
 	_ = tw.Flush()
+
+	result := buf.String()
+	result = strings.ReplaceAll(result, "{CHECK}", "✅")
+	result = strings.ReplaceAll(result, "{WARN}", "⚠️")
+	result = strings.ReplaceAll(result, "{CROSS}", "❌")
+	fmt.Fprint(w, result) //nolint:errcheck
 }
 
 func renderCoverageMarkdown(w io.Writer, report *coverageReport) {
