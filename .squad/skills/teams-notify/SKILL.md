@@ -276,10 +276,56 @@ Check the Teams channel — the message should appear within 2–3 seconds.
 
 ---
 
+## Local Watchdog — `ralph-watch.sh`
+
+For continuous monitoring of repo activity, use the local watchdog script. It runs on your machine, polls GitHub every N minutes via `gh` CLI, and posts new events to Teams automatically.
+
+### Quick Start
+
+```bash
+# Default: poll every 10 minutes
+.squad/scripts/ralph-watch.sh
+
+# Poll every 5 minutes
+.squad/scripts/ralph-watch.sh --interval 5
+
+# Poll every 30 minutes (low-frequency monitoring)
+.squad/scripts/ralph-watch.sh --interval 30
+```
+
+### What It Watches
+
+| Activity | Event Type | Notification |
+|----------|-----------|--------------|
+| PR merged to main | `pr_merged` | PR number, title, author |
+| Issue closed | `issue_closed` | Issue number and title |
+| New commits on main | `work_complete` | Commit count and authors |
+
+### How It Works
+
+1. Polls GitHub using `gh` CLI on each cycle
+2. Compares against state in `.squad/identity/.ralph-watch-state.json`
+3. Calls `teams-notify.sh` for each genuinely new event
+4. Updates state file to avoid duplicate notifications
+
+**First run** initializes state with current activity — no flood of old notifications.
+
+**Ctrl+C** triggers a graceful shutdown with a summary of what was reported.
+
+### Requirements
+
+- `gh` CLI (authenticated)
+- `jq`
+- `teams-notify.sh` (in the same scripts directory)
+
+---
+
 ## Related Files
 
 - `.squad/identity/teams-config.json` — Configuration (group ID, channel ID, event toggles)
 - `.squad/scripts/teams-notify.sh` — Notification script (reads config, posts to Graph API)
+- `.squad/scripts/ralph-watch.sh` — Local watchdog (polls GitHub, calls teams-notify.sh)
+- `.squad/identity/.ralph-watch-state.json` — Watchdog state (auto-created on first run)
 - `.squad/decisions.md` — Team decisions (includes Teams integration decision)
 - `.squad/agents/scribe/charter.md` — Scribe role (calls notification script after work)
 
