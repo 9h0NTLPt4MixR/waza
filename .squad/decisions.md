@@ -399,3 +399,129 @@ All issues routed to qualified squad members:
 | #89 | CI/CD integration guide (P1) | squad:livingston + squad:saul | Documentation with doc-review gate |
 
 **Why:** Batch review + triage ensures all green PRs merge cleanly and new work is routed to the right specialist without manual coordination. Parallel work begins immediately once triage is complete.
+
+## 2026-03-10: PR Feedback Pass 2 — Design Decision Rationale
+
+**By:** Linus (Backend Developer)
+**Date:** 2026-03-10
+
+**What:** Resolved all 49 unresolved review threads across PRs #79–#96. Key design decisions documented:
+
+1. **Trigger grader empty prompt handling** (PR #90): Empty prompts now fail immediately. Previously score=0 in negative mode would pass (0 < threshold), a false positive.
+
+2. **Snapshot path resolution** (PR #95): `resolvePathWithSymlinks` now recursively walks up the path tree, enabling snapshot writes to non-existent intermediate directories. This was blocking the parent-dir-creation use case.
+
+3. **Coverage threshold** (PR #92): ≥2 grader types for "Full" coverage is intentional — a single grader validates one dimension; multi-angle coverage requires multiple grader types. Documented in code.
+
+4. **Base ref fallback chain** (PR #93): Changed from origin/main → main to origin/main → main → HEAD per chlowell's review. Enables diff command in repos without remotes.
+
+**Why:** Clearing the review feedback backlog to unblock merge queue. All human reviewer feedback (wbreza, chlowell) addressed with code or rationale. Copilot automated comments assessed individually — genuine bugs fixed, design choices documented and resolved.
+
+**Impact:** All 8 authored PRs now have 0 unresolved threads and are ready for merge.
+
+## 2026-03-10: Fork PR Branch Fix Protocol
+
+**By:** Linus (Backend Developer)
+**Date:** 2026-03-10
+
+**What:** When squad feedback sweep commits land on the wrong remote (origin/microsoft instead of fork/spboyer), the fix protocol is:
+
+1. Fetch both remotes
+2. Compare `origin/<branch>` vs `fork/<branch>` — identify unique origin commits by deduplicating on commit message
+3. Create detached worktrees from fork branch tips
+4. Cherry-pick only unique, architecturally-compatible commits (skip commits targeting superseded code)
+5. Push to fork remote
+6. Verify PR head SHA advanced on GitHub
+
+**Key rule for #93 (tokens diff):** When a fork branch was independently reworked (diff→compare consolidation), do NOT cherry-pick old fix commits that target removed code. Only cherry-pick architecture-neutral commits (docs, CHANGELOG).
+
+**Why:** Fork-backed PRs only advance when the fork branch moves. Pushing to origin branches (same name) has no effect on the PR. This protocol avoids introducing conflicts from stale commits while ensuring all review feedback reaches the actual PR.
+
+**Impact:** All future feedback sweeps must verify they're pushing to the correct remote (`fork` for fork-backed PRs, `origin` for origin-backed PRs) before pushing. Check `gh pr view <N> --json headRepository` to confirm.
+
+## 2026-03-10: hasConfiguredTokenLimits: non-nil pointer = authoritative
+
+**By:** Linus (Backend Developer)
+**PR:** #96
+**Date:** 2026-03-10
+
+**What:** `hasConfiguredTokenLimits` now returns `true` for any non-nil `*TokenLimitsConfig` pointer, not just when Defaults or Overrides maps are populated. This means `tokens.limits: {}` in `.waza.yaml` is treated as authoritative and suppresses the deprecated `.token-limits.json` fallback.
+
+**Why:** A non-nil pointer from YAML unmarshaling means the user explicitly declared the section. Requiring populated child maps created a semantic gap where `limits: {}` silently fell back to legacy JSON — surprising behavior during migration.
+
+**Impact:** Users migrating from `.token-limits.json` to `.waza.yaml` can now safely write an empty `tokens.limits:` section to disable the legacy fallback before populating their limits.
+
+## 2026-03-12: Teams Notification Script Design
+
+**By:** Linus (Backend Developer)
+**Date:** 2026-03-12
+
+### Context
+
+Created `.squad/scripts/teams-notify.sh` for sending squad notifications to the Waza Squad Teams channel via Microsoft Graph API.
+
+### Decisions
+
+1. **Always exit 0** — The notification script never returns a non-zero exit code. If az isn't installed, not logged in, config is missing, or the API call fails, it logs a warning to stderr and exits cleanly. This prevents notification failures from breaking CI/CD pipelines or squad automation.
+
+2. **jq with grep/sed fallback** — Uses jq for JSON parsing when available, falls back to grep/sed for environments without jq. The jq path is preferred because it properly handles JSON escaping in the request body.
+
+3. **HTML content escaping** — Message content is escaped (`&`, `<`, `>`, `"`) before embedding in HTML to prevent injection in Teams messages.
+
+4. **Config-driven event filtering** — Each event type can be independently enabled/disabled in `teams-config.json` via the `notify_on` object. The script checks this before making any API call.
+
+5. **TEAM_ROOT resolution** — Script auto-detects the team root by walking up from its own location (`../../` from `.squad/scripts/`). Can be overridden via `TEAM_ROOT` env var.
+
+### Files
+
+- `.squad/scripts/teams-notify.sh` — Main notification script
+- `.squad/scripts/teams-test.sh` — Test/verification companion
+- `.squad/identity/teams-config.json` — Channel config (pre-existing)
+
+
+## 2026-03-12: Microsoft Teams Notifications via Graph API
+
+**By:** Coordinator (in consultation with Linus and Shayne Boyer)  
+**Date:** 2026-03-12T13:45Z  
+**Related:** User directive (2026-03-12)
+
+**What:** Implemented Teams notifications for squad milestone updates via Microsoft Graph API. System sends notifications to "Waza Squad" Teams channel on work batches, PR lifecycle, issue closure, and decision merges.
+
+**Components:**
+- **Script:** `.squad/scripts/teams-notify.sh` — Main notification sender
+- **Test:** `.squad/scripts/teams-test.sh` — Verification tool
+- **Config:** `.squad/identity/teams-config.json` — Channel config (pre-existing)
+- **Skill:** `.squad/skills/teams-notify/SKILL.md` — Usage documentation
+
+**Design Decisions:**
+
+1. **Always exit 0** — Notification failures never block automation. Graceful degradation: if az isn't installed, not logged in, config missing, or API fails, the script logs a warning to stderr and exits cleanly.
+
+2. **jq with grep/sed fallback** — JSON parsing prefers jq (proper HTML/JSON escaping) but falls back to grep/sed for minimal environments without jq installed.
+
+3. **HTML content escaping** — Message content escaped for `&`, `<`, `>`, `"` before embedding in Teams HTML to prevent injection vulnerabilities.
+
+4. **Config-driven event filtering** — Each event type (`work_complete`, `pr_opened`, `pr_merged`, `issue_closed`, `decisions`) independently controllable via `notify_on` object in teams-config.json. Allows disabling noisy events while keeping critical ones.
+
+5. **TEAM_ROOT auto-detection** — Script walks up from its location (`../../` from `.squad/scripts/`) to find repo root. Can be overridden via `TEAM_ROOT` environment variable for CI/CD flexibility.
+
+**Event Types:**
+- `work_complete` — Agent work batch summaries (names + what they did)
+- `pr_opened` — New PR (number, title, branch)
+- `pr_merged` — Merged PR (number, title)
+- `issue_closed` — Closed issue (number, title)
+- `decisions` — Decision merges (summary)
+
+**Integration:**
+- Scribe calls notification system after completing logging tasks
+- All agents can manually trigger notifications for their work
+- Coordinator uses for orchestration milestones
+- Failures never block automation — entirely optional enhancement
+
+**Testing:**
+- `.squad/scripts/teams-test.sh` verified notification delivery to Teams
+- Message successfully appeared in "Waza Squad" channel
+- No blocking errors observed
+
+**Why:**
+User request (Shayne Boyer) to send squad milestone updates to Teams channel. System enables real-time team awareness of work completion, PRs, and decisions without requiring polling or manual updates. Designed to never interfere with CI/CD or squad automation — a pure enhancement to team communication.

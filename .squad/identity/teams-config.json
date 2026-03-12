@@ -1,0 +1,14 @@
+{
+  "enabled": true,
+  "group_id": "450e4e32-11f8-4436-a9b4-4990ae16fe58",
+  "channel_id": "19:288df9bbfec84a1da3aec636c7b829a5@thread.tacv2",
+  "channel_name": "Waza Squad",
+  "notify_on": {
+    "work_complete": true,
+    "pr_opened": true,
+    "pr_merged": true,
+    "issue_closed": true,
+    "decisions": true,
+    "ralph_status": false
+  }
+}

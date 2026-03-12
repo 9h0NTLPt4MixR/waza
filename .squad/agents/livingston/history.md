@@ -88,3 +88,40 @@ All code roles now use `claude-opus-4.6`. Docs/Scribe/diversity use `gemini-3-pr
 **Site build verified:** All 14 pages built successfully, ci-cd page included
 
 **Branch:** squad/89-ci-integration-guide → PR to microsoft/waza main
+
+## 📌 Skill Documentation: Teams Notifications (2026-03-12)
+
+**Created:** `.squad/skills/teams-notify/SKILL.md`
+
+**What the skill documents:**
+The Teams notification system that the squad uses to communicate milestones to the "Waza Squad" Teams channel. Uses Microsoft Graph API via `az rest` (Azure CLI) — no Power Automate, no webhooks, no app registration.
+
+**Key components documented:**
+1. **Architecture** — Azure CLI (`az rest`) posts to Graph API, Scribe-driven
+2. **Configuration** — teams-config.json with group ID, channel ID, per-event toggles
+3. **Event types** — work_complete, pr_opened, pr_merged, issue_closed, decisions, ralph_status
+4. **Usage** — Manual notifications via `.squad/scripts/teams-notify.sh <event_type> "<message>"`
+5. **Troubleshooting** — Login issues, 403 permissions, channel ID extraction, script not found
+6. **Graceful degradation** — Full functionality without Teams configured, no impact on dev workflow
+7. **Configuration checklist** — Prerequisites and test procedure
+
+**Key design patterns established:**
+- Master `enabled` toggle gates all notifications
+- Per-event toggles allow selective notification (e.g., decisions=true, ralph_status=false)
+- Script pattern: read config → check enabled and event type → format → post → exit silently on disable
+- Teams channel ID extracted from Teams UI (right-click → copy link) or Azure CLI
+- No retry logic — fire-and-forget HTTP POST to Graph API
+
+**File paths:**
+- Skill document: `.squad/skills/teams-notify/SKILL.md`
+- Configuration: `.squad/identity/teams-config.json`
+- Script location (for user reference): `.squad/scripts/teams-notify.sh` (not yet created; documented as expected location)
+- Graph API endpoint: `/me/teamwork/sendActivityNotification` (documented in See Also)
+
+**Clarity improvements over requirements:**
+- Added mermaid-like flow diagram to show architecture
+- Included step-by-step channel ID extraction procedure (Teams UI + CLI)
+- Provided schema table with field descriptions
+- Added troubleshooting decision tree with specific `az` commands to test
+- Clarified graceful degradation (no errors, no noise when disabled)
+- Included configuration checklist with pre-flight items

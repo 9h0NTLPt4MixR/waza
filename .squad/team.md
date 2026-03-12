@@ -70,6 +70,14 @@
 - Performance-critical paths requiring benchmarking
 - Changes requiring cross-team discussion
 
+## Integrations
+
+| Service | Channel | Method | Config |
+|---------|---------|--------|--------|
+| Microsoft Teams | [Waza Squad](https://teams.microsoft.com/l/channel/19%3A288df9bbfec84a1da3aec636c7b829a5%40thread.tacv2/Waza%20Squad?groupId=450e4e32-11f8-4436-a9b4-4990ae16fe58&tenantId=72f988bf-86f1-41af-91ab-2d7cd011db47) | Graph API via `az rest` | `.squad/identity/teams-config.json` |
+
+Notifications fire on milestones: work batches, PRs, issues, and decisions. Scribe posts automatically after each work batch. See `.squad/skills/teams-notify/SKILL.md` for details.
+
 ## Key Decisions
 
 See `.squad/decisions.md` for team decisions. Notable:
