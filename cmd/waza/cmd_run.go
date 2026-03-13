@@ -937,6 +937,22 @@ func verboseProgressListener(event orchestration.ProgressEvent) {
 		if e, ok := event.Details["error"].(string); ok && e != "" {
 			fmt.Printf("  [ERROR] %s\n", e)
 		}
+	case orchestration.EventWorkspaceSetup:
+		if dir, ok := event.Details["workspace_dir"].(string); ok && dir != "" {
+			fmt.Printf("  [WORKSPACE] %s\n", dir)
+		}
+		if files, ok := event.Details["files"].([]string); ok && len(files) > 0 {
+			fmt.Printf("  [FILES COPIED] %d file(s):\n", len(files))
+			for _, f := range files {
+				fmt.Printf("    - %s\n", f)
+			}
+		}
+		if skills, ok := event.Details["skill_paths"].([]string); ok && len(skills) > 0 {
+			fmt.Printf("  [SKILL DIRS] %d directory(ies):\n", len(skills))
+			for _, s := range skills {
+				fmt.Printf("    - %s\n", s)
+			}
+		}
 	case orchestration.EventGraderResult:
 		name := fmt.Sprintf("%v", event.Details["grader"])
 		passed, ok := event.Details["passed"].(bool)

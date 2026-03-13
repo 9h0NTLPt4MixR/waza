@@ -501,3 +501,114 @@ func TestRunTest_CacheHitAndTranscriptWrite(t *testing.T) {
 	assert.Equal(t, outcome.TestID, cachedOutcome.TestID)
 	assert.Equal(t, outcome.Status, cachedOutcome.Status)
 }
+
+func TestRunBenchmark_VerboseEmitsWorkspaceSetupEvent(t *testing.T) {
+	tmpDir := t.TempDir()
+	tasksDir := filepath.Join(tmpDir, "tasks")
+	fixtureDir := filepath.Join(tmpDir, "fixtures")
+	require.NoError(t, os.MkdirAll(tasksDir, 0o755))
+	require.NoError(t, os.MkdirAll(fixtureDir, 0o755))
+
+	// Write a fixture file to be copied into the workspace
+	require.NoError(t, os.WriteFile(filepath.Join(fixtureDir, "data.txt"), []byte("hello"), 0o644))
+
+	writeTaskFile(t, filepath.Join(tasksDir, "task.yaml"), `id: task-ws
+name: Workspace Task
+inputs:
+  prompt: "check workspace"
+  files:
+    - path: "data.txt"
+`)
+
+	spec := &models.BenchmarkSpec{
+		SpecIdentity: models.SpecIdentity{Name: "workspace-setup-test"},
+		SkillName:    "test-skill",
+		Config: models.Config{
+			RunsPerTest: 1,
+			TimeoutSec:  30,
+			EngineType:  "mock",
+			ModelID:     "mock-model",
+		},
+		Tasks: []string{"tasks/*.yaml"},
+	}
+
+	cfg := config.NewBenchmarkConfig(spec,
+		config.WithSpecDir(tmpDir),
+		config.WithFixtureDir(fixtureDir),
+		config.WithVerbose(true),
+	)
+	runner := NewTestRunner(cfg, execution.NewMockEngine("mock-model"))
+
+	var workspaceEvents []ProgressEvent
+	runner.OnProgress(func(event ProgressEvent) {
+		if event.EventType == EventWorkspaceSetup {
+			workspaceEvents = append(workspaceEvents, event)
+		}
+	})
+
+	outcome, err := runner.RunBenchmark(context.Background())
+	require.NoError(t, err)
+	require.NotNil(t, outcome)
+
+	// Expect one workspace setup event per run
+	require.Len(t, workspaceEvents, 1)
+
+	ev := workspaceEvents[0]
+	assert.Equal(t, "Workspace Task", ev.TestName)
+
+	// workspace_dir must be a non-empty path
+	dir, ok := ev.Details["workspace_dir"].(string)
+	require.True(t, ok, "workspace_dir should be a string")
+	assert.NotEmpty(t, dir)
+
+	// files should include the resource we configured
+	files, ok := ev.Details["files"].([]string)
+	require.True(t, ok, "files should be a []string")
+	require.Len(t, files, 1)
+	assert.Equal(t, "data.txt", files[0])
+
+	// skill_paths should be an empty slice (no skill dirs configured)
+	skillPaths, ok := ev.Details["skill_paths"].([]string)
+	require.True(t, ok, "skill_paths should be a []string")
+	assert.Empty(t, skillPaths)
+}
+
+func TestRunBenchmark_NonVerboseDoesNotEmitWorkspaceSetupEvent(t *testing.T) {
+	tmpDir := t.TempDir()
+	tasksDir := filepath.Join(tmpDir, "tasks")
+	require.NoError(t, os.MkdirAll(tasksDir, 0o755))
+
+	writeTaskFile(t, filepath.Join(tasksDir, "task.yaml"), `id: task-nonverbose
+name: Non-Verbose Task
+inputs:
+  prompt: "check non-verbose"
+`)
+
+	spec := &models.BenchmarkSpec{
+		SpecIdentity: models.SpecIdentity{Name: "non-verbose-test"},
+		SkillName:    "test-skill",
+		Config: models.Config{
+			RunsPerTest: 1,
+			TimeoutSec:  30,
+			EngineType:  "mock",
+			ModelID:     "mock-model",
+		},
+		Tasks: []string{"tasks/*.yaml"},
+	}
+
+	// verbose = false (default)
+	cfg := config.NewBenchmarkConfig(spec, config.WithSpecDir(tmpDir))
+	runner := NewTestRunner(cfg, execution.NewMockEngine("mock-model"))
+
+	var workspaceEvents []ProgressEvent
+	runner.OnProgress(func(event ProgressEvent) {
+		if event.EventType == EventWorkspaceSetup {
+			workspaceEvents = append(workspaceEvents, event)
+		}
+	})
+
+	_, err := runner.RunBenchmark(context.Background())
+	require.NoError(t, err)
+
+	assert.Empty(t, workspaceEvents, "workspace setup events should not be emitted in non-verbose mode")
+}

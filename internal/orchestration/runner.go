@@ -71,6 +71,7 @@ const (
 	EventAgentPrompt       EventType = "agent_prompt"
 	EventAgentResponse     EventType = "agent_response"
 	EventGraderResult      EventType = "grader_result"
+	EventWorkspaceSetup    EventType = "workspace_setup"
 )
 
 // ProgressEvent represents a progress update
@@ -1023,6 +1024,23 @@ func (r *TestRunner) executeRun(ctx context.Context, tc *models.TestCase, runNum
 			DurationMs: time.Since(startTime).Milliseconds(),
 			ErrorMsg:   err.Error(),
 		}
+	}
+
+	// Emit workspace setup event so consumers can see what was copied and where
+	if r.verbose {
+		files := make([]string, 0, len(req.Resources))
+		for _, res := range req.Resources {
+			files = append(files, res.Path)
+		}
+		r.notifyProgress(ProgressEvent{
+			EventType: EventWorkspaceSetup,
+			TestName:  tc.DisplayName,
+			Details: map[string]any{
+				"workspace_dir": resp.WorkspaceDir,
+				"files":         files,
+				"skill_paths":   req.SkillPaths,
+			},
+		})
 	}
 
 	// Emit agent response event after execution
