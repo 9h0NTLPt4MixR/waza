@@ -32,26 +32,34 @@ waza run [eval.yaml | skill-name]
 
 | Flag | Short | Type | Default | Description |
 |------|-------|------|---------|-------------|
-| `--context-dir` | `-c` | string | `./fixtures` | Fixtures directory path |
+| `--context-dir` | | string | `./fixtures` | Fixtures directory path |
 | `--output` | `-o` | string | | Save results JSON to file |
-| `--output-dir` | `-d` | string | | Save output artifacts to directory |
+| `--output-dir` | | string | | Save output artifacts to directory |
 | `--verbose` | `-v` | bool | false | Detailed progress output |
 | `--parallel` | | bool | false | Run tasks concurrently |
-| `--workers` | `-w` | int | 4 | Number of concurrent workers |
+| `--workers` | | int | 4 | Number of concurrent workers |
 | `--trials` | | int | `config.trials_per_task` | Run each task N times for flakiness detection (omit to use `config.trials_per_task`; when provided, value must be >= 1) |
-| `--task` | `-t` | string | | Filter tasks by name (repeatable) |
+| `--task` | | string | | Filter tasks by name (repeatable) |
 | `--tags` | | string | | Filter tasks by tags (repeatable) |
-| `--model` | `-m` | string | | Override model (repeatable) |
+| `--model` | | string | | Override model (repeatable) |
 | `--judge-model` | | string | | Model for LLM-as-judge graders (overrides execution model) |
 | `--cache` | | bool | false | Enable result caching |
+| `--no-cache` | | bool | false | Disable result caching |
 | `--cache-dir` | | string | `.waza-cache` | Cache directory path |
-| `--format` | `-f` | string | `default` | Output format: `default`, `github-comment` |
+| `--format` | | string | `default` | Output format: `default`, `github-comment` |
 | `--reporter` | | string[] | | Output reporters: `json`, `junit:<path>` (repeatable) |
-| `--timeout` | | int | 300 | Task timeout in seconds |
 | `--baseline` | | bool | false | A/B testing mode — runs each task twice (without skill = baseline, with skill = normal) and computes improvement scores |
+| `--recommend` | | bool | false | Generate heuristic recommendation after multi-model run |
+| `--suggest` | | bool | false | Generate a Copilot report suggesting skill improvements based on test outcomes |
 | `--update-snapshots` | | bool | false | Update or create `diff` grader snapshot files to match current workspace output |
-| `--discover` | | string | | Auto skill discovery — walks directory tree for SKILL.md + eval.yaml (root/tests/evals) |
+| `--discover` | | bool | false | Walk directory tree to discover and run all skill evals |
 | `--strict` | | bool | false | Fail if any SKILL.md lacks eval coverage (use with `--discover`) |
+| `--transcript-dir` | | string | | Directory to save per-task transcript JSON files |
+| `--session-log` | | bool | false | Enable session event logging (NDJSON) |
+| `--session-dir` | | string | | Directory for session log files |
+| `--no-summary` | | bool | false | Skip writing combined summary.json for multi-skill runs |
+| `--skip-graders` | | bool | false | Skip grading (execution only); use with `waza grade` to grade later |
+| `--interpret` | | bool | false | Print a plain-language interpretation of the results |
 
 ### Examples
 
@@ -63,7 +71,7 @@ waza run eval.yaml -v
 waza run code-explainer
 
 # Specify fixtures directory
-waza run eval.yaml -c ./fixtures -v
+waza run eval.yaml --context-dir ./fixtures -v
 
 # Save results
 waza run eval.yaml -o results.json
@@ -98,6 +106,10 @@ waza run --discover ./skills/
 
 # Auto discovery with strict mode (fail if any SKILL.md lacks eval coverage)
 waza run --discover --strict ./skills/
+
+# Skip grading and grade later
+waza run eval.yaml --skip-graders --output results.json
+waza grade eval.yaml --results results.json
 ```
 
 ## waza init
@@ -119,6 +131,9 @@ waza init [directory]
 | Flag | Description |
 |------|-------------|
 | `--no-skill` | Skip first skill creation prompt |
+| `--skills-dir` | Skills directory (overrides detection and defaults) |
+| `--evals-dir` | Evals directory (overrides detection and defaults) |
+| `--results-dir` | Results directory (overrides detection and defaults) |
 
 ### Creates
 
@@ -163,9 +178,10 @@ waza new skill my-skill
 
 ### Flags
 
-| Flag | Description |
-|------|-------------|
-| `--template` | Template pack (coming soon) |
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--template` | `-t` | Template pack (coming soon) |
+| `--output-dir` | `-d` | Directory to scaffold into (default: current directory) |
 
 ### Examples
 
@@ -278,7 +294,6 @@ waza check [skill-name | skill-path]
 
 | Flag | Description |
 |------|-------------|
-| `--verbose` | Detailed compliance report |
 | `--format` | Output format: `text` (default), `json` |
 
 ### Output
@@ -499,8 +514,11 @@ waza results list --format json
 
 | Flag | Description |
 |------|-------------|
-| `--limit <n>` | Maximum results to display (default: 10) |
+| `--limit <n>` | Maximum results to display (default: 20) |
 | `--format` | Output format: `table` or `json` (default: `table`) |
+| `--skill` | Filter by skill name |
+| `--model` | Filter by model ID |
+| `--since` | Filter by date (`YYYY-MM-DD`) |
 
 ### waza results compare
 
@@ -527,12 +545,16 @@ waza dev [skill-name | skill-path]
 
 ### Flags
 
-| Flag | Description |
-|------|-------------|
-| `--target` | Target level: `low`, `medium`, `high` |
-| `--max-iterations` | Max improvement loops (default: 5) |
-| `--auto` | Auto-apply without prompting |
-| `--fast` | Skip integration tests |
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--target` | `medium-high` | Target level: `low`, `medium`, `medium-high`, `high` (iterative mode only) |
+| `--max-iterations` | `5` | Max improvement loops (iterative mode only) |
+| `--auto` | | Auto-apply without prompting (iterative mode only) |
+| `--all` | | Process all skills in workspace |
+| `--filter` | | Filter skills by adherence level (used with `--all`): `low`, `medium`, `medium-high`, `high` |
+| `--copilot` | | Generate a non-interactive markdown report with Copilot suggestions |
+| `--model` | `claude-sonnet-4-20250514` | Model to use with `--copilot` |
+| `--scaffold-triggers` | | Generate `tests/trigger_tests.yaml` from SKILL.md USE FOR / DO NOT USE FOR phrases |
 
 ### Workflow
 
@@ -548,6 +570,127 @@ Iteratively:
 5. Re-scores
 6. Repeats until target reached
 
+## waza grade
+
+Run graders against existing results without re-executing an agent.
+
+```bash
+waza grade <eval.yaml>
+```
+
+Use `waza run --skip-graders --output results.json` to capture execution output, then
+`waza grade` to apply graders separately — useful when graders need to be updated or
+re-run without a full agent execution.
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `<eval.yaml>` | Path to the evaluation spec file |
+
+### Flags
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--results` | | Path to `waza run` JSON output **(required)** |
+| `--task` | | Task ID to grade (omit to grade all tasks) |
+| `--workspace` | | Agent workspace directory for file-based graders (default: `.`) |
+| `--judge-model` | | Model override for prompt graders |
+| `--output` | `-o` | Write full `EvaluationOutcome` JSON to file |
+| `--verbose` | `-v` | Verbose output |
+
+### Examples
+
+```bash
+# Full two-step workflow
+waza run eval.yaml --skip-graders --output results.json
+waza grade eval.yaml --results results.json
+
+# Grade a specific task
+waza grade eval.yaml --results results.json --task my-task
+
+# Save graded results to a new file
+waza grade eval.yaml --results results.json -o graded.json
+```
+
+## waza cache
+
+Manage the evaluation result cache.
+
+```bash
+waza cache <subcommand>
+```
+
+### waza cache clear
+
+Clear all cached evaluation results.
+
+```bash
+waza cache clear
+```
+
+#### Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--cache-dir` | `.waza-cache` | Cache directory to clear |
+
+#### Examples
+
+```bash
+waza cache clear
+waza cache clear --cache-dir /tmp/my-cache
+```
+
+## waza session
+
+View and manage session event logs written during eval runs.
+
+```bash
+waza session <subcommand>
+```
+
+### waza session list
+
+List recorded session log files.
+
+```bash
+waza session list
+```
+
+#### Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--dir` | `.` | Directory to search for session logs |
+
+#### Examples
+
+```bash
+waza session list
+waza session list --dir ./session-logs
+```
+
+### waza session view
+
+Display a session timeline from an NDJSON session log file.
+
+```bash
+waza session view <session-file>
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `<session-file>` | Path to the session log file |
+
+#### Examples
+
+```bash
+waza session view session-2024-01-01.ndjson
+```
+
 ## waza serve
 
 Start the interactive dashboard.
@@ -558,18 +701,24 @@ waza serve
 
 ### Flags
 
-| Flag | Description |
-|------|-------------|
-| `--port` | Port (default: 3000) |
-| `--tcp` | TCP address for JSON-RPC (e.g., `:9000`) |
-| `--stdio` | Use stdin/stdout for piping |
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--port` | `3000` | HTTP server port |
+| `--http` | | Start HTTP dashboard server (default when `--tcp` is not set) |
+| `--no-browser` | | Don't auto-open the browser |
+| `--results-dir` | `.` | Directory to read results from |
+| `--tcp` | | TCP address for JSON-RPC (e.g., `:9000`) |
+| `--tcp-allow-remote` | | Allow binding to non-loopback addresses (WARNING: no authentication) |
 
 ### Examples
 
 ```bash
-waza serve                    # http://localhost:3000
-waza serve --port 8080        # http://localhost:8080
-waza serve --tcp :9000        # JSON-RPC TCP server
+waza serve                        # http://localhost:3000
+waza serve --port 8080            # http://localhost:8080
+waza serve --no-browser           # skip auto-open
+waza serve --tcp :9000            # JSON-RPC TCP server
+waza serve --tcp :9000 --tcp-allow-remote  # expose to network
+waza serve --results-dir ./results # load results from a specific dir
 ```
 
 ## Graders
@@ -654,7 +803,7 @@ waza run eval.yaml --baseline -o results.json
 |------|-------------|
 | `--help` | Show help |
 | `--version` | Show version |
-| `--verbose` | Enable debug output |
+| `--debug` | Enable debug logging |
 
 ## Environment Variables
 
