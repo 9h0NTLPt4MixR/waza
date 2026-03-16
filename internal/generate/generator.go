@@ -59,7 +59,6 @@ func ParseSkillMD(path string) (fm *SkillFrontmatter, err error) {
 	raw := strings.Join(lines, "\n")
 	var parsed SkillFrontmatter
 	decoder := yaml.NewDecoder(strings.NewReader(raw))
-	decoder.KnownFields(true) // Strict parsing to catch unknown fields
 	if err := decoder.Decode(&parsed); err != nil {
 		return nil, fmt.Errorf("parsing frontmatter YAML: %w", err)
 	}
