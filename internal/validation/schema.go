@@ -109,7 +109,6 @@ func validateYAMLBytes(schema *jsonschema.Schema, data []byte) []string {
 	// Parse YAML into generic any
 	var yamlDoc any
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
-	decoder.KnownFields(true)
 	if err := decoder.Decode(&yamlDoc); err != nil {
 		return []string{fmt.Sprintf("YAML parse error: %v", err)}
 	}

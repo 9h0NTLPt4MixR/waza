@@ -198,9 +198,9 @@ func (h *HandlerContext) handleEvalValidate(_ context.Context, params json.RawMe
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	decoder.KnownFields(true)
 
-	if yerr := decoder.Decode(&spec); yerr != nil {
+	yerr := decoder.Decode(&spec)
+	if yerr != nil {
 		errs = append(errs, fmt.Sprintf("parse error: %v", yerr))
-		return &EvalValidateResult{Valid: false, Errors: errs}, nil
 	}
 
 	// Schema validation via validation package
@@ -214,8 +214,10 @@ func (h *HandlerContext) handleEvalValidate(_ context.Context, params json.RawMe
 		}
 	}
 
-	if verr := spec.Validate(); verr != nil {
-		errs = append(errs, verr.Error())
+	if yerr == nil {
+		if verr := spec.Validate(); verr != nil {
+			errs = append(errs, verr.Error())
+		}
 	}
 
 	if len(spec.Tasks) == 0 {
