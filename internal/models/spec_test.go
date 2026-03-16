@@ -6,6 +6,62 @@ import (
 	"testing"
 )
 
+func TestBenchmarkSpec_Validate(t *testing.T) {
+	tests := []struct {
+		name        string
+		specYAML    string
+		expectError bool
+	}{
+		{
+			name: "valid spec",
+			specYAML: `name: valid
+skill: test-skill
+config:
+  trials_per_task: 1
+  timeout_seconds: 60
+  executor: mock
+`,
+			expectError: false,
+		},
+		{
+			name: "valid spec",
+			specYAML: `name: valid
+skill: test-skill
+unknownElement: should cause error
+config:
+  trials_per_task: 1
+  timeout_seconds: 60
+  executor: mock
+`,
+			expectError: true,
+		},
+		{
+			name: "invalid spec with zero trials",
+			specYAML: `name: invalid-trials
+skill: test-skill
+config:
+  trials_per_task: 0
+  timeout_seconds: 60
+  executor: mock
+`,
+			expectError: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			specPath := filepath.Join(tempDir, "spec.yaml")
+			if err := os.WriteFile(specPath, []byte(tt.specYAML), 0644); err != nil {
+				t.Fatalf("Failed to write spec file: %v", err)
+			}
+			_, err := LoadBenchmarkSpec(specPath)
+			if (err != nil) != tt.expectError {
+				t.Errorf("LoadBenchmarkSpec() error = %v, expectError %v", err, tt.expectError)
+			}
+		})
+	}
+}
+
 func TestBenchmarkSpec_LoadFromYAML(t *testing.T) {
 	// Create temp YAML file
 	tempDir := t.TempDir()

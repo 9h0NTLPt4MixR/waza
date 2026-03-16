@@ -1,6 +1,7 @@
 package jsonrpc
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -194,7 +195,10 @@ func (h *HandlerContext) handleEvalValidate(_ context.Context, params json.RawMe
 	var spec models.BenchmarkSpec
 	var errs []string
 
-	if yerr := yaml.Unmarshal(data, &spec); yerr != nil {
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+
+	if yerr := decoder.Decode(&spec); yerr != nil {
 		errs = append(errs, fmt.Sprintf("parse error: %v", yerr))
 		return &EvalValidateResult{Valid: false, Errors: errs}, nil
 	}

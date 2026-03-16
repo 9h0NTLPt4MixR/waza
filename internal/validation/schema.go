@@ -1,6 +1,7 @@
 package validation
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -61,7 +62,9 @@ func ValidateEvalFile(evalPath string) (evalErrs []string, taskErrs map[string][
 	var spec struct {
 		Tasks []string `yaml:"tasks"`
 	}
-	if yamlErr := yaml.Unmarshal(data, &spec); yamlErr != nil {
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	if yamlErr := decoder.Decode(&spec); yamlErr != nil {
 		return evalErrs, nil, nil // can't resolve tasks, but eval errors are still useful
 	}
 
@@ -106,7 +109,9 @@ func ValidateTaskBytes(data []byte) []string {
 func validateYAMLBytes(schema *jsonschema.Schema, data []byte) []string {
 	// Parse YAML into generic any
 	var yamlDoc any
-	if err := yaml.Unmarshal(data, &yamlDoc); err != nil {
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&yamlDoc); err != nil {
 		return []string{fmt.Sprintf("YAML parse error: %v", err)}
 	}
 

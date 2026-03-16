@@ -1,6 +1,7 @@
 package models
 
 import (
+	"bytes"
 	"encoding/json"
 	"testing"
 
@@ -67,7 +68,9 @@ tasks: []
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var spec BenchmarkSpec
-			err := yaml.Unmarshal([]byte(tt.yamlContent), &spec)
+			decoder := yaml.NewDecoder(bytes.NewReader([]byte(tt.yamlContent)))
+			decoder.KnownFields(true)
+			err := decoder.Decode(&spec)
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectBaseline, spec.Baseline)
 		})

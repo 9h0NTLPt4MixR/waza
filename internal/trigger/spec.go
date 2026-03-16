@@ -1,6 +1,7 @@
 package trigger
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 
@@ -23,7 +24,9 @@ var validConfidences = map[string]bool{"": true, "high": true, "medium": true}
 
 func ParseSpec(data []byte) (*TestSpec, error) {
 	var s TestSpec
-	if err := yaml.Unmarshal(data, &s); err != nil {
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&s); err != nil {
 		return nil, fmt.Errorf("parsing trigger tests: %w", err)
 	}
 	if s.Skill == "" {

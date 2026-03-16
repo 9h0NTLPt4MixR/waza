@@ -178,6 +178,19 @@ defaults:
 	}
 }
 
+func TestLoad_UnknownFields_ReturnsError(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, ".waza.yaml", `
+defaults:
+  engine: mock
+  unknownField: should cause error
+`)
+	_, err := Load(dir)
+	if err == nil {
+		t.Fatal("Load() should return error for unknown fields")
+	}
+}
+
 func TestLoad_WalksUpDirectories(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, ".waza.yaml", `

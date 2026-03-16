@@ -3,6 +3,7 @@
 package projectconfig
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -176,7 +177,10 @@ func Load(startDir string) (*ProjectConfig, error) {
 	}
 
 	var fileCfg ProjectConfig
-	if err := yaml.Unmarshal(data, &fileCfg); err != nil {
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+
+	if err := decoder.Decode(&fileCfg); err != nil {
 		return nil, fmt.Errorf("parsing .waza.yaml: %w", err)
 	}
 

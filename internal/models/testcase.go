@@ -1,6 +1,7 @@
 package models
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 
@@ -114,8 +115,10 @@ func LoadTestCase(path string) (*TestCase, error) {
 	}
 
 	var tc TestCase
-	if err := yaml.Unmarshal(data, &tc); err != nil {
-		return nil, err
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true) // Strict parsing to catch unknown fields
+	if err := decoder.Decode(&tc); err != nil {
+		return nil, fmt.Errorf("parsing test case YAML: %w", err)
 	}
 
 	// Note: Active field defaults to nil when not specified in YAML.

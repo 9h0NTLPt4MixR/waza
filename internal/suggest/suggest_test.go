@@ -304,3 +304,37 @@ tasks:
 	require.NoError(t, err)
 	require.True(t, strings.Contains(string(taskData), "id: basic-001"))
 }
+
+func TestValidateInvalidConfigFields(t *testing.T) {
+	invalidEvalYAML := `name: bad-eval
+description: has unknown field
+skill: test-skill
+version: "1.0"
+config:
+  trials_per_task: 1
+  timeout_seconds: 120
+  executor: mock
+  model: test
+  unknown_field: should cause error
+`
+	err := validateEvalYAML(invalidEvalYAML)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unknown_field")
+}
+
+func TestValidateInvalidBenchmarkSecFields(t *testing.T) {
+	invalidEvalYAML := `name: bad-eval
+description: has unknown field
+skill: test-skill
+version: "1.0"
+unknown_field: should cause error
+config:
+  trials_per_task: 1
+  timeout_seconds: 120
+  executor: mock
+  model: test
+`
+	err := validateEvalYAML(invalidEvalYAML)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unknown field")
+}

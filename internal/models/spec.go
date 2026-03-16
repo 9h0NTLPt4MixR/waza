@@ -1,6 +1,7 @@
 package models
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -115,7 +116,10 @@ func LoadBenchmarkSpec(path string) (*BenchmarkSpec, error) {
 	}
 
 	var spec BenchmarkSpec
-	if err := yaml.Unmarshal(data, &spec); err != nil {
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true) // Strict parsing to catch unknown fields
+
+	if err := decoder.Decode(&spec); err != nil {
 		return nil, err
 	}
 

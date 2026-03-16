@@ -304,7 +304,9 @@ func skillRootsForRef(rootDir, ref string) []string {
 			Skills string `yaml:"skills"`
 		} `yaml:"paths"`
 	}
-	if err := yaml.Unmarshal([]byte(raw), &cfg); err == nil {
+	decoder := yaml.NewDecoder(strings.NewReader(raw))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&cfg); err == nil {
 		addRoot(cfg.Paths.Skills)
 	}
 	return roots
