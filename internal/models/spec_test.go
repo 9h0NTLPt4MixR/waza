@@ -24,7 +24,7 @@ config:
 			expectError: false,
 		},
 		{
-			name: "valid spec",
+			name: "unknown field",
 			specYAML: `name: valid
 skill: test-skill
 unknownElement: should cause error

@@ -322,7 +322,7 @@ config:
 	require.Contains(t, err.Error(), "unknown_field")
 }
 
-func TestValidateInvalidBenchmarkSecFields(t *testing.T) {
+func TestValidateInvalidBenchmarkSpecFields(t *testing.T) {
 	invalidEvalYAML := `name: bad-eval
 description: has unknown field
 skill: test-skill
@@ -336,5 +336,5 @@ config:
 `
 	err := validateEvalYAML(invalidEvalYAML)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "unknown field")
+	require.Contains(t, err.Error(), "unknown_field")
 }

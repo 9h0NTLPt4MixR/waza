@@ -299,14 +299,8 @@ func skillRootsForRef(rootDir, ref string) []string {
 	if err != nil {
 		return roots
 	}
-	var cfg struct {
-		Paths struct {
-			Skills string `yaml:"skills"`
-		} `yaml:"paths"`
-	}
-	decoder := yaml.NewDecoder(strings.NewReader(raw))
-	decoder.KnownFields(true)
-	if err := decoder.Decode(&cfg); err == nil {
+	var cfg projectconfig.ProjectConfig
+	if err := yaml.Unmarshal([]byte(raw), &cfg); err == nil {
 		addRoot(cfg.Paths.Skills)
 	}
 	return roots

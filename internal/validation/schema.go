@@ -63,7 +63,6 @@ func ValidateEvalFile(evalPath string) (evalErrs []string, taskErrs map[string][
 		Tasks []string `yaml:"tasks"`
 	}
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
-	decoder.KnownFields(true)
 	if yamlErr := decoder.Decode(&spec); yamlErr != nil {
 		return evalErrs, nil, nil // can't resolve tasks, but eval errors are still useful
 	}
