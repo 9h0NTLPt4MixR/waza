@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Custom YAML deserializers for config types (#106)
+- Validate only known fields in YAML decoders. (#132)
 - Token limits priority inverted to `.waza.yaml` first (#64)
 - `@wbreza` added to CODEOWNERS (#111)
 - Go 1.26+ noted in agent instruction files (#108)
