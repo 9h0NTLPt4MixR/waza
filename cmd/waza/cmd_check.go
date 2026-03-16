@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1083,10 +1082,7 @@ func countValidatedTasks(report *readinessReport) int {
 		Tasks []string `yaml:"tasks"`
 	}
 
-	decoder := yaml.NewDecoder(bytes.NewReader(data))
-	decoder.KnownFields(true) // Strict parsing to catch unknown fields
-
-	if err := decoder.Decode(&spec); err != nil {
+	if err := yaml.Unmarshal(data, &spec); err != nil {
 		return 0
 	}
 	baseDir := filepath.Dir(report.evalPath)
