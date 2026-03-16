@@ -304,6 +304,19 @@ func skillRootsForRef(rootDir, ref string) []string {
 	decoder.KnownFields(true)
 	if err := decoder.Decode(&cfg); err == nil {
 		addRoot(cfg.Paths.Skills)
+		return roots
+	}
+
+	// Fallback: decode only the paths.skills field without strict KnownFields
+	type minimalConfig struct {
+		Paths struct {
+			Skills string `yaml:"skills"`
+		} `yaml:"paths"`
+	}
+	var minimal minimalConfig
+	fallbackDecoder := yaml.NewDecoder(strings.NewReader(raw))
+	if err := fallbackDecoder.Decode(&minimal); err == nil {
+		addRoot(minimal.Paths.Skills)
 	}
 	return roots
 }
