@@ -136,20 +136,19 @@ func parseGraderSelection(raw string) []string {
 	}
 
 	// Try structured YAML: { graders: [code, keyword, ...] }
+	// Use permissive decoding (no KnownFields) so that LLM responses with extra
+	// fields alongside "graders" are still accepted here. Unknown-field validation
+	// happens later in validateEvalYAML, not during grader-type selection.
 	var structured struct {
 		Graders []string `yaml:"graders"`
 	}
-	decoder := yaml.NewDecoder(strings.NewReader(normalized))
-	decoder.KnownFields(true)
-	if err := decoder.Decode(&structured); err == nil && len(structured.Graders) > 0 {
+	if err := yaml.NewDecoder(strings.NewReader(normalized)).Decode(&structured); err == nil && len(structured.Graders) > 0 {
 		return filterValidGraderTypes(structured.Graders)
 	}
 
 	// Try bare YAML list: [code, keyword, ...]
 	var bare []string
-	decoder = yaml.NewDecoder(strings.NewReader(normalized))
-	decoder.KnownFields(true)
-	if err := decoder.Decode(&bare); err == nil && len(bare) > 0 {
+	if err := yaml.NewDecoder(strings.NewReader(normalized)).Decode(&bare); err == nil && len(bare) > 0 {
 		return filterValidGraderTypes(bare)
 	}
 

@@ -106,6 +106,14 @@ func TestParseGraderSelectionEmpty(t *testing.T) {
 	require.Nil(t, result)
 }
 
+// TestParseGraderSelectionExtraFields verifies that extra keys alongside "graders"
+// (common in LLM responses) do not prevent grader-type extraction.
+func TestParseGraderSelectionExtraFields(t *testing.T) {
+	input := "graders:\n  - code\n  - text\nreason: these graders cover the task\n"
+	result := parseGraderSelection(input)
+	require.Equal(t, []string{"code", "text"}, result)
+}
+
 func TestGraderSummariesListsAllTypes(t *testing.T) {
 	summaries := GraderSummaries()
 	for _, graderType := range AvailableGraderTypes() {
