@@ -1,6 +1,9 @@
 # Ensure script fails on any error
 $ErrorActionPreference = 'Stop'
 
+$goarch = $env:GOARCH
+$goos = $env:GOOS
+
 # Get the directory of the script
 $SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
 
@@ -72,6 +75,19 @@ foreach ($PLATFORM in $PLATFORMS) {
         exit 1
     }
 }
+
+if ($goos) {
+    Write-Host "Restoring original GOOS: $goos"
+    $env:GOOS = $goos
+}
+else { remove-item env:GOOS }
+
+if ($goarch) {
+    Write-Host "Restoring original GOARCH: $goarch"
+    $env:GOARCH = $goarch
+}
+else { remove-item env:GOARCH }
+
 
 Write-Host "Build completed successfully!"
 Write-Host "Binaries are located in the $OUTPUT_DIR directory."
