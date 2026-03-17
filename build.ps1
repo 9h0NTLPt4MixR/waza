@@ -80,13 +80,21 @@ if ($goos) {
     Write-Host "Restoring original GOOS: $goos"
     $env:GOOS = $goos
 }
-else { remove-item env:GOOS }
+else {
+    if (Test-Path env:GOOS) {
+        Remove-Item env:GOOS
+    }
+}
 
 if ($goarch) {
     Write-Host "Restoring original GOARCH: $goarch"
     $env:GOARCH = $goarch
 }
-else { remove-item env:GOARCH }
+else {
+    if (Test-Path env:GOARCH) {
+        Remove-Item env:GOARCH
+    }
+}
 
 
 Write-Host "Build completed successfully!"
