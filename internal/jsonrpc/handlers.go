@@ -201,30 +201,34 @@ func (h *HandlerContext) handleEvalValidate(_ context.Context, params json.RawMe
 	yerr := decoder.Decode(&spec)
 	if yerr != nil {
 		errs = append(errs, fmt.Sprintf("parse error: %v", yerr))
-	} else {
-		// Schema validation via validation package - Only executed if the YAML is syntactically correct,
-		// to avoid overwhelming users with schema errors when the YAML is not parseable at all.
-		schemaEvalErrs, schemaTaskErrs, _ := validation.ValidateEvalFile(p.Path)
-		for _, e := range schemaEvalErrs {
-			errs = append(errs, fmt.Sprintf("schema: %s", e))
-		}
-		for file, fileErrs := range schemaTaskErrs {
-			for _, e := range fileErrs {
-				errs = append(errs, fmt.Sprintf("%s: %s", file, e))
-			}
-		}
+		return &EvalValidateResult{
+			Valid:  false,
+			Errors: errs,
+		}, nil
+	}
 
-		if verr := spec.Validate(); verr != nil {
-			errs = append(errs, verr.Error())
+	// Schema validation via validation package - Only executed if the YAML is syntactically correct,
+	// to avoid overwhelming users with schema errors when the YAML is not parseable at all.
+	schemaEvalErrs, schemaTaskErrs, _ := validation.ValidateEvalFile(p.Path)
+	for _, e := range schemaEvalErrs {
+		errs = append(errs, fmt.Sprintf("schema: %s", e))
+	}
+	for file, fileErrs := range schemaTaskErrs {
+		for _, e := range fileErrs {
+			errs = append(errs, fmt.Sprintf("%s: %s", file, e))
 		}
+	}
 
-		if len(spec.Tasks) == 0 {
-			errs = append(errs, "no tasks defined")
-		}
+	if verr := spec.Validate(); verr != nil {
+		errs = append(errs, verr.Error())
+	}
 
-		if spec.Config.EngineType == "" {
-			errs = append(errs, "executor is required")
-		}
+	if len(spec.Tasks) == 0 {
+		errs = append(errs, "no tasks defined")
+	}
+
+	if spec.Config.EngineType == "" {
+		errs = append(errs, "executor is required")
 	}
 
 	return &EvalValidateResult{

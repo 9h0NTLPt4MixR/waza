@@ -553,6 +553,28 @@ else:
 
 ---
 
+## Tool Constraint
+
+Defines constraints on the tools which are used during grading
+
+```yaml
+- type: tool_constraint
+  name: allowed_tools
+  config:
+    command: "python3"
+    args: ["scripts/grade.py"]
+    timeout: 60
+```
+
+**Options:**
+
+| Option         | Type | Description                               |
+| -------------- | ---- | ----------------------------------------- |
+| `expect_tools` | list | Tool specs that MUST have been called     |
+| `reject_tools` | list | Tool specs that MUST NOT have been called |
+
+## Trigger
+
 ## Using graders in eval YAML
 
 ### Global graders
