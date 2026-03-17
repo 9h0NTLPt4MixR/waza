@@ -10,28 +10,28 @@ Complete reference for YAML schema used in waza evaluations.
 Main evaluation configuration file.
 
 ```yaml
-name: code-explainer-eval          # Required: eval suite name
-description: "..."                 # Required: what this eval tests
-skill: code-explainer              # Required: skill name
-version: "1.0"                      # Optional: version number
+name: code-explainer-eval # Required: eval suite name
+description: "..." # Required: what this eval tests
+skill: code-explainer # Required: skill name
+version: "1.0" # Optional: version number
 
 config:
-  trials_per_task: 1               # Runs per task
-  timeout_seconds: 300             # Task timeout
-  parallel: false                  # Concurrent execution
-  workers: 4                        # Parallel workers
-  model: claude-sonnet-4.6          # Default model
-  executor: mock                    # mock or copilot-sdk
+  trials_per_task: 1 # Runs per task
+  timeout_seconds: 300 # Task timeout
+  parallel: false # Concurrent execution
+  workers: 4 # Parallel workers
+  model: claude-sonnet-4.6 # Default model
+  executor: mock # mock or copilot-sdk
 
-graders:                            # Validation rules
+graders: # Validation rules
   - type: text
     name: checks_logic
     config:
       regex_match: "(?i)(function)"
 
-tasks:                              # Test cases
-  - "tasks/*.yaml"                 # From files
-  - id: inline-001                 # Or inline
+tasks: # Test cases
+  - "tasks/*.yaml" # From files
+  - id: inline-001 # Or inline
     name: Inline Task
     inputs:
       prompt: "..."
@@ -107,10 +107,11 @@ Maximum seconds per task before timeout.
 
 ```yaml
 config:
-  timeout_seconds: 300  # 5 minutes
+  timeout_seconds: 300 # 5 minutes
 ```
 
 Common values:
+
 - `60` — Quick validation tasks
 - `300` — Standard code analysis
 - `600` — Complex multi-file tasks
@@ -159,6 +160,7 @@ config:
 **Options:** `mock`, `copilot-sdk`
 
 Execution engine:
+
 - `mock` — Local testing (no API calls)
 - `copilot-sdk` — Real LLM execution
 
@@ -177,7 +179,7 @@ graders:
     name: pattern_check
     config:
       regex_match: ["success"]
-  
+
   - type: code
     name: logic_check
     config:
@@ -187,12 +189,12 @@ graders:
 
 ### Grader Fields
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `type` | string | Grader type: `code`, `regex`, `keyword`, `file`, `diff`, `json_schema`, `prompt`, `behavior`, `action_sequence`, `skill_invocation`, `program` |
-| `name` | string | Unique grader name (used to reference in tasks) |
-| `weight` | float | Relative importance in composite scoring (default: `1.0`) |
-| `config` | object | Type-specific configuration |
+| Field    | Type   | Description                                                                                                                                    |
+| -------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `type`   | string | Grader type: `code`, `regex`, `keyword`, `file`, `diff`, `json_schema`, `prompt`, `behavior`, `action_sequence`, `skill_invocation`, `program` |
+| `name`   | string | Unique grader name (used to reference in tasks)                                                                                                |
+| `weight` | float  | Relative importance in composite scoring (default: `1.0`)                                                                                      |
+| `config` | object | Type-specific configuration                                                                                                                    |
 
 See **[Validators & Graders](../../guides/graders/)** for complete documentation.
 
@@ -202,9 +204,9 @@ List of test cases to run.
 
 ```yaml
 tasks:
-  - "tasks/*.yaml"          # Load from files
-  - "tasks/basic.yaml"      # Specific file
-  - id: inline-001          # Inline task
+  - "tasks/*.yaml" # Load from files
+  - "tasks/basic.yaml" # Specific file
+  - id: inline-001 # Inline task
     name: "Test 1"
     inputs:
       prompt: "..."
@@ -214,9 +216,9 @@ tasks:
 
 ```yaml
 tasks:
-  - "tasks/*.yaml"              # All YAML files
-  - "tasks/basic/*.yaml"        # Subdirectory
-  - "tasks/important.yaml"      # Single file
+  - "tasks/*.yaml" # All YAML files
+  - "tasks/basic/*.yaml" # Subdirectory
+  - "tasks/important.yaml" # Single file
 ```
 
 File path is relative to `eval.yaml`.
@@ -238,20 +240,20 @@ tasks:
 Individual task files (`tasks/task-name.yaml`).
 
 ```yaml
-id: basic-usage-001              # Required: unique ID
-name: Basic Usage                # Required: display name
-description: "..."               # Optional: full description
+id: basic-usage-001 # Required: unique ID
+name: Basic Usage # Required: display name
+description: "..." # Optional: full description
 
-tags:                            # Optional: for filtering
+tags: # Optional: for filtering
   - basic
   - happy-path
 
-inputs:                          # Required: test inputs
+inputs: # Required: test inputs
   prompt: "Your instruction"
   files:
     - path: sample.py
 
-expected:                        # Required: validation rules
+expected: # Required: validation rules
   output_contains: ["function"]
   behavior:
     max_tool_calls: 5
@@ -350,8 +352,8 @@ Files to include in the task context.
 ```yaml
 inputs:
   files:
-    - path: sample.py           # Reference fixture
-    - content: "def foo(): ..."  # Or inline content
+    - path: sample.py # Reference fixture
+    - content: "def foo(): ..." # Or inline content
 ```
 
 ## expected Section
@@ -367,7 +369,6 @@ expected:
     - type: task_completed
   behavior:
     max_tool_calls: 5
-    max_response_time_ms: 30000
     max_tokens: 4096
 ```
 
@@ -434,9 +435,8 @@ Behavioral constraints.
 ```yaml
 expected:
   behavior:
-    max_tool_calls: 5           # Max tools to invoke
-    max_response_time_ms: 30000  # Max execution time
-    max_tokens: 4096            # Max tokens in response
+    max_tool_calls: 5 # Max tools to invoke
+    max_tokens: 4096 # Max tokens in response
 ```
 
 ## .waza.yaml Configuration
@@ -488,12 +488,12 @@ See the **[Token Limits guide](../../guides/token-limits/)** for full documentat
 
 **Priority order:** `.waza.yaml tokens.limits` → `.token-limits.json` (legacy, emits deprecation warning) → built-in defaults.
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `warningThreshold` | integer | `2500` | Token count at which a soft warning is shown |
-| `fallbackLimit` | integer | `1000` | Limit applied to files that match no pattern |
-| `limits.defaults` | map | (built-in) | Glob patterns → token limits |
-| `limits.overrides` | map | `{}` | Exact file paths → token limits (take precedence over `defaults`) |
+| Field              | Type    | Default    | Description                                                       |
+| ------------------ | ------- | ---------- | ----------------------------------------------------------------- |
+| `warningThreshold` | integer | `2500`     | Token count at which a soft warning is shown                      |
+| `fallbackLimit`    | integer | `1000`     | Limit applied to files that match no pattern                      |
+| `limits.defaults`  | map     | (built-in) | Glob patterns → token limits                                      |
+| `limits.overrides` | map     | `{}`       | Exact file paths → token limits (take precedence over `defaults`) |
 
 Both `limits.defaults` and `limits.overrides` are optional. When `tokens.limits` is present in `.waza.yaml`, `.token-limits.json` is **not** consulted.
 
@@ -573,13 +573,13 @@ graders:
         - "function"
         - "parameter"
         - "return"
-  
+
   - type: code
     name: minimum_length
     config:
       assertions:
         - "len(output) > 200"
-  
+
   - type: tool_calls
     name: reasonable_calls
     config:

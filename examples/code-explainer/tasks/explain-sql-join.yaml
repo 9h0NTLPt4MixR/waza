@@ -23,15 +23,10 @@ inputs:
 expected:
   output_contains:
     - "join"
-  output_contains_any:
-    - "users"
-    - "orders"
-    - "table"
   outcomes:
     - type: task_completed
   behavior:
     max_tool_calls: 5
-    max_response_time_ms: 30000
 
 graders:
   - name: explains_sql_join

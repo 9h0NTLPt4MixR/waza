@@ -18,6 +18,7 @@ curl -fsSL https://raw.githubusercontent.com/microsoft/waza/main/install.sh | ba
 ```
 
 This downloads the latest release, verifies the checksum, and installs the `waza` binary to:
+
 - `/usr/local/bin/waza` (if writable), or
 - `~/bin/waza` (if `/usr/local/bin` is not writable)
 
@@ -156,7 +157,6 @@ expected:
     - "return"
   behavior:
     max_tool_calls: 5
-    max_response_time_ms: 30000
 ```
 
 ### Step 5: Add Test Fixtures
@@ -285,6 +285,7 @@ Make sure you're in a project with `skills/` directory or a standalone skill wit
 ### "eval.yaml not found"
 
 Check that:
+
 - File is at `evals/{skill-name}/eval.yaml` (project mode)
 - Or at `{skill}/evals/eval.yaml` (standalone)
 

@@ -35,6 +35,7 @@ waza init
 ```
 
 This creates:
+
 ```
 my-skills-repo/
 ├── skills/           # Skill definitions
@@ -45,6 +46,7 @@ my-skills-repo/
 ```
 
 You'll be prompted to create your first skill. You can:
+
 - Type a skill name (e.g., `code-explainer`) and continue
 - Type `skip` to initialize without a skill
 - Use `--no-skill` flag to skip the prompt entirely
@@ -57,6 +59,7 @@ waza new skill code-explainer
 ```
 
 This scaffolds:
+
 ```
 my-skills-repo/
 ├── skills/
@@ -129,10 +132,10 @@ expected:
     - type: task_completed
   behavior:
     max_tool_calls: 5
-    max_response_time_ms: 30000
 ```
 
 Create additional tasks in `evals/code-explainer/tasks/` as needed:
+
 - `edge-case.yaml` — boundary conditions, error handling
 - `should-not-trigger.yaml` — negative tests (prompt doesn't match skill intent)
 - `advanced.yaml` — complex scenarios
@@ -142,6 +145,7 @@ Create additional tasks in `evals/code-explainer/tasks/` as needed:
 Place test files in `evals/code-explainer/fixtures/`:
 
 **fixtures/sample.py:**
+
 ```python
 def fibonacci(n):
     """Calculate the nth Fibonacci number."""
@@ -151,6 +155,7 @@ def fibonacci(n):
 ```
 
 **fixtures/complex.py:**
+
 ```python
 class DataProcessor:
     def __init__(self, data):
@@ -193,7 +198,6 @@ graders:
     name: reasonable_cost
     config:
       max_tool_calls: 10
-      max_response_time_ms: 30000
 
 tasks:
   - "tasks/*.yaml"
@@ -216,6 +220,7 @@ waza run code-explainer -o results.json
 ```
 
 Example output:
+
 ```
 Running evaluations for code-explainer...
   ✓ basic-usage-001 passed (has_output, explains_concepts, reasonable_cost)
@@ -241,6 +246,7 @@ waza dev code-explainer --target high --auto
 ```
 
 Output:
+
 ```
 🔍 Skill Readiness Check
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -293,6 +299,7 @@ waza new skill my-translator
 ```
 
 This creates a self-contained directory:
+
 ```
 my-translator/
 ├── SKILL.md                    # Skill definition
@@ -387,6 +394,7 @@ waza new skill code-formatter
 ```
 
 The wizard asks:
+
 - Skill name
 - Type (utility, analysis, generation, etc.)
 - Triggers (example prompts)
@@ -400,6 +408,7 @@ And generates a complete SKILL.md.
 ## Migration: Old Layout to New Separated Layout
 
 If you have an old co-located layout:
+
 ```
 my-skills-repo/
 └── code-explainer/
@@ -487,16 +496,21 @@ git push
 ## Troubleshooting
 
 ### "skill not found in workspace"
+
 Make sure you're in a project with `skills/` directory or a standalone skill with `SKILL.md`.
 
 ### "eval.yaml not found"
+
 Check that:
+
 - File is at `evals/{skill-name}/eval.yaml` (project mode)
 - Or at `{skill}/evals/eval.yaml` (standalone)
 - Or at `{skill}/eval.yaml` (legacy/co-located)
 
 ### "No tasks in eval.yaml"
+
 Ensure your `eval.yaml` has:
+
 ```yaml
 tasks:
   - "tasks/*.yaml"
@@ -505,6 +519,7 @@ tasks:
 And that you have `.yaml` files in `tasks/` directory.
 
 ### "Mock executor always passes"
+
 The `mock` executor is meant for local iteration without API calls. For real evaluation, use `executor: copilot-sdk` and set `GITHUB_TOKEN`.
 
 ---

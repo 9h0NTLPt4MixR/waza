@@ -24,15 +24,10 @@ expected:
   output_contains:
     - "async"
     - "fetch"
-  output_contains_any:
-    - "await"
-    - "promise"
-    - "asynchronous"
   outcomes:
     - type: task_completed
   behavior:
     max_tool_calls: 5
-    max_response_time_ms: 30000
 
 graders:
   - name: explains_async_pattern

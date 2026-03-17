@@ -23,17 +23,11 @@ inputs:
 expected:
   output_contains:
     - "list"
-  output_contains_any:
-    - "square"
-    - "x**2"
-    - "power"
-    - "comprehension"
   outcomes:
     - type: task_completed
   behavior:
     # Simple explanation shouldn't need many tool calls
     max_tool_calls: 3
-    max_response_time_ms: 20000
 
 graders:
   - name: explains_comprehension

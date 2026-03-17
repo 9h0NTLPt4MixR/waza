@@ -25,16 +25,10 @@ expected:
   output_contains:
     - "recursive"
     - "factorial"
-  # Alternative keywords (any of these is acceptable)
-  output_contains_any:
-    - "base case"
-    - "n <= 1"
-    - "termination"
   outcomes:
     - type: task_completed
   behavior:
     max_tool_calls: 5
-    max_response_time_ms: 30000
 
 # Task-specific graders (in addition to global graders)
 graders:

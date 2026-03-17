@@ -38,16 +38,16 @@ tasks:
 
 ## Top-Level Fields
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | ✓ | Eval suite name |
-| `description` | string | ✓ | What the eval tests |
-| `skill` | string | ✓ | Associated skill name |
-| `version` | string | ✗ | Version number (e.g., "1.0") |
-| `inputs` | object | ✗ | Key-value map of global template variables (see [Template Variables](#template-variables)) |
-| `tasks_from` | string | ✗ | Path to an external YAML file containing the task list |
-| `hooks` | object | ✗ | Lifecycle hooks that run shell commands at specific points (see [Hooks](#hooks)) |
-| `baseline` | bool | ✗ | Mark this spec as a baseline for A/B comparison |
+| Field         | Type   | Required | Description                                                                                |
+| ------------- | ------ | -------- | ------------------------------------------------------------------------------------------ |
+| `name`        | string | ✓        | Eval suite name                                                                            |
+| `description` | string | ✓        | What the eval tests                                                                        |
+| `skill`       | string | ✓        | Associated skill name                                                                      |
+| `version`     | string | ✗        | Version number (e.g., "1.0")                                                               |
+| `inputs`      | object | ✗        | Key-value map of global template variables (see [Template Variables](#template-variables)) |
+| `tasks_from`  | string | ✗        | Path to an external YAML file containing the task list                                     |
+| `hooks`       | object | ✗        | Lifecycle hooks that run shell commands at specific points (see [Hooks](#hooks))           |
+| `baseline`    | bool   | ✗        | Mark this spec as a baseline for A/B comparison                                            |
 
 ## Config Section
 
@@ -55,32 +55,33 @@ The `config` block controls execution behavior:
 
 ```yaml
 config:
-  trials_per_task: 1        # Run each task this many times
-  timeout_seconds: 300      # Task timeout in seconds
-  parallel: false           # Run tasks sequentially (true = concurrent)
-  workers: 4                # Parallel workers if parallel: true
-  model: claude-sonnet-4.6  # Default model (override with --model)
-  judge_model: gpt-4o       # Model for LLM-as-judge graders (optional)
-  executor: mock            # mock (local) or copilot-sdk (real API)
+  trials_per_task: 1 # Run each task this many times
+  timeout_seconds: 300 # Task timeout in seconds
+  parallel: false # Run tasks sequentially (true = concurrent)
+  workers: 4 # Parallel workers if parallel: true
+  model: claude-sonnet-4.6 # Default model (override with --model)
+  judge_model: gpt-4o # Model for LLM-as-judge graders (optional)
+  executor: mock # mock (local) or copilot-sdk (real API)
 ```
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `trials_per_task` | int | 1 | Number of times each task runs (for statistical analysis) |
-| `timeout_seconds` | int | 300 | Task timeout in seconds |
-| `parallel` | bool | false | Run tasks concurrently |
-| `workers` | int | 4 | Number of parallel workers |
-| `model` | string | *required* | Default model for tasks (override with `--model` flag) |
-| `judge_model` | string | (same as `model`) | Model for `prompt`-type graders (LLM-as-judge) |
-| `executor` | string | `copilot-sdk` | Executor: `mock` (local, fast) or `copilot-sdk` (real API) |
-| `max_attempts` | int | 0 | Maximum retry attempts per task on failure (0 = no retries) |
-| `group_by` | string | — | Group results by a field (e.g., `tags`, `task_id`) |
-| `fail_fast` | bool | false | Stop the entire run on first task failure |
-| `skill_directories` | list[str] | `[]` | Additional directories to search for skills |
-| `required_skills` | list[str] | `[]` | Skills that must be available before running |
-| `mcp_servers` | object | — | MCP server configurations for the evaluation |
+| Field               | Type      | Default           | Description                                                 |
+| ------------------- | --------- | ----------------- | ----------------------------------------------------------- |
+| `trials_per_task`   | int       | 1                 | Number of times each task runs (for statistical analysis)   |
+| `timeout_seconds`   | int       | 300               | Task timeout in seconds                                     |
+| `parallel`          | bool      | false             | Run tasks concurrently                                      |
+| `workers`           | int       | 4                 | Number of parallel workers                                  |
+| `model`             | string    | _required_        | Default model for tasks (override with `--model` flag)      |
+| `judge_model`       | string    | (same as `model`) | Model for `prompt`-type graders (LLM-as-judge)              |
+| `executor`          | string    | `copilot-sdk`     | Executor: `mock` (local, fast) or `copilot-sdk` (real API)  |
+| `max_attempts`      | int       | 0                 | Maximum retry attempts per task on failure (0 = no retries) |
+| `group_by`          | string    | —                 | Group results by a field (e.g., `tags`, `task_id`)          |
+| `fail_fast`         | bool      | false             | Stop the entire run on first task failure                   |
+| `skill_directories` | list[str] | `[]`              | Additional directories to search for skills                 |
+| `required_skills`   | list[str] | `[]`              | Skills that must be available before running                |
+| `mcp_servers`       | object    | —                 | MCP server configurations for the evaluation                |
 
 **Common Timeouts:**
+
 - `60` — Quick tasks (single-file review, validation)
 - `300` — Standard tasks (code explanation, analysis)
 - `600` — Complex tasks (multi-file refactoring, design)
@@ -96,14 +97,14 @@ graders:
     weight: 2.0
     config:
       pattern: "(?i)(function|variable|parameter)"
-      
+
   - type: code
     name: has_minimum_output
     config:
       assertions:
         - "len(output) > 100"
         - "'success' in output.lower()"
-        
+
   - type: text
     name: mentions_key_concepts
     config:
@@ -114,6 +115,7 @@ graders:
 Each grader accepts an optional `weight` (default `1.0`) that controls its influence on the composite score. See **[Validators & Graders](../graders/#weighted-scoring)** for details.
 
 All graders return:
+
 - `score`: 0.0 to 1.0
 - `passed`: boolean
 - `message`: human-readable result
@@ -149,9 +151,9 @@ Load tasks from YAML files in a directory:
 
 ```yaml
 tasks:
-  - "tasks/*.yaml"          # All YAML files in tasks/
-  - "tasks/basic/*.yaml"    # Specific subdirectory
-  - "tasks/advanced.yaml"   # Single file
+  - "tasks/*.yaml" # All YAML files in tasks/
+  - "tasks/basic/*.yaml" # Specific subdirectory
+  - "tasks/advanced.yaml" # Single file
 ```
 
 ## Task File Format
@@ -181,19 +183,18 @@ expected:
     - type: task_completed
   behavior:
     max_tool_calls: 5
-    max_response_time_ms: 30000
 ```
 
 ### Task Fields
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | string | Unique task identifier |
-| `name` | string | Human-readable task name |
-| `description` | string | What the task tests |
-| `tags` | array | Tags for filtering (e.g., `["basic", "edge-case"]`) |
-| `inputs` | object | Test inputs (prompt, files) |
-| `expected` | object | Validation rules and expected behavior |
+| Field         | Type   | Description                                         |
+| ------------- | ------ | --------------------------------------------------- |
+| `id`          | string | Unique task identifier                              |
+| `name`        | string | Human-readable task name                            |
+| `description` | string | What the task tests                                 |
+| `tags`        | array  | Tags for filtering (e.g., `["basic", "edge-case"]`) |
+| `inputs`      | object | Test inputs (prompt, files)                         |
+| `expected`    | object | Validation rules and expected behavior              |
 
 ### Inputs Section
 
@@ -201,8 +202,8 @@ expected:
 inputs:
   prompt: "Your instruction to the agent"
   files:
-    - path: sample.py         # Fixture file (relative to fixtures dir)
-      content: |              # Or inline content
+    - path: sample.py # Fixture file (relative to fixtures dir)
+      content: | # Or inline content
         def hello():
             print("Hello")
 ```
@@ -224,27 +225,26 @@ expected:
   output_contains:
     - "function"
     - "parameter"
-  
+
   # Output must NOT contain these
   output_excludes:
     - "error"
     - "failed"
-  
+
   # Regex patterns to match
   matches:
     - "returns\\s+.*value"
     - "def\\s+\\w+\\("
-  
+
   # Task outcomes
   outcomes:
     - type: task_completed
     - type: tool_called
       tool_name: code_analyzer
-  
+
   # Behavioral constraints
   behavior:
     max_tool_calls: 5
-    max_response_time_ms: 30000
     max_tokens: 4096
 ```
 
@@ -397,7 +397,7 @@ graders:
   - type: text
     name: format_check
     config:
-      pattern: "^[A-Z].*\\.$"  # Sentence starting with capital, ending with period
+      pattern: "^[A-Z].*\\.$" # Sentence starting with capital, ending with period
 
 tasks:
   - id: format-001
@@ -437,9 +437,8 @@ tasks:
       prompt: "Refactor this code"
     expected:
       behavior:
-        max_tool_calls: 3        # Efficient
-        max_response_time_ms: 5000  # Quick
-        max_tokens: 1000         # Concise
+        max_tool_calls: 3 # Efficient
+        max_tokens: 1000 # Concise
 ```
 
 ## Hooks
@@ -460,21 +459,21 @@ hooks:
     - command: "bash collect-metrics.sh"
 ```
 
-| Hook | When it runs |
-|------|-------------|
-| `before_run` | Once, before the entire evaluation starts |
-| `after_run` | Once, after all tasks complete |
-| `before_task` | Before each individual task |
-| `after_task` | After each individual task |
+| Hook          | When it runs                              |
+| ------------- | ----------------------------------------- |
+| `before_run`  | Once, before the entire evaluation starts |
+| `after_run`   | Once, after all tasks complete            |
+| `before_task` | Before each individual task               |
+| `after_task`  | After each individual task                |
 
 Each hook entry:
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `command` | string | *(required)* | Shell command to execute |
-| `working_directory` | string | `.` | Working directory for the command |
-| `exit_codes` | list[int] | `[0]` | Acceptable exit codes |
-| `error_on_fail` | bool | false | Abort the run if this hook fails |
+| Field               | Type      | Default      | Description                       |
+| ------------------- | --------- | ------------ | --------------------------------- |
+| `command`           | string    | _(required)_ | Shell command to execute          |
+| `working_directory` | string    | `.`          | Working directory for the command |
+| `exit_codes`        | list[int] | `[0]`        | Acceptable exit codes             |
+| `error_on_fail`     | bool      | false        | Abort the run if this hook fails  |
 
 ---
 
