@@ -201,12 +201,9 @@ func (h *HandlerContext) handleEvalValidate(_ context.Context, params json.RawMe
 	yerr := decoder.Decode(&spec)
 	if yerr != nil {
 		errs = append(errs, fmt.Sprintf("parse error: %v", yerr))
-		return &EvalValidateResult{
-			Valid:  false,
-			Errors: errs,
-		}, nil
 	} else {
-		// Schema validation via validation package
+		// Schema validation via validation package - Only executed if the YAML is syntactically correct,
+		// to avoid overwhelming users with schema errors when the YAML is not parseable at all.
 		schemaEvalErrs, schemaTaskErrs, _ := validation.ValidateEvalFile(p.Path)
 		for _, e := range schemaEvalErrs {
 			errs = append(errs, fmt.Sprintf("schema: %s", e))

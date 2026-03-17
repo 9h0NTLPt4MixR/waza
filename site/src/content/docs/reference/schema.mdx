@@ -189,12 +189,12 @@ graders:
 
 ### Grader Fields
 
-| Field    | Type   | Description                                                                                                                                    |
-| -------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `type`   | string | Grader type: `code`, `regex`, `keyword`, `file`, `diff`, `json_schema`, `prompt`, `behavior`, `action_sequence`, `skill_invocation`, `program` |
-| `name`   | string | Unique grader name (used to reference in tasks)                                                                                                |
-| `weight` | float  | Relative importance in composite scoring (default: `1.0`)                                                                                      |
-| `config` | object | Type-specific configuration                                                                                                                    |
+| Field    | Type   | Description                                                                                                                                                      |
+| -------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `type`   | string | Grader type: `code`, `prompt`, `text`, `file`, `json_schema`, `program`, `behavior`, `action_sequence`, `skill_invocation`, `trigger`, `diff`, `tool_constraint` |
+| `name`   | string | Unique grader name (used to reference in tasks)                                                                                                                  |
+| `weight` | float  | Relative importance in composite scoring (default: `1.0`)                                                                                                        |
+| `config` | object | Type-specific configuration                                                                                                                                      |
 
 See **[Validators & Graders](../../guides/graders/)** for complete documentation.
 

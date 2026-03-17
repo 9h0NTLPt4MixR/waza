@@ -9,6 +9,7 @@
     "name",
     "inputs"
   ],
+  "additionalProperties": false,
   "properties": {
     "id": {
       "type": "string",
@@ -64,6 +65,7 @@
       "required": [
         "prompt"
       ],
+      "additionalProperties": false,
       "description": "Input stimulus for the task.",
       "properties": {
         "prompt": {
@@ -92,6 +94,7 @@
     },
     "resourceRef": {
       "type": "object",
+      "additionalProperties": false,
       "description": "A file reference by path or inline content.",
       "properties": {
         "path": {
@@ -106,6 +109,7 @@
     },
     "expected": {
       "type": "object",
+      "additionalProperties": false,
       "description": "Expected outcomes and constraints for grading.",
       "properties": {
         "outcomes": {
@@ -144,6 +148,7 @@
     },
     "outcomeSpec": {
       "type": "object",
+      "additionalProperties": false,
       "properties": {
         "type": {
           "type": "string",
@@ -160,6 +165,7 @@
     },
     "behaviorRules": {
       "type": "object",
+      "additionalProperties": false,
       "description": "Behavioral constraints for the agent during this task.",
       "properties": {
         "max_tool_calls": {
@@ -301,25 +307,7 @@
             }
           }
         },
-        {
-          "if": {
-            "properties": {
-              "type": {
-                "const": "keyword"
-              }
-            },
-            "required": [
-              "type"
-            ]
-          },
-          "then": {
-            "properties": {
-              "config": {
-                "$ref": "#/$defs/keywordGraderConfig"
-              }
-            }
-          }
-        },
+
         {
           "if": {
             "properties": {
@@ -698,36 +686,6 @@
         }
       }
     },
-    "keywordGraderConfig": {
-      "type": "object",
-      "additionalProperties": false,
-      "anyOf": [
-        {
-          "required": [
-            "must_contain"
-          ]
-        },
-        {
-          "required": [
-            "must_not_contain"
-          ]
-        }
-      ],
-      "properties": {
-        "must_contain": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "must_not_contain": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      }
-    },
     "behaviorGraderConfig": {
       "type": "object",
       "additionalProperties": false,
@@ -1026,6 +984,10 @@
         },
         "context_dir": {
           "type": "string"
+        },
+        "update_snapshots": {
+          "type": "boolean",
+          "default": false
         }
       }
     },

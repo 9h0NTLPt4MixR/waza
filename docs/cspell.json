@@ -1,0 +1,22 @@
+{
+    "version": "0.2",
+    "language": "en",
+    "words": [],
+    "ignoreWords": [
+        "frontmatter",
+        "waza",
+        "evals",
+        "hctx",
+        "stretchr",
+        "yerr",
+        "verr",
+    ],
+    "import": [],
+    "dictionaries": [
+        "go",
+        "softwareTerms",
+        "misc"
+    ],
+    "ignoreRegExpList": [],
+    "allowCompoundWords": false,
+}

@@ -14,6 +14,8 @@ graders:
         If it does not, then call set_waza_grade_fail, with your reasoning.
       model: "gpt-4o-mini"
       continue_session: true
+  # the `prompt` grader type can also be used without
+  # being in a literal block.
   - type: prompt
     name: without-continue-session
     config:

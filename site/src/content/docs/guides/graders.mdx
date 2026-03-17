@@ -3,7 +3,7 @@ title: Graders
 description: Complete reference for all 11 grader types — how they work, configuration options, and real-world examples.
 ---
 
-import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
 
 Graders are the scoring engine behind every waza evaluation. After an agent executes a task, one or more graders inspect the result and produce a verdict.
 
@@ -13,12 +13,12 @@ Graders are the scoring engine behind every waza evaluation. After an agent exec
 2. waza collects the **output text**, **transcript** (tool calls, events), **session digest** (token counts, tools used), and the **workspace directory** (files on disk).
 3. Each grader receives that context and returns a result:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `score` | `float` | 0.0 – 1.0 (proportion of checks passed) |
-| `passed` | `bool` | Whether the grader considers the task successful |
-| `feedback` | `string` | Human-readable explanation |
-| `details` | `object` | Structured metadata for debugging |
+| Field      | Type     | Description                                      |
+| ---------- | -------- | ------------------------------------------------ |
+| `score`    | `float`  | 0.0 – 1.0 (proportion of checks passed)          |
+| `passed`   | `bool`   | Whether the grader considers the task successful |
+| `feedback` | `string` | Human-readable explanation                       |
+| `details`  | `object` | Structured metadata for debugging                |
 
 You can attach graders **globally** (applied to every task) or **per-task** in your eval YAML. Each grader also accepts an optional **`weight`** field that controls its influence on the composite score (see [Weighted Scoring](#weighted-scoring) below).
 
@@ -28,18 +28,20 @@ You can attach graders **globally** (applied to every task) or **per-task** in y
 
 waza ships with **several built-in grader types**. Pick the right one for the job:
 
-| Type | YAML key | What it checks |
-|------|----------|----------------|
-| [Inline Script](#inline-script-code) | `code` | Python/JS assertion expressions against output |
-| [Text](#Text) | `text` | Text and regex matching against output |
-| [File](#file) | `file` | File existence and content patterns in workspace |
-| [Diff](#diff) | `diff` | Workspace files vs. expected snapshots or fragments |
-| [JSON Schema](#json-schema-json_schema) | `json_schema` | Output validates against a JSON Schema |
-| [Prompt (LLM-as-judge)](#prompt-llm-as-judge) | `prompt` | A second LLM grades the result |
-| [Behavior](#behavior) | `behavior` | Agent metrics — tool calls, tokens, duration |
-| [Action Sequence](#action-sequence-action_sequence) | `action_sequence` | Tool call ordering and completeness |
-| [Skill Invocation](#skill-invocation-skill_invocation) | `skill_invocation` | Which skills were invoked and in what order |
-| [Program](#program) | `program` | External command (any language) grades via exit code |
+| Type                                                   | YAML key           | What it checks                                       |
+| ------------------------------------------------------ | ------------------ | ---------------------------------------------------- |
+| [Inline Script](#inline-script-code)                   | `code`             | Python/JS assertion expressions against output       |
+| [Text](#Text)                                          | `text`             | Text and regex matching against output               |
+| [File](#file)                                          | `file`             | File existence and content patterns in workspace     |
+| [Diff](#diff)                                          | `diff`             | Workspace files vs. expected snapshots or fragments  |
+| [JSON Schema](#json-schema-json_schema)                | `json_schema`      | Output validates against a JSON Schema               |
+| [Prompt (LLM-as-judge)](#prompt-llm-as-judge)          | `prompt`           | A second LLM grades the result                       |
+| [Behavior](#behavior)                                  | `behavior`         | Agent metrics — tool calls, tokens, duration         |
+| [Action Sequence](#action-sequence-action_sequence)    | `action_sequence`  | Tool call ordering and completeness                  |
+| [Skill Invocation](#skill-invocation-skill_invocation) | `skill_invocation` | Which skills were invoked and in what order          |
+| [Program](#program)                                    | `program`          | External command (any language) grades via exit code |
+| [Tool Constraint](#tool-constraint)                    | `tool_constraint`  | Tool Constraint                                      |
+| [Trigger](#trigger)                                    | `trigger`          | Trigger                                              |
 
 ---
 
@@ -51,7 +53,7 @@ Evaluates Python or JavaScript assertion expressions against the execution conte
 - type: code
   name: output_quality
   config:
-    language: python          # or "javascript" — default is python
+    language: python # or "javascript" — default is python
     assertions:
       - "len(output) > 100"
       - "'function' in output.lower()"
@@ -60,14 +62,14 @@ Evaluates Python or JavaScript assertion expressions against the execution conte
 
 ### Context variables
 
-| Variable | Type | Description |
-|----------|------|-------------|
-| `output` | `str` | Agent's final text output |
-| `outcome` | `dict` | Structured outcome state |
-| `transcript` | `list` | Full execution transcript events |
-| `tool_calls` | `list` | Tool calls extracted from transcript |
-| `errors` | `list` | Errors from transcript |
-| `duration_ms` | `int` | Execution wall-clock time |
+| Variable      | Type   | Description                          |
+| ------------- | ------ | ------------------------------------ |
+| `output`      | `str`  | Agent's final text output            |
+| `outcome`     | `dict` | Structured outcome state             |
+| `transcript`  | `list` | Full execution transcript events     |
+| `tool_calls`  | `list` | Tool calls extracted from transcript |
+| `errors`      | `list` | Errors from transcript               |
+| `duration_ms` | `int`  | Execution wall-clock time            |
 
 **Built-in functions:** `len`, `any`, `all`, `str`, `int`, `float`, `bool`, `list`, `dict`, `re`
 
@@ -85,6 +87,7 @@ assertions:
 assertions:
   - "'azure' in output.lower() or 'deploy' in output.lower()"
 ```
+
 </Aside>
 
 ### JavaScript example
@@ -120,14 +123,14 @@ Validates the agent output using substring matching and regex patterns. Supports
       - "(?i)error|failed|exception"
 ```
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `contains` | `list[str]` | Substrings that **must** appear (case-insensitive) |
-| `not_contains` | `list[str]` | Substrings that **must not** appear (case-insensitive) |
-| `contains_cs` | `list[str]` | Substrings that **must** appear (case-sensitive) |
-| `not_contains_cs` | `list[str]` | Substrings that **must not** appear (case-sensitive) |
-| `regex_match` | `list[str]` | Regex patterns that **must** match in output |
-| `regex_not_match` | `list[str]` | Regex patterns that **must not** match |
+| Option            | Type        | Description                                            |
+| ----------------- | ----------- | ------------------------------------------------------ |
+| `contains`        | `list[str]` | Substrings that **must** appear (case-insensitive)     |
+| `not_contains`    | `list[str]` | Substrings that **must not** appear (case-insensitive) |
+| `contains_cs`     | `list[str]` | Substrings that **must** appear (case-sensitive)       |
+| `not_contains_cs` | `list[str]` | Substrings that **must not** appear (case-sensitive)   |
+| `regex_match`     | `list[str]` | Regex patterns that **must** match in output           |
+| `regex_not_match` | `list[str]` | Regex patterns that **must not** match                 |
 
 **Scoring:** `passed_checks / total_checks`
 
@@ -144,9 +147,9 @@ Validates the agent output using substring matching and regex patterns. Supports
       - "TODO"
       - "FIXME"
     regex_match:
-      - "def \\w+\\(.*\\):"   # Has function definitions
+      - "def \\w+\\(.*\\):" # Has function definitions
     regex_not_match:
-      - "print\\("             # No debug prints
+      - "print\\(" # No debug prints
 ```
 
 ---
@@ -174,22 +177,23 @@ Validates file existence and content patterns in the agent's workspace directory
           - '"version":\\s*"0\\.0\\.0"'
 ```
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `must_exist` | `list[str]` | Workspace-relative paths that must be present |
-| `must_not_exist` | `list[str]` | Paths that must **not** be present |
-| `content_patterns` | `list` | Regex checks against file contents (see below) |
+| Option             | Type        | Description                                    |
+| ------------------ | ----------- | ---------------------------------------------- |
+| `must_exist`       | `list[str]` | Workspace-relative paths that must be present  |
+| `must_not_exist`   | `list[str]` | Paths that must **not** be present             |
+| `content_patterns` | `list`      | Regex checks against file contents (see below) |
 
 Each `content_patterns` entry:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `path` | `string` | Workspace-relative file path |
-| `must_match` | `list[str]` | Regex patterns the file content must match |
-| `must_not_match` | `list[str]` | Regex patterns the file must not match |
+| Field            | Type        | Description                                |
+| ---------------- | ----------- | ------------------------------------------ |
+| `path`           | `string`    | Workspace-relative file path               |
+| `must_match`     | `list[str]` | Regex patterns the file content must match |
+| `must_not_match` | `list[str]` | Regex patterns the file must not match     |
 
 <Aside>
-At least one of `must_exist`, `must_not_exist`, or `content_patterns` is required.
+  At least one of `must_exist`, `must_not_exist`, or `content_patterns` is
+  required.
 </Aside>
 
 ---
@@ -214,45 +218,31 @@ Compares post-execution workspace files against expected snapshots or content fr
 
 Each `expected_files` entry supports:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `path` | `string` | Workspace-relative file path (required) |
-| `snapshot` | `string` | Path to expected file for exact matching |
+| Field      | Type        | Description                                   |
+| ---------- | ----------- | --------------------------------------------- |
+| `path`     | `string`    | Workspace-relative file path (required)       |
+| `snapshot` | `string`    | Path to expected file for exact matching      |
 | `contains` | `list[str]` | Content fragments to check (see prefix rules) |
 
 ### Contains prefix rules
 
-| Prefix | Meaning |
-|--------|---------|
-| `+` | Fragment **must** be present in the file |
-| `-` | Fragment **must not** be present |
-| *(none)* | Fragment must be present (same as `+`) |
+| Prefix   | Meaning                                  |
+| -------- | ---------------------------------------- |
+| `+`      | Fragment **must** be present in the file |
+| `-`      | Fragment **must not** be present         |
+| _(none)_ | Fragment must be present (same as `+`)   |
 
 **Scoring:** `passed_checks / total_checks`
 
 <Tabs>
   <TabItem label="Fragment checking">
-```yaml
-- type: diff
-  name: api_updates
-  config:
-    expected_files:
-      - path: "src/api.py"
-        contains:
-          - "+from fastapi import FastAPI"
-          - "+@app.get('/health')"
-          - "-import flask"
-```
+    ```yaml - type: diff name: api_updates config: expected_files: - path:
+    "src/api.py" contains: - "+from fastapi import FastAPI" -
+    "+@app.get('/health')" - "-import flask" ```
   </TabItem>
   <TabItem label="Snapshot matching">
-```yaml
-- type: diff
-  name: exact_config
-  config:
-    expected_files:
-      - path: "config.json"
-        snapshot: "snapshots/expected_config.json"
-```
+    ```yaml - type: diff name: exact_config config: expected_files: - path:
+    "config.json" snapshot: "snapshots/expected_config.json" ```
   </TabItem>
 </Tabs>
 
@@ -277,9 +267,9 @@ Validates that the agent output is valid JSON conforming to a given schema. Supp
           type: object
 ```
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `schema` | `object` | Inline JSON Schema definition |
+| Option        | Type     | Description                   |
+| ------------- | -------- | ----------------------------- |
+| `schema`      | `object` | Inline JSON Schema definition |
 | `schema_file` | `string` | Path to a `.json` schema file |
 
 One of `schema` or `schema_file` is required.
@@ -314,11 +304,11 @@ Uses a second LLM to evaluate the agent's work. The judge LLM calls `set_waza_gr
     model: "gpt-4o-mini"
 ```
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `prompt` | `string` | *(required)* | Instructions for the judge LLM |
-| `model` | `string` | *(required)* | Model to use for judging |
-| `continue_session` | `bool` | `false` | Resume the agent's session (judge sees full context) |
+| Option             | Type     | Default      | Description                                          |
+| ------------------ | -------- | ------------ | ---------------------------------------------------- |
+| `prompt`           | `string` | _(required)_ | Instructions for the judge LLM                       |
+| `model`            | `string` | _(required)_ | Model to use for judging                             |
+| `continue_session` | `bool`   | `false`      | Resume the agent's session (judge sees full context) |
 
 ### How it works
 
@@ -327,7 +317,9 @@ Uses a second LLM to evaluate the agent's work. The judge LLM calls `set_waza_gr
 3. The judge calls one of the tools. If it calls `set_waza_grade_pass`, score is `1.0`; if `set_waza_grade_fail`, score is `0.0`.
 
 <Aside type="tip" title="When to use continue_session">
-Set `continue_session: true` when the judge needs to inspect files on disk or see the full conversation history. The judge resumes the same session the agent used, so it has access to the workspace and prior context.
+  Set `continue_session: true` when the judge needs to inspect files on disk or
+  see the full conversation history. The judge resumes the same session the
+  agent used, so it has access to the workspace and prior context.
 </Aside>
 
 ### Example: file review with continue_session
@@ -366,20 +358,21 @@ Validates agent behavior metrics — how many tool calls were made, token consum
       - sudo
 ```
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `max_tool_calls` | `int` | Maximum allowed tool calls (0 = no limit) |
-| `max_tokens` | `int` | Maximum total token usage (0 = no limit) |
-| `max_duration_ms` | `int` | Maximum execution time in ms (0 = no limit) |
-| `required_tools` | `list[str]` | Tool names that **must** be used |
-| `forbidden_tools` | `list[str]` | Tool names that **must not** be used |
+| Option            | Type        | Description                                 |
+| ----------------- | ----------- | ------------------------------------------- |
+| `max_tool_calls`  | `int`       | Maximum allowed tool calls (0 = no limit)   |
+| `max_tokens`      | `int`       | Maximum total token usage (0 = no limit)    |
+| `max_duration_ms` | `int`       | Maximum execution time in ms (0 = no limit) |
+| `required_tools`  | `list[str]` | Tool names that **must** be used            |
+| `forbidden_tools` | `list[str]` | Tool names that **must not** be used        |
 
 At least one option must be configured. Each configured rule counts as one check.
 
 **Scoring:** `passed_checks / total_checks`
 
 <Aside>
-The behavior grader reads from the **session digest**, which tracks aggregate tool call counts, token usage, and tools used during the session.
+  The behavior grader reads from the **session digest**, which tracks aggregate
+  tool call counts, token usage, and tools used during the session.
 </Aside>
 
 ---
@@ -400,18 +393,18 @@ Validates the sequence of tool calls the agent made against an expected action p
       - git
 ```
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `expected_actions` | `list[str]` | The expected tool call sequence |
-| `matching_mode` | `string` | How to compare actual vs. expected (see below) |
+| Option             | Type        | Description                                    |
+| ------------------ | ----------- | ---------------------------------------------- |
+| `expected_actions` | `list[str]` | The expected tool call sequence                |
+| `matching_mode`    | `string`    | How to compare actual vs. expected (see below) |
 
 ### Matching modes
 
-| Mode | Description |
-|------|-------------|
-| `exact_match` | Actual tool calls must exactly match the expected list (same tools, same order, same count) |
-| `in_order_match` | Expected tools must appear in order, but extra tools between them are allowed |
-| `any_order_match` | All expected tools must appear, but order doesn't matter |
+| Mode              | Description                                                                                 |
+| ----------------- | ------------------------------------------------------------------------------------------- |
+| `exact_match`     | Actual tool calls must exactly match the expected list (same tools, same order, same count) |
+| `in_order_match`  | Expected tools must appear in order, but extra tools between them are allowed               |
+| `any_order_match` | All expected tools must appear, but order doesn't matter                                    |
 
 **Scoring:** F1 score computed from precision (correct calls / total actual) and recall (matched / total expected).
 
@@ -432,11 +425,11 @@ Validates which Copilot skills the agent invoked during a session. Useful for mu
     allow_extra: true
 ```
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `required_skills` | `list[str]` | *(required)* | Skills that must be invoked |
-| `mode` | `string` | *(required)* | Matching mode: `exact_match`, `in_order`, or `any_order` |
-| `allow_extra` | `bool` | `true` | Whether extra skill invocations are penalized |
+| Option            | Type        | Default      | Description                                              |
+| ----------------- | ----------- | ------------ | -------------------------------------------------------- |
+| `required_skills` | `list[str]` | _(required)_ | Skills that must be invoked                              |
+| `mode`            | `string`    | _(required)_ | Matching mode: `exact_match`, `in_order`, or `any_order` |
+| `allow_extra`     | `bool`      | `true`       | Whether extra skill invocations are penalized            |
 
 When `allow_extra: false`, extra invocations beyond the required list reduce the score by up to 60%.
 
@@ -462,19 +455,23 @@ Validates which tools an agent should or shouldn't use, and enforces turn and to
     max_tokens: 50000
 ```
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `expect_tools` | `list[str]` | `[]` | Tool names that **must** appear in the session |
-| `reject_tools` | `list[str]` | `[]` | Tool names that **must not** appear |
-| `max_turns` | `int` | `0` | Maximum conversation turns (0 = no limit) |
-| `max_tokens` | `int` | `0` | Maximum total token usage (0 = no limit) |
+| Option         | Type        | Default | Description                                    |
+| -------------- | ----------- | ------- | ---------------------------------------------- |
+| `expect_tools` | `list[str]` | `[]`    | Tool names that **must** appear in the session |
+| `reject_tools` | `list[str]` | `[]`    | Tool names that **must not** appear            |
+| `max_turns`    | `int`       | `0`     | Maximum conversation turns (0 = no limit)      |
+| `max_tokens`   | `int`       | `0`     | Maximum total token usage (0 = no limit)       |
 
 At least one constraint must be configured. Each configured rule counts as one check.
 
 **Scoring:** `passed_checks / total_checks`
 
 <Aside type="tip" title="tool_constraint vs. behavior">
-Both `behavior` and `tool_constraint` can check tool usage and token limits. Use `tool_constraint` when you want to validate specific tool names (expect/reject lists) alongside turn and token budgets. Use `behavior` when you need `max_duration_ms` or `max_tool_calls` (total count, not specific names).
+  Both `behavior` and `tool_constraint` can check tool usage and token limits.
+  Use `tool_constraint` when you want to validate specific tool names
+  (expect/reject lists) alongside turn and token budgets. Use `behavior` when
+  you need `max_duration_ms` or `max_tool_calls` (total count, not specific
+  names).
 </Aside>
 
 ### Example: safety guardrails
@@ -518,11 +515,11 @@ Runs any external command to grade the agent output. The agent output is passed 
     timeout: 60
 ```
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `command` | `string` | *(required)* | Program to execute |
-| `args` | `list[str]` | `[]` | Arguments passed to the program |
-| `timeout` | `int` | `30` | Max execution time in seconds |
+| Option    | Type        | Default      | Description                     |
+| --------- | ----------- | ------------ | ------------------------------- |
+| `command` | `string`    | _(required)_ | Program to execute              |
+| `args`    | `list[str]` | `[]`         | Arguments passed to the program |
+| `timeout` | `int`       | `30`         | Max execution time in seconds   |
 
 ### Example: shell script grader
 
@@ -643,13 +640,13 @@ By default every grader counts equally toward the composite score. Add a `weight
 graders:
   - type: text
     name: critical_check
-    weight: 3.0          # Counts 3×
+    weight: 3.0 # Counts 3×
     config:
       regex_match: ["deployed"]
 
   - type: text
     name: nice_to_have
-    weight: 0.5          # Counts 0.5×
+    weight: 0.5 # Counts 0.5×
     config:
       contains: [summary]
 
@@ -661,16 +658,18 @@ graders:
         - "len(output) > 50"
 ```
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `weight` | `float` | `1.0` | Relative importance of this grader in the composite score |
+| Option   | Type    | Default | Description                                               |
+| -------- | ------- | ------- | --------------------------------------------------------- |
+| `weight` | `float` | `1.0`   | Relative importance of this grader in the composite score |
 
 **Formula:** `(score₁ × weight₁ + score₂ × weight₂ + …) / (weight₁ + weight₂ + …)`
 
 With the config above and scores of `1.0`, `0.0`, and `1.0`, the composite score is `(1.0×3 + 0.0×0.5 + 1.0×1) / (3+0.5+1) = 0.89`.
 
 <Aside type="tip" title="When to use weights">
-Weight critical checks (correctness, security) higher and cosmetic checks (style, formatting) lower. A task still passes only when **all** graders pass — weights affect the composite score, not the pass/fail verdict.
+  Weight critical checks (correctness, security) higher and cosmetic checks
+  (style, formatting) lower. A task still passes only when **all** graders pass
+  — weights affect the composite score, not the pass/fail verdict.
 </Aside>
 
 ---

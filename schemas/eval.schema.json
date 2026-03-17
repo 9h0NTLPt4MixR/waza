@@ -1126,6 +1126,11 @@
         "context_dir": {
           "type": "string",
           "description": "Base directory for resolving snapshot paths."
+        },
+        "update_snapshots": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, create or overwrite snapshot files with actual workspace content."
         }
       }
     },
