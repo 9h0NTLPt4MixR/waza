@@ -120,7 +120,7 @@ func LoadBenchmarkSpec(path string) (*BenchmarkSpec, error) {
 	decoder.KnownFields(true) // Strict parsing to catch unknown fields
 
 	if err := decoder.Decode(&spec); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parsing benchmark spec YAML (%s): %w", path, err)
 	}
 
 	// Validate spec
