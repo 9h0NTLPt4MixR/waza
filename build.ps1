@@ -44,58 +44,60 @@ else {
     )
 }
 
-# Loop through platforms and build
-foreach ($PLATFORM in $PLATFORMS) {
-    $OS, $ARCH = $PLATFORM -split '/'
+try {
+    # Loop through platforms and build
+    foreach ($PLATFORM in $PLATFORMS) {
+        $OS, $ARCH = $PLATFORM -split '/'
 
-    $OUTPUT_NAME = Join-Path $OUTPUT_DIR "$BINARY_NAME-$OS-$ARCH"
+        $OUTPUT_NAME = Join-Path $OUTPUT_DIR "$BINARY_NAME-$OS-$ARCH"
 
-    if ($OS -eq "windows") {
-        $OUTPUT_NAME += ".exe"
+        if ($OS -eq "windows") {
+            $OUTPUT_NAME += ".exe"
+        }
+
+        Write-Host "Building for $OS/$ARCH..."
+
+        # Delete the output file if it already exists
+        if (Test-Path -Path $OUTPUT_NAME) {
+            Remove-Item -Path $OUTPUT_NAME -Force
+        }
+
+        # Set environment variables for Go build
+        $env:GOOS = $OS
+        $env:GOARCH = $ARCH
+
+        go build `
+            -ldflags="-X 'main.version=$VERSION'" `
+            -o $OUTPUT_NAME `
+            ./cmd/waza
+
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "An error occurred while building for $OS/$ARCH"
+            exit 1
+        }
     }
 
-    Write-Host "Building for $OS/$ARCH..."
-
-    # Delete the output file if it already exists
-    if (Test-Path -Path $OUTPUT_NAME) {
-        Remove-Item -Path $OUTPUT_NAME -Force
+    Write-Host "Build completed successfully!"
+    Write-Host "Binaries are located in the $OUTPUT_DIR directory."
+}
+finally {
+    if ($goos) {
+        Write-Host "Restoring original GOOS: $goos"
+        $env:GOOS = $goos
+    }
+    else {
+        if (Test-Path env:GOOS) {
+            Remove-Item env:GOOS
+        }
     }
 
-    # Set environment variables for Go build
-    $env:GOOS = $OS
-    $env:GOARCH = $ARCH
-
-    go build `
-        -ldflags="-X 'main.version=$VERSION'" `
-        -o $OUTPUT_NAME `
-        ./cmd/waza
-
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "An error occurred while building for $OS/$ARCH"
-        exit 1
+    if ($goarch) {
+        Write-Host "Restoring original GOARCH: $goarch"
+        $env:GOARCH = $goarch
+    }
+    else {
+        if (Test-Path env:GOARCH) {
+            Remove-Item env:GOARCH
+        }
     }
 }
-
-if ($goos) {
-    Write-Host "Restoring original GOOS: $goos"
-    $env:GOOS = $goos
-}
-else {
-    if (Test-Path env:GOOS) {
-        Remove-Item env:GOOS
-    }
-}
-
-if ($goarch) {
-    Write-Host "Restoring original GOARCH: $goarch"
-    $env:GOARCH = $goarch
-}
-else {
-    if (Test-Path env:GOARCH) {
-        Remove-Item env:GOARCH
-    }
-}
-
-
-Write-Host "Build completed successfully!"
-Write-Host "Binaries are located in the $OUTPUT_DIR directory."
