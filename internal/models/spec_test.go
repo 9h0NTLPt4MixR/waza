@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestBenchmarkSpec_Validate(t *testing.T) {
+func TestLoadBenchmarkSpec_StrictYAML(t *testing.T) {
 	tests := []struct {
 		name        string
 		specYAML    string
