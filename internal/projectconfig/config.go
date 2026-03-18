@@ -1,3 +1,8 @@
+// Copyright 2024 Microsoft Corp. All rights reserved.
+// Use of this source is goverend by the MIT License that can be found in the LICENSE file.
+
+// cspell:ignore unmarshals
+
 // Package projectconfig provides the ProjectConfig struct and loader for
 // .waza.yaml project-level configuration files.
 package projectconfig

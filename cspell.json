@@ -22,5 +22,5 @@
   "import": [],
   "dictionaries": ["go", "softwareTerms", "misc"],
   "ignoreRegExpList": [],
-  "allowCompoundWords": false
+  "allowCompoundWords": true
 }

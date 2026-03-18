@@ -189,7 +189,7 @@ graders:
   - type: text
     name: check_keywords
     config:
-      must_include:
+      contains:
         - hello
   - type: skill_invocation
     name: skill_was_invoked

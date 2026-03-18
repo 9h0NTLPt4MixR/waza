@@ -201,6 +201,7 @@
     },
     "validatorInline": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "name"
       ],
