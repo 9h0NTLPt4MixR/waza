@@ -3,6 +3,8 @@ title: Graders
 description: Complete reference for all 11 grader types — how they work, configuration options, and real-world examples.
 ---
 
+<!-- cspell:ignore astrojs fastapi -->
+
 import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
 
 Graders are the scoring engine behind every waza evaluation. After an agent executes a task, one or more graders inspect the result and produce a verdict.
@@ -553,27 +555,28 @@ else:
 
 ---
 
-## Tool Constraint
+## Trigger
 
-Defines constraints on the tools which are used during grading
+Heuristic grader for validating whether a prompt should activate a skill.
 
 ```yaml
-- type: tool_constraint
-  name: allowed_tools
+- type: trigger
+  name: deploy_trigger
   config:
-    command: "python3"
-    args: ["scripts/grade.py"]
-    timeout: 60
+    skill_path: skills/azure-deploy/SKILL.md
+    mode: positive
+    threshold: 0.6
 ```
 
-**Options:**
+** Options:**
 
-| Option         | Type | Description                               |
-| -------------- | ---- | ----------------------------------------- |
-| `expect_tools` | list | Tool specs that MUST have been called     |
-| `reject_tools` | list | Tool specs that MUST NOT have been called |
+| Option       | Type   | Description                                                                  |
+| ------------ | ------ | ---------------------------------------------------------------------------- |
+| `skill_path` | string | (required) Path to the `SKILL.md` file or the skill directory containing it. |
+| `mode`       | string | Either `positive` or `negative`                                              |
+| `threshold`  | string | Score threshold between `0.0` and `1.0`. Default is `0.6`.                   |
 
-## Trigger
+For more information, see (the triggers grader documentation)[https://github.com/microsoft/waza/blob/main/docs/graders/trigger.md]
 
 ## Using graders in eval YAML
 

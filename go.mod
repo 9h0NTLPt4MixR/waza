@@ -1,3 +1,12 @@
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License. See LICENSE in the project root for license information.
+
+// cspell:ignore azcore azblob azcontainer azidentity charmbracelet mapstructure Aivazis alecthomas atotto aymanbagabas aymerick bahlo blang bluemonday santhosh tekuri
+// cspell:ignore braydonk buger yuin goldmark gopkg mergo jsonparser catppuccin bubbletea cespare xxhash colorprofile lipgloss cellbuf clipperhouse displaywidth davecgh
+// cspell:ignore dlclark envsubst logr jmespath invopop godotenv kylelemons godebug mailru easyjson isatty localereader mitchellh hashstructure cancelreader termenv lucasb
+// cspell:ignore erikgeiser coninput fatih stdr golobby joho fiscaletti consolesize pmezard difflib rivo uniseg sethvargo pflag terminfo yosida unitemplate genproto mockgen
+// cspell:ignore inconshreveable unitemplate
+
 module github.com/microsoft/waza
 
 go 1.26

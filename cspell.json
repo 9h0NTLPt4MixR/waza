@@ -1,0 +1,26 @@
+{
+  "version": "0.2",
+  "language": "en",
+  "words": [],
+  "ignoreWords": [
+    "avgs",
+    "azurestaticapps",
+    "charmbracelet",
+    "evals",
+    "frontmatter",
+    "hctx",
+    "idempotently",
+    "mattn",
+    "runewidth",
+    "stretchr",
+    "suggestpkg",
+    "unitemplate",
+    "verr",
+    "waza",
+    "yerr"
+  ],
+  "import": [],
+  "dictionaries": ["go", "softwareTerms", "misc"],
+  "ignoreRegExpList": [],
+  "allowCompoundWords": false
+}
