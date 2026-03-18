@@ -60,7 +60,7 @@ config:
   trials_per_task: 1 # Run each task this many times
   timeout_seconds: 300 # Task timeout in seconds
   parallel: false # Run tasks sequentially (true = concurrent)
-  max_workers: 4 # Parallel workers if parallel: true
+  workers: 4 # Parallel workers if parallel: true
   model: claude-sonnet-4.6 # Default model (override with --model)
   judge_model: gpt-4o # Model for LLM-as-judge graders (optional)
   executor: mock # mock (local) or copilot-sdk (real API)
@@ -71,7 +71,7 @@ config:
 | `trials_per_task`   | int       | 1                 | Number of times each task runs (for statistical analysis)   |
 | `timeout_seconds`   | int       | 300               | Task timeout in seconds                                     |
 | `parallel`          | bool      | false             | Run tasks concurrently                                      |
-| `max_workers`       | int       | 4                 | Number of parallel workers                                  |
+| `workers`           | int       | 4                 | Number of parallel workers                                  |
 | `model`             | string    | _required_        | Default model for tasks (override with `--model` flag)      |
 | `judge_model`       | string    | (same as `model`) | Model for `prompt`-type graders (LLM-as-judge)              |
 | `executor`          | string    | `copilot-sdk`     | Executor: `mock` (local, fast) or `copilot-sdk` (real API)  |
@@ -98,7 +98,7 @@ graders:
     name: checks_logic
     weight: 2.0
     config:
-      pattern: "(?i)(function|variable|parameter)"
+      regex_match: "(?i)(function|variable|parameter)"
 
   - type: code
     name: has_minimum_output

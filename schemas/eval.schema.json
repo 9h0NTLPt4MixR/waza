@@ -117,7 +117,7 @@
           "default": false,
           "description": "When true, run tasks in parallel."
         },
-        "max_workers": {
+        "workers": {
           "type": "integer",
           "minimum": 1,
           "description": "Maximum number of concurrent workers when parallel is true."

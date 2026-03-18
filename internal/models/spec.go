@@ -36,7 +36,7 @@ type Config struct {
 	RunsPerTest    int            `yaml:"trials_per_task" json:"runs_per_test"`
 	TimeoutSec     int            `yaml:"timeout_seconds" json:"timeout_sec"`
 	Concurrent     bool           `yaml:"parallel" json:"concurrent"`
-	Workers        int            `yaml:"max_workers,omitempty" json:"workers,omitempty"`
+	Workers        int            `yaml:"workers,omitempty" json:"workers,omitempty"`
 	StopOnError    bool           `yaml:"fail_fast,omitempty" json:"stop_on_error,omitempty"`
 	EngineType     string         `yaml:"executor" json:"engine_type"`
 	ModelID        string         `yaml:"model" json:"model_id"`
