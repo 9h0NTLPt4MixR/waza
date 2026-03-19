@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Renamed `config` node `max_workers` to `workers` for consistency across all config types
+  - This is a breaking change
 - Custom YAML deserializers for config types (#106)
 - Validate only known fields in YAML decoders. (#132)
 - Token limits priority inverted to `.waza.yaml` first (#64)

@@ -243,9 +243,5 @@ func decodeYAMLNode[T GraderParameters](node *yaml.Node) (T, error) {
 		return target, fmt.Errorf("failed to decode grader parameters of type %T: %w", target, err)
 	}
 
-	// if err := node.Decode(&target); err != nil {
-	// 	return target, fmt.Errorf("failed to decode grader config of type %T: %w", target, err)
-	// }
-
 	return target, nil
 }
