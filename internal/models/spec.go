@@ -70,8 +70,16 @@ func (g *GraderConfig) UnmarshalYAML(node *yaml.Node) error {
 		Parameters yaml.Node  `yaml:"config,omitempty"`
 	}
 
+	// Marshal the node back to bytes so we can use a strict decoder that rejects unknown fields.
+	nodeBytes, err := yaml.Marshal(node)
+	if err != nil {
+		return fmt.Errorf("failed to marshal grader node: %w", err)
+	}
+	decoder := yaml.NewDecoder(bytes.NewReader(nodeBytes))
+	decoder.KnownFields(true)
+
 	var raw rawGraderConfig
-	if err := node.Decode(&raw); err != nil {
+	if err := decoder.Decode(&raw); err != nil {
 		return err
 	}
 

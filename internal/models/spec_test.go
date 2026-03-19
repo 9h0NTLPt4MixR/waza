@@ -46,6 +46,40 @@ config:
 `,
 			expectError: true,
 		},
+		{
+			name: "unknown field inside grader entry",
+			specYAML: `name: valid
+skill: test-skill
+config:
+  trials_per_task: 1
+  timeout_seconds: 60
+  executor: mock
+graders:
+  - name: my-grader
+    type: text
+    unknown_grader_field: should cause error
+    config:
+      contains: ["hello"]
+`,
+			expectError: true,
+		},
+		{
+			name: "unknown field inside grader config",
+			specYAML: `name: valid
+skill: test-skill
+config:
+  trials_per_task: 1
+  timeout_seconds: 60
+  executor: mock
+graders:
+  - name: my-grader
+    type: text
+    config:
+      contains: ["hello"]
+      unknown_config_field: should cause error
+`,
+			expectError: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
