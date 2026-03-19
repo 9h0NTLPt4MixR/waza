@@ -5,7 +5,7 @@
 // cspell:ignore braydonk buger yuin goldmark gopkg mergo jsonparser catppuccin bubbletea cespare xxhash colorprofile lipgloss cellbuf clipperhouse displaywidth davecgh
 // cspell:ignore dlclark envsubst logr jmespath invopop godotenv kylelemons godebug mailru easyjson isatty localereader mitchellh hashstructure cancelreader termenv lucasb
 // cspell:ignore erikgeiser coninput fatih stdr golobby joho fiscaletti consolesize pmezard difflib rivo uniseg sethvargo pflag terminfo yosida unitemplate genproto mockgen
-// cspell:ignore inconshreveable unitemplate
+// cspell:ignore inconshreveable uritemplate
 
 module github.com/microsoft/waza
 

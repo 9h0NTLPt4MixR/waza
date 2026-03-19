@@ -240,7 +240,7 @@ func decodeYAMLNode[T GraderParameters](node *yaml.Node) (T, error) {
 	decoder := yaml.NewDecoder(bytes.NewReader(params))
 	decoder.KnownFields(true)
 	if err := decoder.Decode(&target); err != nil {
-		return target, fmt.Errorf("failed to decode grader parameters of type %T: %w.", target, err)
+		return target, fmt.Errorf("failed to decode grader parameters of type %T: %w", target, err)
 	}
 
 	// if err := node.Decode(&target); err != nil {
