@@ -238,26 +238,26 @@ Each `expected_files` entry supports:
 
 <Tabs>
   <TabItem label="Fragment checking">
-    ```yaml
-    - type: diff
-      name: api_updates
-      config:
-        expected_files:
-          - path: "src/api.py"
-            contains:
-              - "+from fastapi import FastAPI"
-              - "+@app.get('/health')"
-              - "-import flask"
+```yaml
+- type: diff
+  name: api_updates
+  config:
+    expected_files:
+      - path: "src/api.py"
+        contains:
+          - "+from fastapi import FastAPI"
+          - "+@app.get('/health')"
+          - "-import flask"
     ```
   </TabItem>
   <TabItem label="Snapshot matching">
-    ```yaml
-    - type: diff
-      name: exact_config
-      config:
-        expected_files:
-          - path: "config.json"
-            snapshot: "snapshots/expected_config.json"
+```yaml
+- type: diff
+  name: exact_config
+  config:
+    expected_files:
+      - path: "config.json"
+        snapshot: "snapshots/expected_config.json"
     ```
   </TabItem>
 </Tabs>
