@@ -30,7 +30,6 @@
     },
     "version": {
       "type": "string",
-      "minLength": 1,
       "description": "Version identifier for this evaluation specification."
     },
     "config": {

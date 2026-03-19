@@ -1,5 +1,5 @@
 // Copyright 2024 Microsoft Corp. All rights reserved.
-// Use of this source is goverend by the MIT License that can be found in the LICENSE file.
+// Licensed under the MIT License. See LICENSE in the project root for license information.
 
 // cspell:ignore unmarshals
 

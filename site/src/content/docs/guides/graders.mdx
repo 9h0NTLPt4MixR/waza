@@ -238,7 +238,7 @@ Each `expected_files` entry supports:
 
 <Tabs>
   <TabItem label="Fragment checking">
-    ```yaml - type: diff name: api_updates config: expected_files: - path:
+    ``` yaml - type: diff name: api_updates config: expected_files: - path:
     "src/api.py" contains: - "+from fastapi import FastAPI" -
     "+@app.get('/health')" - "-import flask" ```
   </TabItem>
@@ -568,15 +568,13 @@ Heuristic grader for validating whether a prompt should activate a skill.
     threshold: 0.6
 ```
 
-** Options:**
-
 | Option       | Type   | Description                                                                  |
 | ------------ | ------ | ---------------------------------------------------------------------------- |
 | `skill_path` | string | (required) Path to the `SKILL.md` file or the skill directory containing it. |
 | `mode`       | string | Either `positive` or `negative`                                              |
-| `threshold`  | string | Score threshold between `0.0` and `1.0`. Default is `0.6`.                   |
+| `threshold`  | number | Score threshold between `0.0` and `1.0`. Default is `0.6`.                   |
 
-For more information, see (the triggers grader documentation)[https://github.com/microsoft/waza/blob/main/docs/graders/trigger.md]
+For more information, see [the triggers grader documentation](https://github.com/microsoft/waza/blob/main/docs/graders/trigger.md)
 
 ## Using graders in eval YAML
 

@@ -27,14 +27,11 @@ graders: # Validation rules
   - type: text
     name: checks_logic
     config:
-      regex_match: "(?i)(function)"
+      regex_match:
+        - "(?i)(function)"
 
 tasks: # Test cases
   - "tasks/*.yaml" # From files
-  - id: inline-001 # Or inline
-    name: Inline Task
-    inputs:
-      prompt: "..."
 ```
 
 ## Top-Level Fields
@@ -206,10 +203,6 @@ List of test cases to run.
 tasks:
   - "tasks/*.yaml" # Load from files
   - "tasks/basic.yaml" # Specific file
-  - id: inline-001 # Inline task
-    name: "Test 1"
-    inputs:
-      prompt: "..."
 ```
 
 ### Loading from Files
@@ -222,18 +215,6 @@ tasks:
 ```
 
 File path is relative to `eval.yaml`.
-
-### Inline Tasks
-
-Define tasks directly in `eval.yaml`:
-
-```yaml
-tasks:
-  - id: task-001
-    name: "Basic Usage"
-    inputs:
-      prompt: "Explain this"
-```
 
 ## Task File Format
 
@@ -363,8 +344,7 @@ Validation rules and constraints.
 ```yaml
 expected:
   output_contains: ["function", "parameter"]
-  output_excludes: ["error"]
-  matches: ["def\\s+\\w+"]
+  output_not_contains: ["error"]
   outcomes:
     - type: task_completed
   behavior:

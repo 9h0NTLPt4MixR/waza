@@ -148,7 +148,6 @@ func parseGraderSelection(raw string) []string {
 	// Try bare YAML list: [code, keyword, ...]
 	var bare []string
 	decoder = yaml.NewDecoder(strings.NewReader(normalized))
-	decoder.KnownFields(true)
 	if err := decoder.Decode(&bare); err == nil && len(bare) > 0 {
 		return filterValidGraderTypes(bare)
 	}
