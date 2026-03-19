@@ -1,3 +1,7 @@
+// Copyright 2024 Microsoft Corporation. All rights reserved.
+// Use of this source code is governed by the MIT License that can be found in the LICENSE file.
+
+// cspell:ignore myorg
 package models
 
 import (
