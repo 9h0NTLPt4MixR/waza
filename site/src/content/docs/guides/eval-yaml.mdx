@@ -98,7 +98,8 @@ graders:
     name: checks_logic
     weight: 2.0
     config:
-      regex_match: "(?i)(function|variable|parameter)"
+      regex_match:
+        - "(?i)(function|variable|parameter)"
 
   - type: code
     name: has_minimum_output
@@ -234,7 +235,7 @@ expected:
     - "failed"
 
   # Regex patterns to match
-  matches:
+  regex_match:
     - "returns\\s+.*value"
     - "def\\s+\\w+\\("
 
@@ -406,7 +407,7 @@ tasks:
     inputs:
       prompt: "Write a single sentence"
     expected:
-      matches:
+      regex_match:
         - "^[A-Z].*\\.$"
 ```
 
