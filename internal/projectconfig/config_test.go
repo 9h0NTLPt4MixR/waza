@@ -208,6 +208,8 @@ defaults:
 		t.Fatalf("Load() error: %v", err)
 	}
 
+	assertEqual(t, "Dir", root, cfg.Dir)
+
 	assertEqual(t, "Defaults.Engine", "found-it", cfg.Defaults.Engine)
 	// Other defaults still populated
 	assertEqual(t, "Defaults.Model", "claude-sonnet-4.6", cfg.Defaults.Model)

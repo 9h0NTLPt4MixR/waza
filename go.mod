@@ -19,6 +19,7 @@ require (
 	github.com/charmbracelet/huh v1.0.0
 	github.com/github/copilot-sdk/go v0.1.32
 	github.com/go-viper/mapstructure/v2 v2.5.0
+	github.com/klauspost/compress v1.18.3
 	github.com/mattn/go-runewidth v0.0.21
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	github.com/spf13/cobra v1.10.2
@@ -44,7 +45,7 @@ require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/braydonk/yaml v0.9.0 // indirect
-	github.com/buger/jsonparser v1.1.1 // indirect
+	github.com/buger/jsonparser v1.1.2 // indirect
 	github.com/catppuccin/go v0.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/charmbracelet/bubbles v1.0.0 // indirect
@@ -116,8 +117,11 @@ require (
 	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.42.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260226221140-a57be14db171 // indirect
-	google.golang.org/grpc v1.79.2 // indirect
+	google.golang.org/grpc v1.79.3 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
-tool go.uber.org/mock/mockgen
+tool (
+	github.com/github/copilot-sdk/go/cmd/bundler
+	go.uber.org/mock/mockgen
+)

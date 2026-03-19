@@ -47,6 +47,7 @@ const (
 )
 
 // PathsConfig holds directory paths for skills, evals, and results.
+// NOTE: these paths should be considered relative to the project root. See [ProjectConfig.Dir].
 type PathsConfig struct {
 	Skills  string `yaml:"skills,omitempty"`
 	Evals   string `yaml:"evals,omitempty"`
@@ -67,13 +68,17 @@ type DefaultsConfig struct {
 
 // CacheConfig holds cache settings.
 type CacheConfig struct {
-	Enabled *bool  `yaml:"enabled,omitempty"`
-	Dir     string `yaml:"dir,omitempty"`
+	Enabled *bool `yaml:"enabled,omitempty"`
+
+	// Dir is relative to the project root. See [ProjectConfig.Dir].
+	Dir string `yaml:"dir,omitempty"`
 }
 
 // ServerConfig holds dashboard server settings.
 type ServerConfig struct {
-	Port       int    `yaml:"port,omitempty"`
+	Port int `yaml:"port,omitempty"`
+
+	// ResultsDir is relative to the project root. See [ProjectConfig.Dir].
 	ResultsDir string `yaml:"resultsDir,omitempty"`
 }
 
@@ -112,7 +117,17 @@ type StorageConfig struct {
 
 // ProjectConfig is the top-level configuration loaded from .waza.yaml.
 type ProjectConfig struct {
-	Paths    PathsConfig    `yaml:"paths,omitempty"`
+	// Dir is the directory of the .waza.yaml file. If this ProjectConfig was not
+	// loaded from disk then this field will be empty.
+	//
+	// Dir affects:
+	// 	- [ProjectConfig.Paths],
+	// 	- [ServerConfig.ResultsDir]
+	// 	- [CacheConfig.Dir]
+	Dir string `yaml:"-"`
+
+	Paths PathsConfig `yaml:"paths,omitempty"`
+
 	Defaults DefaultsConfig `yaml:"defaults,omitempty"`
 	Cache    CacheConfig    `yaml:"cache,omitempty"`
 	Server   ServerConfig   `yaml:"server,omitempty"`
@@ -173,13 +188,16 @@ func New() *ProjectConfig {
 func Load(startDir string) (*ProjectConfig, error) {
 	cfg := New()
 
-	data, err := findConfigFile(startDir)
+	configPath, data, err := findConfigFile(startDir)
+
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return cfg, nil // no file found → return defaults
 		}
 		return nil, fmt.Errorf("loading .waza.yaml: %w", err)
 	}
+
+	cfg.Dir = filepath.Dir(configPath)
 
 	var fileCfg ProjectConfig
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
@@ -191,17 +209,18 @@ func Load(startDir string) (*ProjectConfig, error) {
 
 	// Merge file values onto defaults.
 	mergeConfig(cfg, &fileCfg)
+
 	return cfg, nil
 }
 
 // findConfigFile walks up from dir looking for .waza.yaml (max 10 levels).
 // Returns os.ErrNotExist if no config file is found. Propagates real I/O
 // errors (e.g. permission denied) instead of silently swallowing them.
-func findConfigFile(dir string) ([]byte, error) {
+func findConfigFile(dir string) (string, []byte, error) {
 	// Convert to absolute path so filepath.Dir(".") walks correctly.
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
-		return nil, fmt.Errorf("resolving path %q: %w", dir, err)
+		return "", nil, fmt.Errorf("resolving path %q: %w", dir, err)
 	}
 	dir = absDir
 
@@ -209,10 +228,10 @@ func findConfigFile(dir string) ([]byte, error) {
 		p := filepath.Join(dir, ".waza.yaml")
 		data, err := os.ReadFile(p)
 		if err == nil {
-			return data, nil
+			return p, data, nil
 		}
 		if !errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("reading %q: %w", p, err)
+			return "", nil, fmt.Errorf("reading %q: %w", p, err)
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
@@ -220,7 +239,7 @@ func findConfigFile(dir string) ([]byte, error) {
 		}
 		dir = parent
 	}
-	return nil, os.ErrNotExist
+	return "", nil, os.ErrNotExist
 }
 
 // mergeConfig overlays non-zero values from src onto dst.

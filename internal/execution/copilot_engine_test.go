@@ -49,7 +49,7 @@ func TestCopilotEngine_Execute_StartRespectsTimeout(t *testing.T) {
 	t.Skip("Skipping - passing a context to copilot.Start causes copilot CLI to exit")
 
 	ctrl := gomock.NewController(t)
-	clientMock := NewMockcopilotClient(ctrl)
+	clientMock := NewMockCopilotClient(ctrl)
 
 	// Simulate a Start() that blocks until its context is canceled (mimicking
 	// the copilot SDK hanging on the JSON-RPC Ping during protocol negotiation).
@@ -79,9 +79,8 @@ func TestCopilotEngine_Execute_StartRespectsTimeout(t *testing.T) {
 
 func TestCopilotEngine_Execute_CreateSessionError(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	clientMock := NewMockcopilotClient(ctrl)
+	clientMock := newClientMock(ctrl)
 
-	clientMock.EXPECT().Start(gomock.Any())
 	clientMock.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil, errors.New("session create failed"))
 
 	engine := NewCopilotEngineBuilder("test", &CopilotEngineBuilderOptions{
@@ -92,6 +91,11 @@ func TestCopilotEngine_Execute_CreateSessionError(t *testing.T) {
 
 	require.NoError(t, engine.Initialize(context.Background()))
 
+	t.Cleanup(func() {
+		err := engine.Shutdown(context.Background())
+		require.NoError(t, err)
+	})
+
 	resp, err := engine.Execute(context.Background(), &ExecutionRequest{Message: "hello", Timeout: time.Second})
 	require.Error(t, err)
 	assert.Nil(t, resp)
@@ -100,11 +104,11 @@ func TestCopilotEngine_Execute_CreateSessionError(t *testing.T) {
 
 func TestCopilotEngine_Execute_SendError(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	clientMock := NewMockcopilotClient(ctrl)
-	sessionMock := NewMockcopilotSession(ctrl)
+	clientMock := newClientMock(ctrl)
+	sessionMock := NewMockCopilotSession(ctrl)
 
-	clientMock.EXPECT().Start(gomock.Any())
 	clientMock.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(sessionMock, nil)
+	clientMock.EXPECT().DeleteSession(gomock.Any(), "session-1")
 
 	sessionMock.EXPECT().On(gomock.Any()).Return(func() {}).AnyTimes()
 	sessionMock.EXPECT().SessionID().Return("session-1")
@@ -120,6 +124,11 @@ func TestCopilotEngine_Execute_SendError(t *testing.T) {
 	err := engine.Initialize(context.Background())
 	require.NoError(t, err)
 
+	t.Cleanup(func() {
+		err := engine.Shutdown(context.Background())
+		require.NoError(t, err)
+	})
+
 	resp, err := engine.Execute(context.Background(), &ExecutionRequest{Message: "hello", Timeout: time.Second})
 	require.NoError(t, err)
 
@@ -129,7 +138,7 @@ func TestCopilotEngine_Execute_SendError(t *testing.T) {
 
 func TestCopilotEngine_Shutdown_StopsClientAndCleansWorkspaces(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	clientMock := NewMockcopilotClient(ctrl)
+	clientMock := NewMockCopilotClient(ctrl)
 
 	engine := NewCopilotEngineBuilder("test-model", &CopilotEngineBuilderOptions{
 		NewCopilotClient: func(clientOptions *copilot.ClientOptions) CopilotClient { return clientMock },

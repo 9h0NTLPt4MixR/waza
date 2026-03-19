@@ -444,7 +444,7 @@ func compareFilesets(baseRef, headRef, rootDir string, baseFiles, headFiles map[
 			before = &fileTokens{
 				Tokens:     beforeTokens,
 				Characters: utf8.RuneCountInString(baseContent),
-				Lines:      countLines(baseContent),
+				Lines:      tokens.CountLines(baseContent),
 			}
 		}
 		var after *fileTokens
@@ -452,7 +452,7 @@ func compareFilesets(baseRef, headRef, rootDir string, baseFiles, headFiles map[
 			after = &fileTokens{
 				Tokens:     afterTokens,
 				Characters: utf8.RuneCountInString(headContent),
-				Lines:      countLines(headContent),
+				Lines:      tokens.CountLines(headContent),
 			}
 		}
 

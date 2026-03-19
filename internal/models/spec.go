@@ -33,7 +33,7 @@ type SpecIdentity struct {
 
 // Config controls execution behavior
 type Config struct {
-	RunsPerTest    int            `yaml:"trials_per_task" json:"runs_per_test"`
+	TrialsPerTask  int            `yaml:"trials_per_task" json:"runs_per_test"`
 	TimeoutSec     int            `yaml:"timeout_seconds" json:"timeout_sec"`
 	Concurrent     bool           `yaml:"parallel" json:"concurrent"`
 	Workers        int            `yaml:"workers,omitempty" json:"workers,omitempty"`
@@ -133,8 +133,8 @@ func LoadBenchmarkSpec(path string) (*BenchmarkSpec, error) {
 
 // Validate checks that the spec is valid
 func (s *BenchmarkSpec) Validate() error {
-	if s.Config.RunsPerTest < 1 {
-		return fmt.Errorf("trials_per_task must be at least 1, got %d", s.Config.RunsPerTest)
+	if s.Config.TrialsPerTask < 1 {
+		return fmt.Errorf("trials_per_task must be at least 1, got %d", s.Config.TrialsPerTask)
 	}
 	if s.Config.TimeoutSec < 1 {
 		return fmt.Errorf("timeout_seconds must be at least 1, got %d", s.Config.TimeoutSec)

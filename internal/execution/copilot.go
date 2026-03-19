@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -13,6 +12,9 @@ import (
 	copilot "github.com/github/copilot-sdk/go"
 	"github.com/microsoft/waza/internal/models"
 	"github.com/microsoft/waza/internal/utils"
+
+	// auto-loads the embedded copilot CLI, over using the copilot CLI on the machine.
+	_ "github.com/microsoft/waza/internal/embedded"
 )
 
 // CopilotEngine integrates with GitHub Copilot SDK
@@ -92,6 +94,26 @@ func (e *CopilotEngine) Initialize(ctx context.Context) error {
 		// it'll kill the copilot process.
 		// Tracking here: https://github.com/github/copilot-sdk/issues/668
 		startErr = e.client.Start(context.Background())
+
+		if startErr != nil {
+			return
+		}
+
+		authStatusResp, err := e.client.GetAuthStatus(ctx)
+
+		if err != nil {
+			_ = e.client.Stop()
+
+			startErr = fmt.Errorf("failed to get copilot authentication status. Use any installed instance of copilot CLI and run \"copilot login\" before using this command: %w", err)
+			return
+		}
+
+		if !authStatusResp.IsAuthenticated {
+			_ = e.client.Stop()
+
+			startErr = fmt.Errorf("copilot is not authenticated. Use any installed instance of copilot CLI and run \"copilot login\" before using this command")
+			return
+		}
 	})
 
 	if startErr != nil {
@@ -124,13 +146,10 @@ func (e *CopilotEngine) Execute(ctx context.Context, req *ExecutionRequest) (*Ex
 	// Build skill directories list: start with CWD, then add any from request
 	skillDirs := e.getSkillDirs(sourceDir, req)
 
-	// Load skill definitions from directories and build system message
-	var systemMessage *copilot.SystemMessageConfig
-	if msg := buildSkillSystemMessage(skillDirs); msg != "" {
-		systemMessage = &copilot.SystemMessageConfig{
-			Mode:    "append",
-			Content: msg,
-		}
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, req.Timeout)
+		defer cancel()
 	}
 
 	var session CopilotSession
@@ -150,7 +169,6 @@ func (e *CopilotEngine) Execute(ctx context.Context, req *ExecutionRequest) (*Ex
 
 			SkillDirectories: skillDirs,
 			WorkingDirectory: workspaceDir,
-			SystemMessage:    systemMessage,
 		})
 
 		if err != nil {
@@ -165,7 +183,6 @@ func (e *CopilotEngine) Execute(ctx context.Context, req *ExecutionRequest) (*Ex
 			// these are the directory for the skill itself.
 			SkillDirectories: skillDirs,
 			WorkingDirectory: workspaceDir,
-			SystemMessage:    systemMessage,
 		})
 
 		if err != nil {
@@ -389,100 +406,4 @@ func joinStrings(parts []string) string {
 func allowAllTools(request copilot.PermissionRequest, invocation copilot.PermissionInvocation) (copilot.PermissionRequestResult, error) {
 	// value for 'Kind' came from the permissions_test.go in the Copilot SDK.
 	return copilot.PermissionRequestResult{Kind: "approved"}, nil
-}
-
-// skillDefinition holds the name and description extracted from a SKILL.md file.
-type skillDefinition struct {
-	Name        string
-	Description string
-	Dir         string
-}
-
-// buildSkillSystemMessage scans skill directories for SKILL.md files, extracts
-// their name and description, and returns a system message section that tells
-// the agent about available skills. Returns empty string if no skills found.
-func buildSkillSystemMessage(skillDirs []string) string {
-	var skills []skillDefinition
-
-	for _, dir := range skillDirs {
-		sd := loadSkillDefinition(dir)
-		if sd != nil {
-			skills = append(skills, *sd)
-		}
-	}
-
-	if len(skills) == 0 {
-		return ""
-	}
-
-	var sb strings.Builder
-	sb.WriteString("\n<available_skills>\n")
-	for _, s := range skills {
-		sb.WriteString("<skill>\n")
-		fmt.Fprintf(&sb, "  <name>%s</name>\n", s.Name)
-		if s.Description != "" {
-			fmt.Fprintf(&sb, "  <description>%s</description>\n", s.Description)
-		}
-		sb.WriteString("</skill>\n")
-	}
-	sb.WriteString("</available_skills>\n")
-
-	return sb.String()
-}
-
-// loadSkillDefinition reads a SKILL.md file from dir and extracts the skill
-// name and description from its YAML frontmatter. Returns nil if no SKILL.md
-// exists or parsing fails.
-func loadSkillDefinition(dir string) *skillDefinition {
-	skillPath := filepath.Join(dir, "SKILL.md")
-
-	data, err := os.ReadFile(skillPath)
-	if err != nil {
-		return nil
-	}
-
-	name, desc := parseSkillFrontmatter(string(data))
-	if name == "" {
-		slog.Debug("SKILL.md has no name in frontmatter", "path", skillPath)
-		return nil
-	}
-
-	slog.Debug("Loaded skill definition", "name", name, "dir", dir)
-	return &skillDefinition{Name: name, Description: desc, Dir: dir}
-}
-
-// parseSkillFrontmatter extracts name and description from SKILL.md YAML
-// frontmatter. Avoids importing the skill package to keep execution decoupled.
-func parseSkillFrontmatter(content string) (name, description string) {
-	if !strings.HasPrefix(content, "---") {
-		return "", ""
-	}
-
-	rest := content[3:]
-	if strings.HasPrefix(rest, "\r\n") {
-		rest = rest[2:]
-	} else if strings.HasPrefix(rest, "\n") {
-		rest = rest[1:]
-	}
-
-	idx := strings.Index(rest, "\n---")
-	if idx < 0 {
-		return "", ""
-	}
-
-	yamlBlock := rest[:idx]
-
-	// Simple line-by-line extraction to avoid a YAML dependency in execution
-	for _, line := range strings.Split(yamlBlock, "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "name:") {
-			name = strings.TrimSpace(strings.TrimPrefix(line, "name:"))
-			name = strings.Trim(name, "\"'")
-		} else if strings.HasPrefix(line, "description:") {
-			description = strings.TrimSpace(strings.TrimPrefix(line, "description:"))
-			description = strings.Trim(description, "\"'")
-		}
-	}
-
-	return name, description
 }

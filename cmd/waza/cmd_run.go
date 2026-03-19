@@ -17,6 +17,7 @@ import (
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
 
+	copilot "github.com/github/copilot-sdk/go"
 	"github.com/microsoft/waza/internal/cache"
 	"github.com/microsoft/waza/internal/config"
 	"github.com/microsoft/waza/internal/discovery"
@@ -64,6 +65,9 @@ var (
 	strictFlag      bool
 	updateSnapshots bool
 	skipGradersFlag bool
+
+	// newCopilotClientFn allows you to override the client used by the copilot engine, for this command.
+	newCopilotClientFn func(clientOptions *copilot.ClientOptions) execution.CopilotClient
 )
 
 // modelResult pairs a model identifier with its evaluation outcome.
@@ -87,8 +91,9 @@ With no arguments, uses workspace detection to find eval.yaml automatically:
 
 You can also specify a skill name to run its eval:
   waza run code-explainer`,
-		Args: cobra.MaximumNArgs(1),
-		RunE: runCommandE,
+		Args:          cobra.MaximumNArgs(1),
+		RunE:          runCommandE,
+		SilenceErrors: true,
 	}
 
 	cmd.Flags().StringVar(&contextDir, "context-dir", "", "Context directory for fixtures (default: ./fixtures relative to spec)")
@@ -182,8 +187,45 @@ func runCommandE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	var skillFolders []string
+
+	// load up the skills from the .waza.yaml's skills folder
+	if cfg.Dir != "" {
+		skillsPath := filepath.Join(cfg.Dir, cfg.Paths.Skills)
+
+		stat, err := os.Stat(skillsPath)
+
+		// it's possible for the user to run waza where all they care about is what's in the current folder
+		// and it won't conform to our default .waza.yaml structure. We'll bypass this skill discovery
+		// if the skill folder doesn't exist.
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			slog.Warn("skills folder does not exist, skipping skills discovery",
+				slog.String("path", skillsPath))
+		case err != nil:
+			slog.Warn("error accessing skills folder, will not do skills discovery",
+				slog.String("error", err.Error()),
+				slog.String("path", skillsPath))
+		case !stat.IsDir():
+			slog.Warn("skills folder is not a directory, will not do skills discovery",
+				slog.String("path", skillsPath))
+		default:
+			discoveredSkills, err := discovery.Discover(skillsPath)
+
+			if err != nil {
+				return err
+			}
+
+			for _, ds := range discoveredSkills {
+				skillFolders = append(skillFolders, ds.Dir)
+			}
+
+			slog.Debug("Workspace skills added", "skills", skillFolders, "base", skillsPath)
+		}
+	}
+
 	if len(specPaths) == 1 {
-		results, err := runCommandForSpec(cmd, specPaths[0])
+		results, err := runCommandForSpec(cmd, specPaths[0], skillFolders)
 
 		// Only write outputs when the run produced meaningful results:
 		// either success (err == nil) or test failures (outcomes are still valid).
@@ -218,7 +260,7 @@ func runCommandE(cmd *cobra.Command, args []string) error {
 	for _, sp := range specPaths {
 		fmt.Printf("\n=== %s ===\n\n", sp.skillName)
 		result := skillRunResult{skillName: sp.skillName}
-		outcomes, err := runCommandForSpec(cmd, sp)
+		outcomes, err := runCommandForSpec(cmd, sp, skillFolders)
 		result.outcomes = outcomes
 		if err != nil {
 			var testErr *TestFailureError
@@ -290,8 +332,8 @@ func runCommandE(cmd *cobra.Command, args []string) error {
 }
 
 type skillSpecPath struct {
-	specPath  string
-	skillName string
+	evalSpecPath string
+	skillName    string
 }
 
 type skillRunResult struct {
@@ -306,7 +348,7 @@ func resolveSpecPaths(args []string) ([]skillSpecPath, error) {
 		arg := args[0]
 		// If it looks like a path, use directly
 		if workspace.LooksLikePath(arg) {
-			return []skillSpecPath{{specPath: arg}}, nil
+			return []skillSpecPath{{evalSpecPath: arg}}, nil
 		}
 		// Treat as skill name
 		wsCtx, err := resolveWorkspace(args)
@@ -320,7 +362,7 @@ func resolveSpecPaths(args []string) ([]skillSpecPath, error) {
 		if err != nil {
 			return nil, err
 		}
-		return []skillSpecPath{{specPath: evalPath, skillName: wsCtx.Skills[0].Name}}, nil
+		return []skillSpecPath{{evalSpecPath: evalPath, skillName: wsCtx.Skills[0].Name}}, nil
 	}
 
 	// No args — workspace detection
@@ -339,7 +381,7 @@ func resolveSpecPaths(args []string) ([]skillSpecPath, error) {
 			fmt.Printf("⚠️  Skipping %s: %v\n", si.Name, err)
 			continue
 		}
-		paths = append(paths, skillSpecPath{specPath: evalPath, skillName: si.Name})
+		paths = append(paths, skillSpecPath{evalSpecPath: evalPath, skillName: si.Name})
 	}
 
 	if len(paths) == 0 {
@@ -396,8 +438,9 @@ func printSkillRunSummary(results []skillRunResult) {
 }
 
 // runCommandForSpec runs the evaluation for a single spec path.
-func runCommandForSpec(cmd *cobra.Command, sp skillSpecPath) ([]modelResult, error) {
-	specPath := sp.specPath
+// defaultSkills - skills found under the workspace folder, specified by .waza.yaml
+func runCommandForSpec(cmd *cobra.Command, sp skillSpecPath, defaultSkills []string) ([]modelResult, error) {
+	specPath := sp.evalSpecPath
 
 	// Load spec
 	spec, err := models.LoadBenchmarkSpec(specPath)
@@ -419,7 +462,7 @@ func runCommandForSpec(cmd *cobra.Command, sp skillSpecPath) ([]modelResult, err
 		shouldOverrideTrials = cmd.Flags().Changed("trials")
 	}
 	if shouldOverrideTrials {
-		spec.Config.RunsPerTest = trials
+		spec.Config.TrialsPerTask = trials
 	}
 	if baselineFlag {
 		spec.Baseline = true
@@ -455,7 +498,7 @@ func runCommandForSpec(cmd *cobra.Command, sp skillSpecPath) ([]modelResult, err
 		// Override spec model for this iteration
 		spec.Config.ModelID = modelID
 
-		outcome, err := runSingleModel(cmd, spec, specPath)
+		outcome, err := runSingleModel(cmd, spec, specPath, defaultSkills)
 		if err != nil {
 			var testErr *TestFailureError
 			if errors.As(err, &testErr) {
@@ -524,7 +567,7 @@ func runCommandForSpec(cmd *cobra.Command, sp skillSpecPath) ([]modelResult, err
 
 // runSingleModel executes a benchmark for one model and returns the outcome.
 // It prints the per-model summary and saves output for single-model runs.
-func runSingleModel(cmd *cobra.Command, spec *models.BenchmarkSpec, specPath string) (*models.EvaluationOutcome, error) {
+func runSingleModel(cmd *cobra.Command, spec *models.BenchmarkSpec, specPath string, defaultSkills []string) (*models.EvaluationOutcome, error) {
 	// Get spec directory for resolving relative paths
 	specDir := filepath.Dir(specPath)
 	if !filepath.IsAbs(specDir) {
@@ -543,6 +586,11 @@ func runSingleModel(cmd *cobra.Command, spec *models.BenchmarkSpec, specPath str
 		if err == nil {
 			fixtureDir = absFixtureDir
 		}
+	}
+
+	if len(spec.Config.SkillPaths) == 0 {
+		// ie, the user hasn't configured skill paths explicitly
+		spec.Config.SkillPaths = append(spec.Config.SkillPaths, defaultSkills...)
 	}
 
 	// Create config with both directories
@@ -583,7 +631,9 @@ func runSingleModel(cmd *cobra.Command, spec *models.BenchmarkSpec, specPath str
 	case "mock":
 		engine = execution.NewMockEngine(spec.Config.ModelID)
 	case "copilot-sdk":
-		engine = execution.NewCopilotEngineBuilder(spec.Config.ModelID, nil).Build()
+		engine = execution.NewCopilotEngineBuilder(spec.Config.ModelID, &execution.CopilotEngineBuilderOptions{
+			NewCopilotClient: newCopilotClientFn, // if nil, uses the real function, otherwise overridable for tests.
+		}).Build()
 	default:
 		return nil, fmt.Errorf("unknown engine type: %s", spec.Config.EngineType)
 	}
@@ -1521,6 +1571,12 @@ func runDiscoverMode(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no skills with eval.yaml found in %s", root)
 	}
 
+	var skillDirs []string
+
+	for _, ds := range withEval {
+		skillDirs = append(skillDirs, ds.Dir)
+	}
+
 	// Run evaluations
 	fmt.Println("Running evaluations...")
 
@@ -1530,10 +1586,10 @@ func runDiscoverMode(cmd *cobra.Command, args []string) error {
 	for i, s := range withEval {
 		fmt.Printf("\n[%d/%d] %s\n", i+1, len(withEval), s.Name)
 
-		sp := skillSpecPath{specPath: s.EvalPath, skillName: s.Name}
+		sp := skillSpecPath{evalSpecPath: s.EvalPath, skillName: s.Name}
 		result := skillRunResult{skillName: s.Name}
 
-		outcomes, runErr := runCommandForSpec(cmd, sp)
+		outcomes, runErr := runCommandForSpec(cmd, sp, skillDirs)
 		result.outcomes = outcomes
 		if runErr != nil {
 			var testErr *TestFailureError

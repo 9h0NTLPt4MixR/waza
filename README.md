@@ -22,8 +22,18 @@ Or download binaries directly from the [latest release](https://github.com/micro
 
 Requires Go 1.26+:
 
+NOTE, due to the use of LFS artifacts you cannot install waza using `go install`. To install waza, outside of a normal release, you'll need to clone the repository:
+
 ```bash
-go install github.com/microsoft/waza/cmd/waza@latest
+git clone https://github.com/microsoft/waza.git
+cd waza
+
+# ensure git LFS-based artifacts are available (for embedded copilot binaries)
+git lfs install
+git lfs pull
+
+go build -o waza ./cmd/waza
+./waza <waza command line>
 ```
 
 ### Azure Developer CLI (azd) Extension
