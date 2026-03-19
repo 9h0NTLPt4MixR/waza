@@ -88,7 +88,14 @@ func (v *ValidatorInline) UnmarshalYAML(node *yaml.Node) error {
 	}
 
 	var raw rawValidatorInline
-	if err := node.Decode(&raw); err != nil {
+
+	bytesData, err := yaml.Marshal(node)
+	if err != nil {
+		return fmt.Errorf("failed to marshal validator config for %q: %w", raw.Identifier, err)
+	}
+	decoder := yaml.NewDecoder(bytes.NewReader(bytesData))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&raw); err != nil {
 		return err
 	}
 
