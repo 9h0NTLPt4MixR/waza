@@ -114,7 +114,11 @@ type MeasurementDef struct {
 	Desc       string  `yaml:"description,omitempty" json:"desc,omitempty"`
 }
 
-// LoadBenchmarkSpec loads a spec from a YAML file
+// LoadBenchmarkSpec loads a spec from a YAML file with strict validation.
+//
+// Normally the schema validation will catch errors in the eval.yaml, but this also does
+// strict YAML parsing to catch errors like unknown fields or type errors that the schema
+// validation might miss.
 func LoadBenchmarkSpec(path string) (*BenchmarkSpec, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -122,9 +126,9 @@ func LoadBenchmarkSpec(path string) (*BenchmarkSpec, error) {
 	}
 
 	var spec BenchmarkSpec
-	decoder := yaml.NewDecoder(bytes.NewReader(data))
-	decoder.KnownFields(true) // Strict parsing to catch unknown fields
 
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
 	if err := decoder.Decode(&spec); err != nil {
 		return nil, fmt.Errorf("parsing benchmark spec YAML (%s): %w", path, err)
 	}

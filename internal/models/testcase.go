@@ -78,6 +78,7 @@ func (v *ValidatorInline) EffectiveWeight() float64 {
 }
 
 func (v *ValidatorInline) UnmarshalYAML(node *yaml.Node) error {
+	// We need to unmarshal into a separate struct to apply KnownFields strict parsing, since ValidatorInline has flexible fields based on the Kind.
 	type rawValidatorInline struct {
 		Identifier string     `yaml:"name"`
 		Kind       GraderKind `yaml:"type,omitempty"`
@@ -89,6 +90,7 @@ func (v *ValidatorInline) UnmarshalYAML(node *yaml.Node) error {
 
 	var raw rawValidatorInline
 
+	// Serialize the node back to bytes to leverage KnownFields strict parsing on the raw struct
 	bytesData, err := yaml.Marshal(node)
 	if err != nil {
 		return fmt.Errorf("failed to marshal validator config for %q: %w", raw.Identifier, err)

@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/microsoft/waza/internal/models"
 	"github.com/microsoft/waza/schemas"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"golang.org/x/text/language"
@@ -55,21 +54,31 @@ func mustCompileSchema(raw string, name string) *jsonschema.Schema {
 
 // ValidateEvalFile validates an eval.yaml file at the given path against the JSON schema.
 // Returns errors for the eval itself AND all referenced task files.
+//
+// This assumes that the schema files are up-to-date with the implementation.
+// Other YAML decoding errors may be reported if fields are removed from the implementation. Those
+// will be caught by the strict YAML parsing in LoadTestCase and LoadBenchmarkSpec, but the schema
+// validation has a much higher fidelity (better error location) than the validation in LoadTestCase
+// and LoadBenchmarkSpec.
 func ValidateEvalFile(evalPath string) (evalErrs []string, taskErrs map[string][]string, err error) {
 	data, err := os.ReadFile(evalPath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("reading eval file: %w", err)
 	}
 
-	// Validate eval schema
+	// Validate the data against the eval schema
 	evalErrs = ValidateEvalBytes(data)
 
-	// Strict-decode the original YAML to catch extraneous fields
-	var spec models.BenchmarkSpec
-	decoder := yaml.NewDecoder(bytes.NewReader(data))
-	decoder.KnownFields(true)
-	if yamlErr := decoder.Decode(&spec); yamlErr != nil {
-		evalErrs = append(evalErrs, fmt.Sprintf("strict YAML: %v", yamlErr))
+	// Since we're just validating the eval.yaml and its referenced tasks, we don't need to parse the
+	// full spec here.
+	// But a spec must have at least one task reference, so we'll parse out the "tasks" field to find the referenced task files.
+	//
+	// Note that we're NOT validating the yaml here. If the "tasks" field is missing or not an array of strings, we'll just skip validating tasks and return any eval.yaml errors.
+	var spec struct {
+		Tasks []string `yaml:"tasks"`
+	}
+	if yamlErr := yaml.Unmarshal(data, &spec); yamlErr != nil {
+		evalErrs = append(evalErrs, fmt.Sprintf("yaml 'tasks' parse: %v", yamlErr))
 		return evalErrs, nil, nil
 	}
 
