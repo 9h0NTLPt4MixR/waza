@@ -73,7 +73,10 @@ func ValidateEvalFile(evalPath string) (evalErrs []string, taskErrs map[string][
 	// full spec here.
 	// But a spec must have at least one task reference, so we'll parse out the "tasks" field to find the referenced task files.
 	//
-	// Note that we're NOT validating the yaml here. If the "tasks" field is missing or not an array of strings, we'll just skip validating tasks and return any eval.yaml errors.
+	// Note that we're NOT performing a full validation here.
+	// If the "tasks" field is missing or not an array of strings, we'll return
+	// any schema validation errors in addition to the YAML parsing error for
+	// the "tasks" field, but we won't attempt to validate any tasks.
 	var spec struct {
 		Tasks []string `yaml:"tasks"`
 	}
@@ -82,6 +85,7 @@ func ValidateEvalFile(evalPath string) (evalErrs []string, taskErrs map[string][
 		return evalErrs, nil, nil
 	}
 
+	// Now walk the set of tasks referenced by the eval.yaml and validate each one.
 	baseDir := filepath.Dir(evalPath)
 	taskErrs = make(map[string][]string)
 

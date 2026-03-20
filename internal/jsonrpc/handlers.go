@@ -192,7 +192,9 @@ func (h *HandlerContext) handleEvalValidate(_ context.Context, params json.RawMe
 		return nil, ErrInternalError(err.Error())
 	}
 
-	// Validate at the input yaml file is correct YAML and report syntax errors, to avoid overwhelming users with schema validation errors when the YAML is not parseable at all.
+	// Validate that the input YAML file is correct YAML and report syntax errors, to avoid
+	// overwhelming users with schema validation errors when the YAML is not parseable
+	// at all.
 	var errs []string
 	var anyYaml = yaml.Node{}
 	if yerr := yaml.Unmarshal(data, &anyYaml); yerr != nil {

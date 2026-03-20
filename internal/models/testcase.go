@@ -93,7 +93,7 @@ func (v *ValidatorInline) UnmarshalYAML(node *yaml.Node) error {
 	// Serialize the node back to bytes to leverage KnownFields strict parsing on the raw struct
 	bytesData, err := yaml.Marshal(node)
 	if err != nil {
-		return fmt.Errorf("failed to marshal validator config %w", err)
+		return fmt.Errorf("failed to marshal validator config: %w", err)
 	}
 	decoder := yaml.NewDecoder(bytes.NewReader(bytesData))
 	decoder.KnownFields(true)
