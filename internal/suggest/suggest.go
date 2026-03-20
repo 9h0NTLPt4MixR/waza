@@ -139,16 +139,13 @@ func parseGraderSelection(raw string) []string {
 	var structured struct {
 		Graders []string `yaml:"graders"`
 	}
-	decoder := yaml.NewDecoder(strings.NewReader(normalized))
-	decoder.KnownFields(true)
-	if err := decoder.Decode(&structured); err == nil && len(structured.Graders) > 0 {
+	if err := yaml.Unmarshal([]byte(normalized), &structured); err == nil && len(structured.Graders) > 0 {
 		return filterValidGraderTypes(structured.Graders)
 	}
 
 	// Try bare YAML list: [code, keyword, ...]
 	var bare []string
-	decoder = yaml.NewDecoder(strings.NewReader(normalized))
-	if err := decoder.Decode(&bare); err == nil && len(bare) > 0 {
+	if err := yaml.Unmarshal([]byte(normalized), &bare); err == nil && len(bare) > 0 {
 		return filterValidGraderTypes(bare)
 	}
 

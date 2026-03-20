@@ -197,6 +197,10 @@ func (h *HandlerContext) handleEvalValidate(_ context.Context, params json.RawMe
 	var anyYaml = yaml.Node{}
 	if yerr := yaml.Unmarshal(data, &anyYaml); yerr != nil {
 		errs = append(errs, fmt.Sprintf("YAML syntax error: %v", yerr))
+		return &EvalValidateResult{
+			Valid:  false,
+			Errors: errs,
+		}, nil
 	}
 
 	// Schema validation via validation package - Only executed if the YAML is syntactically correct,
@@ -214,7 +218,6 @@ func (h *HandlerContext) handleEvalValidate(_ context.Context, params json.RawMe
 	// Finally, after we've validated the spec against the schema, parse the actual spec
 	// to catch any errors in our loading logic (if the schema doesn't match the implementation).
 	var spec models.BenchmarkSpec
-
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	decoder.KnownFields(true)
 	yerr := decoder.Decode(&spec)

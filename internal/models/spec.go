@@ -73,8 +73,9 @@ func (g *GraderConfig) UnmarshalYAML(node *yaml.Node) error {
 	var raw rawGraderConfig
 	bytesData, err := yaml.Marshal(node)
 	if err != nil {
-		return fmt.Errorf("failed to marshal validator config for %q: %w", raw.Identifier, err)
+		return fmt.Errorf("failed to marshal validator config %w", err)
 	}
+
 	decoder := yaml.NewDecoder(bytes.NewReader(bytesData))
 	decoder.KnownFields(true)
 	if err := decoder.Decode(&raw); err != nil {
