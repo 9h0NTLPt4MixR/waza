@@ -21,13 +21,20 @@ config:
   trials_per_task: 1
   timeout_seconds: 300
   parallel: false
+  executor: mock
   model: claude-sonnet-4.6
+
+metrics:
+  - name: accuracy
+    weight: 1.0
+    threshold: 0.8
 
 graders:
   - type: text
     name: explains_concepts
     config:
-      pattern: "(?i)(function|logic|parameter)"
+      regex_match:
+        - "(?i)(function|logic|parameter)"
   - type: code
     name: has_output
     config:
@@ -111,8 +118,9 @@ graders:
   - type: text
     name: mentions_key_concepts
     config:
-      keywords: ["algorithm", "optimization"]
-      must_include_all: true
+      contains:
+        - "algorithm"
+        - "optimization"
 ```
 
 Each grader accepts an optional `weight` (default `1.0`) that controls its influence on the composite score. See **[Validators & Graders](../graders/#weighted-scoring)** for details.
@@ -127,26 +135,7 @@ See the **[Validators & Graders](../graders/)** guide for all 12 types and examp
 
 ## Tasks Section
 
-Tasks define individual test cases. Either inline or from files:
-
-### Inline Tasks
-
-```yaml
-tasks:
-  - id: basic-001
-    name: Basic Usage
-    description: Test basic functionality
-    inputs:
-      prompt: "Explain this code"
-      files:
-        - path: sample.py
-    expected:
-      output_contains:
-        - "function"
-        - "variable"
-      behavior:
-        max_tool_calls: 5
-```
+Tasks define individual test cases loaded from YAML files:
 
 ### From Files
 
@@ -395,15 +384,11 @@ graders:
   - type: text
     name: format_check
     config:
-      pattern: "^[A-Z].*\\.$" # Sentence starting with capital, ending with period
+      regex_match:
+        - "^[A-Z].*\\.$" # Sentence starting with capital, ending with period
 
 tasks:
-  - id: format-001
-    inputs:
-      prompt: "Write a single sentence"
-    expected:
-      regex_match:
-        - "^[A-Z].*\\.$"
+  - "tasks/format/*.yaml"
 ```
 
 ### Multi-Criteria Scoring
@@ -419,24 +404,23 @@ graders:
         - "'parameter' in output"
 
 tasks:
-  - id: complete-001
-    inputs:
-      prompt: "Explain this function"
-    expected:
-      # All 3 assertions must pass
+  - "tasks/completeness/*.yaml"
 ```
 
 ### Behavioral Constraints
 
+Behavioral constraints are defined in individual task YAML files:
+
 ```yaml
-tasks:
-  - id: efficient-001
-    inputs:
-      prompt: "Refactor this code"
-    expected:
-      behavior:
-        max_tool_calls: 3 # Efficient
-        max_tokens: 1000 # Concise
+# tasks/efficient-001.yaml
+id: efficient-001
+name: Efficiency test
+inputs:
+  prompt: "Refactor this code"
+expected:
+  behavior:
+    max_tool_calls: 3 # Efficient
+    max_tokens: 1000 # Concise
 ```
 
 ## Hooks
@@ -485,9 +469,7 @@ inputs:
   framework: fastapi
 
 tasks:
-  - id: scaffold-001
-    inputs:
-      prompt: "Create a {{language}} app using {{framework}}"
+  - "tasks/scaffold/*.yaml"
 ```
 
 Prompt templating also supports fixture file injection:

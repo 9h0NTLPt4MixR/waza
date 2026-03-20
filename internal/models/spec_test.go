@@ -24,6 +24,7 @@ config:
   trials_per_task: 1
   timeout_seconds: 60
   executor: mock
+  model: test-model
 `,
 			expectError: false,
 		},
@@ -36,6 +37,7 @@ config:
   trials_per_task: 1
   timeout_seconds: 60
   executor: mock
+  model: test-model
 `,
 			expectError: true,
 		},

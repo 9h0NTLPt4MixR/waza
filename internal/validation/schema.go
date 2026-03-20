@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/microsoft/waza/internal/models"
 	"github.com/microsoft/waza/schemas"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"golang.org/x/text/language"
@@ -63,13 +64,13 @@ func ValidateEvalFile(evalPath string) (evalErrs []string, taskErrs map[string][
 	// Validate eval schema
 	evalErrs = ValidateEvalBytes(data)
 
-	// Parse into a minimal struct to resolve task globs
-	var spec struct {
-		Tasks []string `yaml:"tasks"`
-	}
+	// Strict-decode the original YAML to catch extraneous fields
+	var spec models.BenchmarkSpec
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
 	if yamlErr := decoder.Decode(&spec); yamlErr != nil {
-		return evalErrs, nil, nil // can't resolve tasks, but eval errors are still useful
+		evalErrs = append(evalErrs, fmt.Sprintf("strict YAML: %v", yamlErr))
+		return evalErrs, nil, nil
 	}
 
 	baseDir := filepath.Dir(evalPath)
