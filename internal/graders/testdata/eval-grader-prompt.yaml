@@ -1,4 +1,6 @@
 name: grader-prompt
+skill: grader-prompt-skill
+version: 1
 config:
   trials_per_task: 1
   timeout_seconds: 1
@@ -24,3 +26,5 @@ graders:
         If they are correct, call set_waza_grade_pass.
         If it's not, then call set_waza_grade_fail, with your reasoning.
       model: "claude-sonnet-4.5"
+metrics: []
+tasks: []

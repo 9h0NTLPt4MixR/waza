@@ -79,7 +79,7 @@ func (p *promptGrader) gradeIndependent(ctx context.Context, gradingContext *Con
 
 		if p.args.ContinueSession {
 			if gradingContext.SessionID == "" {
-				return nil, errors.New("no session id set, can't continue session in prmopt grading")
+				return nil, errors.New("no session id set, can't continue session in prompt grading")
 			}
 
 			// resume the previous session, but use a different model for the judge.

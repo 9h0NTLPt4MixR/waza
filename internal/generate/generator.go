@@ -58,6 +58,10 @@ func ParseSkillMD(path string) (fm *SkillFrontmatter, err error) {
 
 	raw := strings.Join(lines, "\n")
 	var parsed SkillFrontmatter
+
+	// We explicitly *don't* use KnownFields here because we want to allow extra fields in
+	// the frontmatter that might be used for other purposes (e.g. by skill registry or
+	// other tools) without causing errors in Waza.
 	decoder := yaml.NewDecoder(strings.NewReader(raw))
 	if err := decoder.Decode(&parsed); err != nil {
 		return nil, fmt.Errorf("parsing frontmatter YAML: %w", err)
