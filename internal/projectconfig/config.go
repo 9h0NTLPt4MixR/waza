@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -115,6 +116,21 @@ type StorageConfig struct {
 	Enabled       bool   `yaml:"enabled,omitempty"`       // true when remote storage is configured
 }
 
+// ADCConfig holds Azure Dev Compute connection and resource settings for
+// sandboxed evaluation execution. Mirrors the canonical type in
+// internal/platform/adc — kept here to avoid an import dependency on the
+// platform package (which depends on the ADC SDK).
+type ADCConfig struct {
+	APIKey         string        `yaml:"api_key,omitempty" json:"-"`
+	APIURL         string        `yaml:"api_url,omitempty" json:"api_url,omitempty"`
+	DiskImage      string        `yaml:"disk_image,omitempty" json:"disk_image,omitempty"`
+	CPU            int           `yaml:"cpu,omitempty" json:"cpu,omitempty"`
+	MemoryMB       int           `yaml:"memory_mb,omitempty" json:"memory_mb,omitempty"`
+	SandboxGroupID string        `yaml:"sandbox_group_id,omitempty" json:"sandbox_group_id,omitempty"`
+	MaxSandboxes   int           `yaml:"max_sandboxes_per_user,omitempty" json:"max_sandboxes_per_user,omitempty"`
+	SandboxTimeout time.Duration `yaml:"sandbox_timeout,omitempty" json:"sandbox_timeout,omitempty"`
+}
+
 // ProjectConfig is the top-level configuration loaded from .waza.yaml.
 type ProjectConfig struct {
 	// Dir is the directory of the .waza.yaml file. If this ProjectConfig was not
@@ -135,6 +151,7 @@ type ProjectConfig struct {
 	Tokens   TokensConfig   `yaml:"tokens,omitempty"`
 	Graders  GradersConfig  `yaml:"graders,omitempty"`
 	Storage  StorageConfig  `yaml:"storage,omitempty"`
+	ADC      ADCConfig      `yaml:"adc,omitempty"`
 }
 
 // New returns a ProjectConfig with all hard-coded defaults populated.
@@ -335,6 +352,32 @@ func mergeConfig(dst, src *ProjectConfig) {
 		dst.Storage.ContainerName = src.Storage.ContainerName
 	}
 	dst.Storage.Enabled = src.Storage.Enabled
+
+	// ADC
+	if src.ADC.APIKey != "" {
+		dst.ADC.APIKey = src.ADC.APIKey
+	}
+	if src.ADC.APIURL != "" {
+		dst.ADC.APIURL = src.ADC.APIURL
+	}
+	if src.ADC.DiskImage != "" {
+		dst.ADC.DiskImage = src.ADC.DiskImage
+	}
+	if src.ADC.CPU > 0 {
+		dst.ADC.CPU = src.ADC.CPU
+	}
+	if src.ADC.MemoryMB > 0 {
+		dst.ADC.MemoryMB = src.ADC.MemoryMB
+	}
+	if src.ADC.SandboxGroupID != "" {
+		dst.ADC.SandboxGroupID = src.ADC.SandboxGroupID
+	}
+	if src.ADC.MaxSandboxes > 0 {
+		dst.ADC.MaxSandboxes = src.ADC.MaxSandboxes
+	}
+	if src.ADC.SandboxTimeout > 0 {
+		dst.ADC.SandboxTimeout = src.ADC.SandboxTimeout
+	}
 }
 
 func boolPtr(b bool) *bool {

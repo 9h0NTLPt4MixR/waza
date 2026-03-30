@@ -102,3 +102,15 @@ All code roles now use `claude-opus-4.6`. Docs/Scribe/diversity use `gemini-3-pr
 - **Gotcha:** `mockStore.UpdateRunRequest` must store copies (`cp := *run`) to prevent pointer aliasing — caller modifying `run.Status` after store call silently corrupts stored data.
 - **Dep additions:** `golang.org/x/oauth2` upgraded to v0.36.0, `azcosmos` v1.4.2 added to go.mod for Linus's implementation files.
 - **Total new tests:** 59 across 4 files (39 PASS, 3 SKIP, 0 FAIL in compilable packages; 17 behind build tag)
+
+### Platform Build Verification & Integration Tests (feature/waza-platform branch)
+- **Branch:** `feature/waza-platform`
+- **Build fix:** Added `//go:build adcsdk` tag to `internal/platform/adc/engine.go` — the ADC SDK (`github.com/coreai-microsoft/adc-sdk-go`) is unpublished, so engine.go must be gated behind a build tag like the test file already was. Without this, `go vet ./...` and `go build` fail.
+- **Go build:** `go vet ./...` clean, `go build ./cmd/waza/` clean after build tag fix.
+- **Go tests:** All 47 test packages pass, 0 failures (`go test ./... -count=1`).
+- **Integration tests:** Created `internal/platform/api/handlers_test.go` — 26 new tests using `httptest.Server` with the real router (not just individual handlers). All pass.
+- **Integration test coverage:** Full HTTP request/response cycle for all handlers, connection CRUD end-to-end (create→list→test→delete), run trigger→queue→cancel lifecycle, user isolation (user A can't access user B's connections or runs), auth middleware rejection on all 11 protected routes (no token + bad token), revoked token rejection, cookie-based auth, public endpoints remain accessible, malformed JSON handling, default value application.
+- **Web build:** `npm ci && npm run build` clean — TypeScript compilation and Vite bundle succeed.
+- **Playwright E2E:** 52/52 tests pass on Chromium (`npx playwright test --project=chromium`).
+- **Gotcha:** `go build ./cmd/waza/` fails with "output already exists and is a directory" because the `waza/` directory exists at project root — use `-o waza-bin` or build from within the directory.
+- **Key pattern:** Integration tests use `setupIntegrationServer(t)` which creates an `httptest.Server` with `t.Cleanup` auto-close. The `doRequest` helper wraps token injection and JSON encoding for concise test bodies.

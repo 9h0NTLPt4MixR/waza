@@ -715,6 +715,12 @@ waza results compare run-id-1 run-id-2
 
 For step-by-step setup and troubleshooting, see [Getting Started with Azure Storage](../docs/guides/azure-storage/) guide.
 
+## Waza Platform
+
+For teams and organizations, deploy the **Waza Platform** — a hosted web application that extends the local CLI dashboard into a multi-tenant, cloud-hosted platform. Features include GitHub OAuth login, remote eval execution on Azure ADC sandboxes, team collaboration, and real-time run monitoring.
+
+Get started with the [Waza Platform guide](../docs/guides/platform.mdx) or [deploy to Azure](../docs/guides/deployment.mdx) using `azd up`.
+
 ## Building
 
 ```bash

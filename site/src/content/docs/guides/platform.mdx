@@ -1,0 +1,77 @@
+---
+title: Waza Platform
+description: Hosted platform for running and managing evaluations.
+---
+
+## Overview
+
+The Waza Platform is a hosted web application that extends the local `waza serve` dashboard into a multi-tenant platform for running evaluations at scale.
+
+### Features
+
+- **GitHub Login** — Sign in with your GitHub account
+- **Azure Storage Integration** — Connect your Azure Blob Storage to view and manage eval results
+- **Remote Execution** — Fan out eval tasks to ADC (Agent Dev Compute) sandboxes for parallel execution
+- **Dashboard** — View runs, compare results, track trends — all from the web
+- **Run Queue** — Trigger new eval runs from the UI, monitor progress in real-time
+
+## Getting Started
+
+### Prerequisites
+
+- A GitHub account
+- An Azure Storage account (for storing eval results)
+- A GitHub repository containing your skill eval specs
+
+### 1. Sign In
+
+Navigate to the platform URL and sign in with GitHub. On first login, your account is created automatically.
+
+### 2. Connect Azure Storage
+
+Go to **Settings → Connections** and add your Azure Storage account:
+
+1. Enter your storage account name
+2. Enter the container name (default: `waza-results`)
+3. Click **Test Connection** to verify access
+4. Save the connection
+
+Your eval results will be read from this storage account.
+
+### 3. Connect a GitHub Repository
+
+Add a GitHub repository containing your eval specs:
+
+1. Go to **Settings → Connections**
+2. Click **Add Repository**
+3. Select or enter the repository (e.g., `myorg/my-skills`)
+4. Authorize access via the Waza GitHub App
+
+### 4. Trigger a Run
+
+1. Go to **New Run**
+2. Select your connected repository
+3. Choose an eval spec (auto-detected from the repo)
+4. Select model(s) and worker count
+5. Click **Run** — tasks are dispatched to ADC sandboxes
+
+### 5. Monitor Progress
+
+The **Live** view shows real-time progress as tasks execute in ADC sandboxes. When complete, results appear in the **Dashboard**.
+
+## Architecture
+
+The platform extends the existing `waza serve` architecture:
+
+- **Go backend** — REST API with GitHub OAuth, Cosmos DB for user data, ADC Go SDK for sandbox execution
+- **React SPA** — Extended dashboard with auth, settings, and run management
+- **Azure Container Apps** — Hosted deployment with auto-scaling
+- **ADC Sandboxes** — Isolated microVMs for eval task execution
+
+## Configuration
+
+Platform-specific configuration is managed through the web UI (Settings page), not `.waza.yaml`. The `.waza.yaml` file continues to work for local CLI usage.
+
+## Self-Hosting
+
+The platform can also be self-hosted using the provided Dockerfile and Azure deployment templates.
