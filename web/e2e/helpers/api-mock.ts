@@ -1,12 +1,24 @@
 import type { Page } from "@playwright/test";
 import { SUMMARY, RUNS, RUN_DETAIL, RUN_DETAIL_B, HEALTH } from "../fixtures/mock-data";
 
+const MOCK_USER = {
+  githubId: 1234,
+  login: "testuser",
+  name: "Test User",
+  avatarUrl: "https://avatars.githubusercontent.com/u/1234?v=4",
+};
+
 /**
  * Intercept all /api/* routes and return deterministic mock data.
  * Uses regex patterns so query strings are handled correctly.
  * Must be called BEFORE page.goto().
  */
 export async function mockAllAPIs(page: Page) {
+  // Auth — return mock user so AuthGate passes
+  await page.route(/\/api\/auth\/me/, (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(MOCK_USER) }),
+  );
+
   await page.route(/\/api\/health/, (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(HEALTH) }),
   );
@@ -42,6 +54,11 @@ export async function mockAllAPIs(page: Page) {
  * Mock API to return empty data sets — useful for empty-state tests.
  */
 export async function mockEmptyAPIs(page: Page) {
+  // Auth — return mock user so AuthGate passes
+  await page.route(/\/api\/auth\/me/, (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(MOCK_USER) }),
+  );
+
   await page.route(/\/api\/summary/, (route) =>
     route.fulfill({
       status: 200,

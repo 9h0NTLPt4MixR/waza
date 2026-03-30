@@ -161,3 +161,42 @@ All code roles now use `claude-opus-4.6`. Docs/Scribe/diversity use `gemini-3-pr
 **Key observation:** Self-authored PRs can't be self-approved or self-request-changes via GitHub API. For approved PRs, left review comments + set auto-merge. For blocked PRs (#65, #64, #55), used request-changes. For blocked self-authored PR (#90), left comment.
 
 **Pattern confirmed:** The same-account limitation is consistent with previous batch review. The workaround (comment + auto-merge for approvals) is reliable.
+
+### Platform Module Architecture (feature/waza-platform)
+
+**Date:** 2026-07 | **Branch:** `feature/waza-platform`
+
+**What:** Designed and created the `internal/platform/` module — the contract layer for Waza Platform (hosted PaaS). Five files across four packages:
+
+- `internal/platform/README.md` — Module overview with Mermaid architecture diagram and data flow sequence diagram.
+- `internal/platform/auth/auth.go` — `AuthProvider` interface (GitHub OAuth), `User`/`Session` structs, `Middleware` type, `UserFromContext` helper.
+- `internal/platform/db/db.go` — `Store` interface (13 methods), `Connection`/`RunRequest` structs, `ConnectionType`/`RunStatus` enums with helper methods.
+- `internal/platform/api/routes.go` — Full route registration via `http.ServeMux` (Go 1.22+ patterns), 14 endpoints across auth/connections/runs/repos, `Dependencies` bundle for DI.
+- `internal/platform/adc/config.go` — `ADCConfig` struct with YAML/JSON tags, `WithDefaults()` and `CanAllocate()` methods, quota constants.
+
+**Design decisions:**
+- Used Go 1.22+ `http.ServeMux` method patterns (`"GET /api/..."`) instead of chi/gorilla — fewer deps for a contract layer.
+- `Store` interface methods are user-scoped by design — no cross-user queries in v1.
+- ADC quota (max 10 sandboxes) is a constant, not config — changing limits requires code review.
+- `Connection.Config` is `map[string]any` — provider-specific config varies too much for a fixed struct.
+- `RunRequest.ADCSandboxIDs` is `[]string` — tracks allocated sandboxes for cleanup on cancellation.
+- `auth.UserContextKey` uses a typed `ContextKey` to avoid collisions.
+
+**For Linus:** These are the interfaces to implement against. Start with `db.Store` (Cosmos SDK), then `auth.AuthProvider` (GitHub OAuth), then wire up `api.RegisterRoutes`.
+
+### Platform Frontend — Wave 2 (feature/waza-platform)
+
+**Date:** 2026-07 | **Branch:** `feature/waza-platform`
+
+**What:** Implemented the full React SPA layer for Waza Platform — auth gate, settings, new run wizard, and updated navigation. Six tasks delivered:
+
+1. **AuthGate** (`web/src/components/AuthGate.tsx`) — Calls `/api/auth/me` on mount. 401 → GitHub login page. Success → render app. Loading spinner while checking.
+2. **AuthContext** (`web/src/contexts/AuthContext.tsx`) — `AuthProvider` + `useAuth()` hook. Standalone state (not React Query) because auth is infrastructure-level.
+3. **Settings** (`web/src/components/Settings.tsx`) — Tab-based. Connections tab: full CRUD for Azure Storage and GitHub Repo connections, with test/delete buttons and status badges. Preferences tab: placeholder with model selector and worker count.
+4. **NewRun** (`web/src/components/NewRun.tsx`) — 4-step wizard: Select repo → Select eval → Configure (model, workers, parallel) → Review & Run. Redirects to Live view on trigger.
+5. **Navigation** — "New Run" button (blue, header-right), Settings gear icon, user avatar dropdown with Settings + Sign out.
+6. **API Client** — 10 new functions in `client.ts`, 7 new types, 9 new React Query hooks (queries + mutations with cache invalidation).
+
+**Key observation:** E2e test mocks needed auth endpoint added — `mockAllAPIs` now returns a mock user for `/api/auth/me`. All 52 existing Playwright tests pass without changes to individual test files.
+
+**Build verified:** TypeScript clean, Vite production build clean, 52/52 Playwright e2e tests pass.

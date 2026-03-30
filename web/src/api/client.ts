@@ -1,3 +1,58 @@
+// --- Platform types ---
+
+export interface User {
+  githubId: number;
+  login: string;
+  name: string;
+  avatarUrl: string;
+}
+
+export interface Connection {
+  id: string;
+  type: "azure-storage" | "github-repo";
+  name: string;
+  config: Record<string, string>;
+  status: "verified" | "unverified";
+  createdAt: string;
+}
+
+export interface CreateConnectionRequest {
+  type: "azure-storage" | "github-repo";
+  name: string;
+  config: Record<string, string>;
+}
+
+export interface Repo {
+  owner: string;
+  repo: string;
+  fullName: string;
+}
+
+export interface EvalSpec {
+  path: string;
+  name: string;
+}
+
+export interface TriggerRunConfig {
+  owner: string;
+  repo: string;
+  evalPath: string;
+  model: string;
+  workers: number;
+  parallel: boolean;
+}
+
+export interface RunQueueItem {
+  id: string;
+  status: string;
+  evalPath: string;
+  model: string;
+  workers: number;
+  createdAt: string;
+}
+
+// --- Existing types ---
+
 export interface SummaryResponse {
   totalRuns: number;
   totalTasks: number;
@@ -99,4 +154,83 @@ export function fetchRuns(
 
 export function fetchRunDetail(id: string): Promise<RunDetail> {
   return fetchJSON<RunDetail>(`/api/runs/${encodeURIComponent(id)}`);
+}
+
+// --- Platform API functions ---
+
+export function fetchCurrentUser(): Promise<User> {
+  return fetchJSON<User>("/api/auth/me");
+}
+
+export async function logout(): Promise<void> {
+  const res = await fetch("/api/auth/logout", { method: "POST" });
+  if (!res.ok) throw new Error(`Logout failed: ${res.status}`);
+}
+
+export function fetchConnections(): Promise<Connection[]> {
+  return fetchJSON<Connection[]>("/api/connections");
+}
+
+export async function createConnection(
+  data: CreateConnectionRequest,
+): Promise<Connection> {
+  const res = await fetch("/api/connections", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`Failed to create connection: ${res.status}`);
+  return res.json() as Promise<Connection>;
+}
+
+export async function testConnection(
+  id: string,
+): Promise<{ ok: boolean; message: string }> {
+  const res = await fetch("/api/connections/test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id }),
+  });
+  if (!res.ok) throw new Error(`Connection test failed: ${res.status}`);
+  return res.json() as Promise<{ ok: boolean; message: string }>;
+}
+
+export async function deleteConnection(id: string): Promise<void> {
+  const res = await fetch(`/api/connections/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(`Failed to delete connection: ${res.status}`);
+}
+
+export function fetchRepos(): Promise<Repo[]> {
+  return fetchJSON<Repo[]>("/api/repos");
+}
+
+export function fetchRepoEvals(owner: string, repo: string): Promise<EvalSpec[]> {
+  return fetchJSON<EvalSpec[]>(
+    `/api/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/evals`,
+  );
+}
+
+export async function triggerRun(
+  config: TriggerRunConfig,
+): Promise<{ runId: string }> {
+  const res = await fetch("/api/runs/trigger", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  });
+  if (!res.ok) throw new Error(`Failed to trigger run: ${res.status}`);
+  return res.json() as Promise<{ runId: string }>;
+}
+
+export function fetchRunQueue(): Promise<RunQueueItem[]> {
+  return fetchJSON<RunQueueItem[]>("/api/runs/queue");
+}
+
+export async function cancelRun(id: string): Promise<void> {
+  const res = await fetch(`/api/runs/cancel/${encodeURIComponent(id)}`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error(`Failed to cancel run: ${res.status}`);
 }
