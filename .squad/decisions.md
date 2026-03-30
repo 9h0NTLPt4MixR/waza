@@ -399,3 +399,177 @@ All issues routed to qualified squad members:
 | #89 | CI/CD integration guide (P1) | squad:livingston + squad:saul | Documentation with doc-review gate |
 
 **Why:** Batch review + triage ensures all green PRs merge cleanly and new work is routed to the right specialist without manual coordination. Parallel work begins immediately once triage is complete.
+
+## 2026-03-12: User directive — mixed notification formats
+
+**By:** Shayne Boyer (via Copilot)
+
+**What:** Teams notifications should use both HTML and Adaptive Cards depending on the update type. Pick the format that best fits each event — not everything needs to be a rich card.
+
+**Why:** User request — captured for team memory.
+
+## 2026-03-30: Platform Module Architecture
+
+**By:** Rusty (Lead / Architect)  
+**Date:** 2026-03-30  
+**Branch:** `feature/waza-platform`  
+**Status:** APPROVED
+
+**What:** Created `internal/platform/` as the contract layer for Waza Platform with four packages:
+
+| Package | Key Types | Implementation Target |
+|---------|-----------|----------------------|
+| `auth` | `AuthProvider`, `User`, `Session`, `Middleware` | GitHub OAuth App |
+| `db` | `Store` (13 methods), `Connection`, `RunRequest` | Cosmos DB (serverless) |
+| `api` | `RegisterRoutes`, `Dependencies` | Go stdlib `http.ServeMux` |
+| `adc` | `ADCConfig`, quota constants | Azure Dev Compute |
+
+**Key Architectural Choices:**
+
+1. **Go stdlib router, not chi/gorilla.** The platform API uses Go 1.22+ `http.ServeMux` method patterns. We don't need middleware chaining or URL params beyond what stdlib provides. Fewer dependencies = fewer CVEs to track.
+
+2. **User-scoped store interface.** Every `Store` method takes a `userID` parameter. No cross-user queries exist in v1. This makes single-user isolation impossible to accidentally violate — the interface enforces it.
+
+3. **ADC quota as constants.** `MaxSandboxesPerUser = 10` is a constant, not YAML config. Changing sandbox limits is a policy decision that should go through code review, not a config file edit.
+
+4. **map[string]any for Connection.Config.** Azure Storage needs `account_name`, `container`, `sas_token`. GitHub Repo needs `owner`, `repo`, `installation_id`. These schemas are too different for a single typed struct. The `Config` map lets each connection type define its own shape without a union type.
+
+5. **Dependencies bundle for DI.** `api.Dependencies` struct bundles all services needed by handlers. No globals, no init() magic. Test handlers by constructing a `Dependencies` with mocks.
+
+**What This Does NOT Include (Intentionally):**
+- No implementations. These are contracts for Linus to build against.
+- No team/org model. Single-user isolation per the v1 scope.
+- No WebSocket routes. Real-time updates are a v2 concern (dashboard polling is fine for v1).
+- No rate limiting types. Add when we have traffic data to calibrate against.
+
+## 2026-03-30: Platform Frontend — Wave 2 React SPA
+
+**By:** Rusty (Lead / Architect)  
+**Date:** 2026-03-30  
+**Branch:** `feature/waza-platform`
+
+**What:** Implemented Wave 2 platform frontend: auth gate, auth context, Settings page (connections management), New Run page (multi-step wizard), updated navigation with user menu, and full API client extensions for platform endpoints.
+
+**Key Decisions:**
+
+### Auth pattern: Context + Gate, not React Query
+Auth state lives in a standalone `AuthContext` using `useState` + `useEffect`, not React Query. Auth is foundational infrastructure — it must resolve before any React Query data fetches happen. The `AuthGate` component wraps the entire app and short-circuits to a login page on 401.
+
+### Login flow: Server-side OAuth redirect
+"Sign in with GitHub" is a plain `<a href="/api/auth/github">` — no client-side OAuth dance. The Go backend handles the full OAuth flow and sets a session cookie. This keeps the SPA stateless regarding tokens.
+
+### Settings: Tab-based, Connections-first
+Settings page uses a simple tab UI (Connections / Preferences). Connections tab is fully functional (CRUD + test). Preferences tab is a placeholder with local-only state — server-side persistence deferred to a future wave.
+
+### New Run: 4-step wizard
+New Run uses a step-by-step form (Source → Eval → Configure → Review & Run). After triggering, redirects to Live view with the run ID. This prevents misconfiguration and gives a clear review step.
+
+### E2e test compatibility
+Updated `mockAllAPIs` and `mockEmptyAPIs` in e2e helpers to mock `/api/auth/me` returning a test user. This ensures all 52 existing tests pass through the auth gate without changes to individual test files.
+
+### Navigation structure
+- "New Run" button (blue, prominent) in header right section
+- Settings gear icon in header right section
+- User avatar + dropdown menu (Settings, Sign out) in header right section
+- Existing nav links unchanged on the left
+
+**Files Created:**
+- `web/src/contexts/AuthContext.tsx` — AuthProvider + useAuth hook
+- `web/src/components/AuthGate.tsx` — Login page + loading screen + auth gate
+- `web/src/components/Settings.tsx` — Full settings page with connections CRUD
+- `web/src/components/NewRun.tsx` — 4-step run creation wizard
+
+**Files Modified:**
+- `web/src/api/client.ts` — 10 new API functions + 7 new types
+- `web/src/hooks/useApi.ts` — 9 new React Query hooks (queries + mutations)
+- `web/src/components/Layout.tsx` — User menu, New Run button, Settings link
+- `web/src/App.tsx` — 2 new routes (`#/settings`, `#/runs/new`)
+- `web/src/main.tsx` — AuthProvider + AuthGate wrapping
+- `web/e2e/helpers/api-mock.ts` — Auth mock for test compatibility
+
+## 2026-03-30: Platform Backend Implementation Patterns
+
+**By:** Linus (Backend Developer)  
+**Date:** 2026-03-30  
+**Branch:** `feature/waza-platform`
+
+**Context:** Implemented the concrete backend pieces (auth, db, adc engine) against Rusty's interface contracts.
+
+**Decisions:**
+
+### 1. ADCConfig defined inline in projectconfig (not imported from adc package)
+
+**What:** The `ADCConfig` struct is defined directly in `internal/projectconfig/config.go` rather than imported from `internal/platform/adc/`.
+
+**Why:** The `adc` package's `engine.go` depends on `github.com/coreai-microsoft/adc-sdk-go` which isn't in go.mod yet. Importing the adc package from projectconfig would prevent the entire projectconfig package (and everything that depends on it) from compiling. All other config types (PathsConfig, DefaultsConfig, etc.) are also defined inline in projectconfig — this is consistent.
+
+**Impact:** If the canonical `ADCConfig` in `internal/platform/adc/config.go` changes field names or YAML tags, the mirrored type in projectconfig must be updated to match.
+
+### 2. In-memory session revocation for GitHubProvider
+
+**What:** `RevokeSession` uses a simple in-memory `map[string]struct{}` to track revoked tokens.
+
+**Why:** Good enough for v1 single-instance deployment on Azure Container Apps. For multi-instance or production scale, this should be replaced with a shared store (Redis, Cosmos DB sessions container, etc.).
+
+### 3. JWT implementation is hand-rolled (not using golang-jwt/v5)
+
+**What:** The HMAC-SHA256 JWT creation/validation in `github.go` is a minimal hand-rolled implementation rather than using the `golang-jwt/jwt/v5` library that's already in go.sum.
+
+**Why:** The JWT payload is minimal (sub, login, iat, exp) and the signing algorithm is fixed (HS256). A library adds unnecessary abstraction for 30 lines of code. If we need RS256, JWK rotation, or complex claims validation later, we should switch to `golang-jwt/v5`.
+
+### 4. Cosmos DB partition key is GitHub ID as string
+
+**What:** All Cosmos DB containers use the user's GitHub ID (as a string) as the partition key.
+
+**Why:** Aligns with Rusty's interface where `User.GitHubID` is the primary identity. Using string format for the partition key is required by Cosmos DB.
+
+## 2026-03-30: Platform API Handlers & Server Mode
+
+**By:** Linus (Backend Developer)  
+**Date:** 2026-03-30  
+**Branch:** `feature/waza-platform`
+
+**What:** Implemented the full HTTP API handler layer, platform Dependencies struct, `--platform` serve mode, and Azure deployment infrastructure:
+
+1. **`internal/platform/api/handlers.go`** — 14 handler implementations covering auth (me, logout), connections (CRUD + test), runs (trigger, queue, get, cancel), repos (list, list evals). All handlers extract user from context, return structured JSON errors, and are user-scoped.
+
+2. **`internal/platform/api/deps.go`** — `Dependencies` struct bundling `Store`, `Auth`, `AuthMiddleware`, and optional `ADCDispatcher` interface. Uses an interface for ADC to avoid pulling the ADC SDK (not yet in go.mod).
+
+3. **`cmd/waza/cmd_serve.go`** — Added `--platform` flag. Platform mode initializes Cosmos DB, GitHub OAuth, and optional ADC engine from environment variables, binds to `0.0.0.0`, skips browser auto-open, and adds `/healthz` for container probes.
+
+4. **Azure deployment** — `azure.yaml` (azd manifest), `Dockerfile.platform` (multi-stage Go + SPA build), `infra/main.bicep` (Container Apps + Cosmos DB serverless + Key Vault + Managed Identity + role assignments), `infra/main.parameters.json`.
+
+**Key Decisions:**
+
+- **ADCDispatcher interface instead of direct `*adc.Engine`**: The ADC SDK isn't in go.mod yet. Using an interface in deps.go means the API package compiles cleanly. When the SDK lands, swap `ADCDispatcher` to include `Execute` and `Shutdown`.
+
+- **Environment variables for platform config**: Platform mode reads all secrets from env vars (`COSMOS_ENDPOINT`, `COSMOS_KEY`, `GITHUB_CLIENT_ID`, etc.) rather than .waza.yaml. This aligns with 12-factor and Key Vault reference injection in Container Apps.
+
+- **Connection test is probe-based**: `handleTestConnection` does a lightweight HTTP probe (list 1 blob for Azure Storage, GET repo for GitHub) rather than importing the full Azure SDK. This keeps the binary lean.
+
+- **Run dispatch is async goroutine**: `handleTriggerRun` creates the RunRequest in DB synchronously, then fires a goroutine for ADC dispatch. The client gets 202 immediately. ADC integration is stubbed until the SDK lands.
+
+- **Cosmos DB serverless**: The Bicep uses serverless capacity mode — no throughput provisioning needed, pay-per-request. Appropriate for platform v1.
+
+**Impact:**
+- All 13 platform API tests pass (including newly un-skipped CRUD, trigger, cancel, and user isolation tests)
+- Full binary builds clean
+- Existing `waza serve` behavior unchanged (platform mode is opt-in via `--platform`)
+
+## 2026-03-30: Linus — PR conflict resolution decision
+
+**By:** Linus (Backend Developer)  
+**Date:** 2026-03-30
+
+**What:** For PR conflict fixes against `main`, use an isolated worktree and merge `origin/main` into the PR branch instead of rebasing when the branch is already published. When `main` already contains newer token-limit warning behavior and fixture coverage, keep the newer `main` implementation and preserve branch-specific intent with targeted docs/examples or assertions rather than reintroducing older warning text.
+
+**Why:** Avoids force-push conflicts on published branches and preserves the newest, best-tested code from main.
+
+## 2026-03-30: Linus — PR #96 token limits precedence
+
+**By:** Linus (Backend Developer)  
+**Date:** 2026-03-30
+
+**What:** Treat any non-empty `.waza.yaml` `tokens.limits` config as authoritative over legacy `.token-limits.json`, including overrides-only configs where `defaults` is omitted. The regression test covers the exact case with overrides-only YAML plus a legacy file present so future refactors don't accidentally reintroduce the fallback.
+
+**Why:** Ensures `.waza.yaml` is always authoritative and prevents subtle migration bugs.

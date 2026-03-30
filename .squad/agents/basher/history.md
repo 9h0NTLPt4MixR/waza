@@ -91,3 +91,14 @@ All code roles now use `claude-opus-4.6`. Docs/Scribe/diversity use `gemini-3-pr
 - **Display:** `DisplayAdvisory()` integrated into `DisplayScore()` after spec compliance; uses ✅/⚠️/ℹ️ icons for positive/warning/info
 - **Counting helpers:** `countModules` (## and ### headings), `countNumberedSteps` (regex), `countCodeBlocks` (``` fence pairs)
 - **Test count:** 28 new tests in `advisory_test.go`, all passing alongside existing dev tests
+
+### Platform Test Scaffolding (feature/waza-platform branch)
+- **Branch:** `feature/waza-platform`
+- **Auth tests:** `internal/platform/auth/auth_test.go` — 19 tests (17 PASS, 2 SKIP for integration). Tests GitHub OAuth login redirect, CSRF state validation, JWT session create/validate/expire/revoke, auth middleware (cookie + Bearer), user context helpers, `Session.Expired()`, state uniqueness.
+- **DB tests:** `internal/platform/db/cosmos_test.go` — 18 tests (17 PASS, 1 SKIP). Mock store satisfies `db.Store` interface. Tests user CRUD, connection CRUD with user isolation, run request lifecycle (queued→running→complete), terminal state blocking, settings, wrong-user guards.
+- **ADC tests:** `internal/platform/adc/engine_test.go` — 11 tests, all behind `//go:build adcsdk` tag because `engine.go` imports unpublished `github.com/coreai-microsoft/adc-sdk-go`. Tests initialization, sandbox lifecycle, error propagation, timeout, shutdown cleanup, quota enforcement, concurrency. Mock client tracks call counts with `atomic.Int32`.
+- **API tests:** `internal/platform/api/routes_test.go` — 11 tests (5 PASS, 6 SKIP). Tests auth enforcement on all 11 protected endpoints, public endpoint access, `/api/auth/me` returns user, stub handler defaults (empty list, 202, 204).
+- **Key patterns:** Mock store copies values to avoid pointer aliasing bugs. Auth tests use the real `GitHubProvider` and `NewAuthMiddleware` (not stubs). DB mock enforces terminal-state write protection.
+- **Gotcha:** `mockStore.UpdateRunRequest` must store copies (`cp := *run`) to prevent pointer aliasing — caller modifying `run.Status` after store call silently corrupts stored data.
+- **Dep additions:** `golang.org/x/oauth2` upgraded to v0.36.0, `azcosmos` v1.4.2 added to go.mod for Linus's implementation files.
+- **Total new tests:** 59 across 4 files (39 PASS, 3 SKIP, 0 FAIL in compilable packages; 17 behind build tag)

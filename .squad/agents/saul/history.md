@@ -50,3 +50,10 @@ All code roles now use `claude-opus-4.6`. Docs/Scribe/diversity use `gemini-3-pr
 - azd extension section includes full install command with versioned tar.gz URL
 - Sidebar updated in astro.config.mjs under Reference group
 - Pattern: release pages should link to GitHub Releases for history rather than duplicating old changelogs
+
+### Waza Platform Documentation (Branch: feature/waza-platform)
+
+- Created `site/src/content/docs/guides/platform.mdx` — Feature overview, getting started workflow (5 steps), architecture diagram of backend/DB/sandboxes, config vs local CLI
+- Created `site/src/content/docs/guides/deployment.mdx` — End-to-end azd deployment guide with prerequisites (GitHub OAuth app setup), env vars, `azd up` workflow, post-deployment config, monitoring/logs, custom domain, scaling, troubleshooting
+- Updated README.md with brief "Waza Platform" section (15 lines) after Cloud Storage section, linking to both platform and deployment guides
+- Pattern: Platform docs follow the "Getting Started" narrative (signup → configure → trigger → monitor); deployment docs mirror `azd init` → `azd up` workflow with environment variable setup as critical step
