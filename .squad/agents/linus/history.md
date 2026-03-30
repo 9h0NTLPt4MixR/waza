@@ -96,3 +96,33 @@ All code roles now use `claude-opus-4.6`. Docs/Scribe/diversity use `gemini-3-pr
 ## Learnings
 - Windows local test runs can fail in `cmd/waza/tokens/internal/git` when temporary repos inherit strict CRLF behavior; setting `core.autocrlf=false` and `core.safecrlf=false` inside test repo setup makes these tests cross-platform stable.
 - PR conflict resolution for `copilot/migrate-copilot-client-usage` in `internal/execution/copilot_test.go` should keep the `TestCopilotExecute_InitializePropagatesStartError` variant from main to preserve startup error propagation coverage.
+- Coverage command (`cmd/waza/cmd_coverage.go`) uses `models.BenchmarkSpec` directly for eval parsing — no custom lite struct. Parse failures and missing grader kinds are hard errors. `parseSkillName` propagates errors.
+- `slices.Sorted(maps.Keys(...))` is the idiomatic Go 1.23+ replacement for custom sorted-keys-from-map helpers. Available in Go 1.26.
+- Full coverage threshold is >= 1 grader type (not 2) — a single complex grader like Program is sufficient.
+
+### Platform Backend — Initial Implementation
+- **Date:** 2026-03-30
+- **Branch:** `feature/waza-platform`
+- **Files created:** `internal/platform/auth/github.go`, `internal/platform/db/cosmos.go`, `internal/platform/adc/engine.go`, `Dockerfile.adc-runner`
+- **Files modified:** `internal/projectconfig/config.go`
+- **What:** Implemented concrete platform backend pieces against Rusty's interface contracts:
+  1. **GitHubProvider** (auth/github.go) — full OAuth flow: login redirect, callback with code exchange, HMAC-SHA256 JWT sessions, token validation, session revocation, and auth middleware factory. Implements `AuthProvider` interface.
+  2. **CosmosStore** (db/cosmos.go) — full Cosmos DB implementation of `Store` interface: CRUD for users, connections, run requests, and settings. AES-256-GCM encryption for connection configs. Partition key is user's GitHub ID as string.
+  3. **ADC Engine** (adc/engine.go) — implements `AgentEngine` for sandboxed eval execution: sandbox lifecycle (create → upload → execute → collect → delete), mutex-protected sandbox tracking, graceful shutdown.
+  4. **ProjectConfig ADC field** — added `ADCConfig` struct inline in projectconfig (mirroring adc.ADCConfig to avoid import dependency on ADC SDK) with yaml merge support.
+  5. **Dockerfile.adc-runner** — multi-stage build for ADC sandbox disk images with waza binary + git/bash/curl/jq.
+- **Key learning:** Can't import `internal/platform/adc` from `internal/projectconfig` because `engine.go` depends on the ADC SDK (`github.com/coreai-microsoft/adc-sdk-go`) which isn't in go.mod yet. Defined `ADCConfig` inline in projectconfig instead — same pattern as all other config types in that file.
+- **Key learning:** Rusty's interface types (`auth.User`, `db.Connection`, `db.RunRequest`) are the source of truth. Implementation files must not redeclare types — use Rusty's definitions directly. The `auth.User` uses `GitHubID int64` (not string ID), and `db.Store` methods take `int64` user IDs.
+- **Pending:** ADC SDK needs to be added to go.mod (`go get github.com/coreai-microsoft/adc-sdk-go`) before `internal/platform/adc/` compiles. Auth and DB packages pass `go vet` and compile now.
+
+### Platform API Handlers & Server Mode — Wave 2
+- **Date:** 2026-03-30
+- **Branch:** `feature/waza-platform`
+- **Files created:** `internal/platform/api/handlers.go`, `internal/platform/api/deps.go`, `azure.yaml`, `Dockerfile.platform`, `infra/main.bicep`, `infra/main.parameters.json`
+- **Files modified:** `internal/platform/api/routes.go`, `internal/platform/api/routes_test.go`, `cmd/waza/cmd_serve.go`
+- **What:** Implemented 14 HTTP handlers (auth, connections, runs, repos), Dependencies struct with ADCDispatcher interface, `--platform` serve mode with Cosmos/OAuth/ADC initialization, and full Azure deployment infrastructure (Container Apps + Cosmos DB serverless + Key Vault + Managed Identity). All 13 platform API tests pass including user isolation.
+- **Key learning:** The ADC SDK dependency gap means any type that touches `internal/platform/adc/` can't compile. Solved by defining `ADCDispatcher` as an interface in the api package — decouples handlers from the concrete ADC engine. When the SDK lands, implement the interface.
+- **Key learning:** Platform mode uses environment variables for all secrets (not .waza.yaml). This aligns with Container Apps Key Vault reference injection and 12-factor principles.
+- **Key learning:** Connection testing uses lightweight HTTP probes (list 1 blob, GET repo) rather than importing heavy Azure/GitHub SDKs. Keeps the API handler layer dependency-free.
+- **Pending:** ADC SDK still needed in go.mod. Storage proxy handlers (HandleProxyRuns, HandleProxyRunDetail) deferred until BYOS storage flow is finalized.
+

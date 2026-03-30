@@ -1,0 +1,29 @@
+# Build stage: compile Go binary and web SPA
+FROM golang:1.26-alpine AS builder
+
+RUN apk add --no-cache git nodejs npm
+
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+# Build web SPA
+RUN cd web && npm ci && npm run build
+
+# Build Go binary with embedded SPA
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -trimpath -ldflags="-s -w" -o /out/waza ./cmd/waza
+
+# Runtime stage: minimal image
+FROM alpine:3.21
+
+RUN apk add --no-cache ca-certificates tzdata
+
+WORKDIR /app
+COPY --from=builder /out/waza .
+
+EXPOSE 3000
+
+CMD ["./waza", "serve", "--platform", "--port", "3000"]

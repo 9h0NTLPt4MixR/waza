@@ -1,15 +1,21 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/microsoft/waza/internal/jsonrpc"
 	"github.com/microsoft/waza/internal/mcp"
+	"github.com/microsoft/waza/internal/platform/api"
+	"github.com/microsoft/waza/internal/platform/auth"
+	"github.com/microsoft/waza/internal/platform/db"
 	"github.com/microsoft/waza/internal/projectconfig"
 	"github.com/microsoft/waza/internal/webserver"
 	"github.com/spf13/cobra"
@@ -22,6 +28,7 @@ func newServeCommand() *cobra.Command {
 	var httpPort int
 	var noBrowser bool
 	var resultsDir string
+	var platformMode bool
 
 	cmd := &cobra.Command{
 		Use:   "serve",
@@ -30,6 +37,10 @@ func newServeCommand() *cobra.Command {
 
 By default, an HTTP server is started that serves the waza dashboard and API.
 The browser is opened automatically (disable with --no-browser).
+
+Use --platform to start the hosted platform server with GitHub OAuth,
+Cosmos DB persistence, and optional ADC sandbox execution. Platform mode
+binds to 0.0.0.0 for container deployment and disables auto-browser.
 
 Use --tcp to start a JSON-RPC 2.0 server instead (for IDE integration).
 TCP defaults to loopback (127.0.0.1) for security. Use --tcp-allow-remote to bind
@@ -62,6 +73,11 @@ JSON-RPC methods (when using --tcp or stdin/stdout):
 			// JSON-RPC TCP mode
 			if tcpAddr != "" {
 				return runJSONRPC(tcpAddr, tcpAllowRemote, logger)
+			}
+
+			// Platform mode — hosted multi-user server.
+			if platformMode {
+				return runPlatformServer(cmd, cfg, httpPort, resultsDir, logger)
 			}
 
 			// HTTP mode (default) — also start MCP on stdio.
@@ -106,8 +122,128 @@ JSON-RPC methods (when using --tcp or stdin/stdout):
 	cmd.Flags().IntVar(&httpPort, "port", 3000, "HTTP server port")
 	cmd.Flags().BoolVar(&noBrowser, "no-browser", false, "Don't auto-open the browser")
 	cmd.Flags().StringVar(&resultsDir, "results-dir", ".", "Directory to read results from")
+	cmd.Flags().BoolVar(&platformMode, "platform", false,
+		"Start hosted platform server (GitHub OAuth, Cosmos DB, ADC)")
 
 	return cmd
+}
+
+// runPlatformServer starts the multi-user platform server with auth, DB, and
+// optional ADC sandbox execution. It binds to 0.0.0.0 for container deployment.
+func runPlatformServer(cmd *cobra.Command, cfg *projectconfig.ProjectConfig, port int, resultsDir string, logger *slog.Logger) error {
+	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// --- Initialize Cosmos DB store ---
+	cosmosEndpoint := envOrDefault("COSMOS_ENDPOINT", "")
+	cosmosKey := envOrDefault("COSMOS_KEY", "")
+	encryptionKey := envOrDefault("ENCRYPTION_KEY", "")
+
+	if cosmosEndpoint == "" || cosmosKey == "" || encryptionKey == "" {
+		return fmt.Errorf("platform mode requires COSMOS_ENDPOINT, COSMOS_KEY, and ENCRYPTION_KEY environment variables")
+	}
+
+	store, err := db.NewCosmosStore(cosmosEndpoint, cosmosKey, encryptionKey)
+	if err != nil {
+		return fmt.Errorf("initializing cosmos store: %w", err)
+	}
+	defer store.Close()
+	logger.Info("Cosmos DB store initialized", "endpoint", cosmosEndpoint)
+
+	// --- Initialize GitHub OAuth provider ---
+	githubClientID := envOrDefault("GITHUB_CLIENT_ID", "")
+	githubClientSecret := envOrDefault("GITHUB_CLIENT_SECRET", "")
+	githubRedirectURL := envOrDefault("GITHUB_REDIRECT_URL", "")
+	jwtSecret := envOrDefault("JWT_SECRET", "")
+
+	if githubClientID == "" || githubClientSecret == "" || jwtSecret == "" {
+		return fmt.Errorf("platform mode requires GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, and JWT_SECRET environment variables")
+	}
+
+	authProvider := auth.NewGitHubProvider(auth.GitHubOAuthConfig{
+		ClientID:     githubClientID,
+		ClientSecret: githubClientSecret,
+		RedirectURL:  githubRedirectURL,
+	}, jwtSecret, store)
+	authMiddleware := auth.NewAuthMiddleware(authProvider)
+	logger.Info("GitHub OAuth provider initialized")
+
+	// --- Build platform dependencies ---
+	deps := &api.Dependencies{
+		Store:          store,
+		Auth:           authProvider,
+		AuthMiddleware: authMiddleware,
+		ADCEngine:      nil, // ADC engine initialized below if configured
+	}
+
+	// --- Initialize ADC engine (optional) ---
+	adcAPIKey := envOrDefault("ADC_API_KEY", "")
+	if adcAPIKey != "" {
+		logger.Info("ADC engine configured but SDK not yet in go.mod — dispatch is no-op")
+		// When the ADC SDK is added to go.mod, uncomment:
+		// adcCfg := adc.ADCConfig{
+		//     APIKey:    adcAPIKey,
+		//     APIURL:    envOrDefault("ADC_API_URL", adc.DefaultAPIURL),
+		//     DiskImage: envOrDefault("ADC_DISK_IMAGE", ""),
+		// }
+		// engine := adc.NewEngine(adcCfg)
+		// if err := engine.Initialize(ctx); err != nil {
+		//     return fmt.Errorf("initializing ADC engine: %w", err)
+		// }
+		// defer engine.Shutdown(ctx)
+		// deps.ADCEngine = engine
+	}
+
+	// --- Build HTTP mux ---
+	mux := http.NewServeMux()
+
+	// Register platform API routes.
+	api.RegisterRoutes(mux, deps)
+
+	// Register existing webapi routes (health, summary, runs, storage status)
+	// alongside platform routes so the dashboard still works.
+	var storageCfg *projectconfig.StorageConfig
+	if cfg.Storage.Enabled {
+		storageCfg = &cfg.Storage
+	}
+	_ = storageCfg
+	_ = resultsDir
+	// Note: existing webapi routes could be registered here for the dashboard.
+	// For platform mode the primary API surface is the platform routes.
+
+	// Health check for container orchestrators.
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, `{"status":"ok","mode":"platform"}`)
+	})
+
+	// --- Start HTTP server on 0.0.0.0 ---
+	addr := fmt.Sprintf("0.0.0.0:%d", port)
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	logger.Info("platform server starting", "address", addr)
+	fmt.Printf("waza platform: http://%s\n", addr)
+
+	// Graceful shutdown.
+	go func() {
+		<-ctx.Done()
+		logger.Info("shutting down platform server")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			logger.Error("platform server shutdown error", "error", err)
+		}
+	}()
+
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		return fmt.Errorf("platform server error: %w", err)
+	}
+	return nil
 }
 
 func runJSONRPC(tcpAddr string, allowRemote bool, logger *slog.Logger) error {
@@ -160,4 +296,13 @@ func resolveTCPAddr(addr string, allowRemote bool, logger *slog.Logger) string {
 	}
 
 	return addr
+}
+
+// envOrDefault returns the value of the environment variable named key,
+// or defaultVal if the variable is empty or unset.
+func envOrDefault(key, defaultVal string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return defaultVal
 }

@@ -1,0 +1,10 @@
+name: waza-platform
+metadata:
+  template: waza-platform
+services:
+  platform:
+    host: containerapp
+    language: go
+    project: .
+    docker:
+      path: Dockerfile.platform
