@@ -36,7 +36,7 @@ param adcApiKey string = ''
 param encryptionKey string
 
 @description('Container image for the platform (e.g., myregistry.azurecr.io/waza-platform:latest)')
-param containerImage string = 'mcr.microsoft.com/waza/platform:latest'
+param containerImage string = 'mcr.microsoft.com/k8se/quickstart:latest'
 
 @description('Custom domain for the platform (optional)')
 param customDomain string = ''
@@ -49,6 +49,7 @@ var resourceToken = toLower(uniqueString(resourceGroup().id, environmentName))
 var abbrs = {
   containerAppsEnvironment: 'cae-'
   containerApp: 'ca-'
+  containerRegistry: 'cr'
   cosmosAccount: 'cosmos-'
   keyVault: 'kv-'
   managedIdentity: 'id-'
@@ -81,6 +82,34 @@ resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-
 
 // ============================================================================
 // Key Vault
+// ============================================================================
+
+// ============================================================================
+// Azure Container Registry
+// ============================================================================
+
+resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
+  name: '${abbrs.containerRegistry}${resourceToken}'
+  location: location
+  sku: {
+    name: 'Basic'
+  }
+  properties: {
+    adminUserEnabled: false
+  }
+}
+
+// AcrPull role for the managed identity
+resource acrPullRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: containerRegistry
+  name: guid(containerRegistry.id, managedIdentity.id, '7f951dda-4ed3-4680-a7ca-43fe172d538d')
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
+    principalId: managedIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 // ============================================================================
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
@@ -160,6 +189,7 @@ resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' = {
   kind: 'GlobalDocumentDB'
   properties: {
     databaseAccountOfferType: 'Standard'
+    disableLocalAuth: true
     locations: [
       {
         locationName: location
@@ -243,14 +273,14 @@ resource containerSettings 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/c
   }
 }
 
-// Cosmos DB Data Contributor role for the managed identity
-resource cosmosDataContributorRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  scope: cosmosAccount
-  name: guid(cosmosAccount.id, managedIdentity.id, '00000000-0000-0000-0000-000000000002')
+// Cosmos DB Built-in Data Contributor role for the managed identity
+resource cosmosDataContributorRole 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2024-05-15' = {
+  parent: cosmosAccount
+  name: guid(cosmosAccount.id, managedIdentity.id, 'cosmos-data-contributor')
   properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '00000000-0000-0000-0000-000000000002')
+    roleDefinitionId: '${cosmosAccount.id}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002'
     principalId: managedIdentity.properties.principalId
-    principalType: 'ServicePrincipal'
+    scope: cosmosAccount.id
   }
 }
 
@@ -279,6 +309,9 @@ resource containerAppsEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
 resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: '${abbrs.containerApp}${resourceToken}'
   location: location
+  tags: {
+    'azd-service-name': 'platform'
+  }
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
@@ -288,6 +321,12 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   properties: {
     managedEnvironmentId: containerAppsEnv.id
     configuration: {
+      registries: [
+        {
+          server: containerRegistry.properties.loginServer
+          identity: managedIdentity.id
+        }
+      ]
       ingress: {
         external: true
         targetPort: 3000
@@ -319,15 +358,6 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
           keyVaultUrl: secretEncryptionKey.properties.secretUri
           identity: managedIdentity.id
         }
-        {
-          name: 'adc-api-key'
-          keyVaultUrl: secretAdcApiKey.properties.secretUri
-          identity: managedIdentity.id
-        }
-        {
-          name: 'cosmos-key'
-          value: cosmosAccount.listKeys().primaryMasterKey
-        }
       ]
     }
     template: {
@@ -341,13 +371,13 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
           }
           env: [
             { name: 'COSMOS_ENDPOINT', value: cosmosAccount.properties.documentEndpoint }
-            { name: 'COSMOS_KEY', secretRef: 'cosmos-key' }
+            { name: 'AZURE_CLIENT_ID', value: managedIdentity.properties.clientId }
             { name: 'ENCRYPTION_KEY', secretRef: 'encryption-key' }
             { name: 'GITHUB_CLIENT_ID', secretRef: 'github-client-id' }
             { name: 'GITHUB_CLIENT_SECRET', secretRef: 'github-client-secret' }
             { name: 'GITHUB_REDIRECT_URL', value: customDomain != '' ? 'https://${customDomain}/api/auth/callback' : 'https://${abbrs.containerApp}${resourceToken}.${containerAppsEnv.properties.defaultDomain}/api/auth/callback' }
             { name: 'JWT_SECRET', secretRef: 'jwt-secret' }
-            { name: 'ADC_API_KEY', secretRef: 'adc-api-key' }
+            { name: 'ADC_API_KEY', value: adcApiKey }
           ]
           probes: [
             {
@@ -396,3 +426,5 @@ output AZURE_CONTAINER_APP_FQDN string = containerApp.properties.configuration.i
 output AZURE_COSMOS_ENDPOINT string = cosmosAccount.properties.documentEndpoint
 output AZURE_KEY_VAULT_NAME string = keyVault.name
 output AZURE_MANAGED_IDENTITY_CLIENT_ID string = managedIdentity.properties.clientId
+output AZURE_CONTAINER_REGISTRY_ENDPOINT string = containerRegistry.properties.loginServer
+output AZURE_CONTAINER_REGISTRY_NAME string = containerRegistry.name

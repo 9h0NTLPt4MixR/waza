@@ -4,7 +4,8 @@ metadata:
 services:
   platform:
     host: containerapp
-    language: go
-    project: .
+    language: docker
     docker:
       path: Dockerfile.platform
+      context: .
+      remoteBuild: true
