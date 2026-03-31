@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
 	"github.com/microsoft/waza/internal/platform/auth"
 )
@@ -50,6 +51,62 @@ func NewCosmosStore(endpoint, accountKey, encryptionKeyB64 string) (*CosmosStore
 	client, err := azcosmos.NewClientWithKey(endpoint, cred, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating cosmos client: %w", err)
+	}
+
+	encKey, err := base64.StdEncoding.DecodeString(encryptionKeyB64)
+	if err != nil {
+		return nil, fmt.Errorf("decoding encryption key: %w", err)
+	}
+	if len(encKey) != 32 {
+		return nil, fmt.Errorf("encryption key must be 32 bytes (got %d)", len(encKey))
+	}
+
+	db, err := client.NewDatabase(databaseName)
+	if err != nil {
+		return nil, fmt.Errorf("getting database: %w", err)
+	}
+
+	users, err := db.NewContainer(usersContainer)
+	if err != nil {
+		return nil, fmt.Errorf("getting users container: %w", err)
+	}
+
+	connections, err := db.NewContainer(connectionsContainer)
+	if err != nil {
+		return nil, fmt.Errorf("getting connections container: %w", err)
+	}
+
+	runRequests, err := db.NewContainer(runRequestsContainer)
+	if err != nil {
+		return nil, fmt.Errorf("getting run-requests container: %w", err)
+	}
+
+	settings, err := db.NewContainer(settingsContainer)
+	if err != nil {
+		return nil, fmt.Errorf("getting settings container: %w", err)
+	}
+
+	return &CosmosStore{
+		client:        client,
+		encryptionKey: encKey,
+		users:         users,
+		connections:   connections,
+		runRequests:   runRequests,
+		settings:      settings,
+	}, nil
+}
+
+// NewCosmosStoreWithIdentity creates a CosmosStore using DefaultAzureCredential (Entra ID / managed identity).
+// Use this when Cosmos DB has disableLocalAuth: true.
+func NewCosmosStoreWithIdentity(endpoint, encryptionKeyB64 string) (*CosmosStore, error) {
+	cred, err := azidentity.NewDefaultAzureCredential(nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating default azure credential: %w", err)
+	}
+
+	client, err := azcosmos.NewClient(endpoint, cred, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating cosmos client with identity: %w", err)
 	}
 
 	encKey, err := base64.StdEncoding.DecodeString(encryptionKeyB64)

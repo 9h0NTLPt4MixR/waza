@@ -139,16 +139,30 @@ func runPlatformServer(cmd *cobra.Command, cfg *projectconfig.ProjectConfig, por
 	cosmosKey := envOrDefault("COSMOS_KEY", "")
 	encryptionKey := envOrDefault("ENCRYPTION_KEY", "")
 
-	if cosmosEndpoint == "" || cosmosKey == "" || encryptionKey == "" {
-		return fmt.Errorf("platform mode requires COSMOS_ENDPOINT, COSMOS_KEY, and ENCRYPTION_KEY environment variables")
+	if cosmosEndpoint == "" || encryptionKey == "" {
+		return fmt.Errorf("platform mode requires COSMOS_ENDPOINT and ENCRYPTION_KEY environment variables")
 	}
 
-	store, err := db.NewCosmosStore(cosmosEndpoint, cosmosKey, encryptionKey)
-	if err != nil {
-		return fmt.Errorf("initializing cosmos store: %w", err)
+	var store db.Store
+	if cosmosKey != "" {
+		// Key-based auth (local dev)
+		s, err := db.NewCosmosStore(cosmosEndpoint, cosmosKey, encryptionKey)
+		if err != nil {
+			return fmt.Errorf("initializing cosmos store: %w", err)
+		}
+		store = s
+		defer s.Close()
+		logger.Info("Cosmos DB store initialized (key auth)", "endpoint", cosmosEndpoint)
+	} else {
+		// Managed identity auth (production / Azure)
+		s, err := db.NewCosmosStoreWithIdentity(cosmosEndpoint, encryptionKey)
+		if err != nil {
+			return fmt.Errorf("initializing cosmos store with identity: %w", err)
+		}
+		store = s
+		defer s.Close()
+		logger.Info("Cosmos DB store initialized (managed identity)", "endpoint", cosmosEndpoint)
 	}
-	defer store.Close()
-	logger.Info("Cosmos DB store initialized", "endpoint", cosmosEndpoint)
 
 	// --- Initialize GitHub OAuth provider ---
 	githubClientID := envOrDefault("GITHUB_CLIENT_ID", "")
