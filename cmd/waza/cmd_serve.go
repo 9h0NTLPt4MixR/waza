@@ -232,6 +232,14 @@ func runPlatformServer(cmd *cobra.Command, cfg *projectconfig.ProjectConfig, por
 		fmt.Fprintf(w, `{"status":"ok","mode":"platform"}`)
 	})
 
+	// Serve the embedded React SPA for all non-API routes.
+	// API routes registered above take precedence over this catch-all.
+	spaHandler, err := webserver.SPAHandler()
+	if err != nil {
+		return fmt.Errorf("failed to initialize SPA handler: %w", err)
+	}
+	mux.Handle("/", spaHandler)
+
 	// --- Start HTTP server on 0.0.0.0 ---
 	addr := fmt.Sprintf("0.0.0.0:%d", port)
 	srv := &http.Server{

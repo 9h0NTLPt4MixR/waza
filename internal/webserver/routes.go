@@ -61,7 +61,7 @@ func registerRoutes(mux *http.ServeMux, cfg Config) error {
 	webapi.RegisterRoutesWithStorage(mux, runStore, storageCfg)
 
 	// SPA static files with HTML5 history API fallback
-	handler, err := spaHandler()
+	handler, err := SPAHandler()
 	if err != nil {
 		return fmt.Errorf("failed to initialize SPA handler: %w", err)
 	}
@@ -69,10 +69,10 @@ func registerRoutes(mux *http.ServeMux, cfg Config) error {
 	return nil
 }
 
-// spaHandler returns an http.Handler that serves the embedded SPA assets.
+// SPAHandler returns an http.Handler that serves the embedded SPA assets.
 // Non-existent paths are served index.html to support client-side routing
 // (HTML5 history API fallback).
-func spaHandler() (http.Handler, error) {
+func SPAHandler() (http.Handler, error) {
 	distFS, err := fs.Sub(web.Assets, "dist")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create sub filesystem for web/dist: %w", err)
