@@ -61,7 +61,7 @@ func RunEval(ctx context.Context, cfg RunConfig) (retErr error) {
 
 	wazaBin := cfg.WazaBinary
 	if wazaBin == "" {
-		wazaBin = "waza"
+		wazaBin = "/app/waza"
 	}
 
 	// 1. Mark running.
