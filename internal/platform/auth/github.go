@@ -157,8 +157,8 @@ func (p *GitHubProvider) HandleCallback(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Create JWT session token
-	sessionToken, err := p.createSessionToken(user)
+	// Create JWT session token (includes GitHub access token for API calls)
+	sessionToken, err := p.createSessionToken(user, token.AccessToken)
 	if err != nil {
 		http.Error(w, "failed to create session", http.StatusInternalServerError)
 		return
@@ -199,6 +199,7 @@ func (p *GitHubProvider) ValidateSession(ctx context.Context, token string) (*Us
 		return nil, fmt.Errorf("user not found")
 	}
 
+	user.GitHubToken = claims.GitHubToken
 	return user, nil
 }
 
@@ -277,20 +278,22 @@ func (p *GitHubProvider) fetchGitHubUser(ctx context.Context, token *oauth2.Toke
 
 // sessionClaims is the payload embedded in the JWT session token.
 type sessionClaims struct {
-	UserID    int64  `json:"sub"`
-	Login     string `json:"login"`
-	IssuedAt  int64  `json:"iat"`
-	ExpiresAt int64  `json:"exp"`
+	UserID      int64  `json:"sub"`
+	Login       string `json:"login"`
+	GitHubToken string `json:"ght,omitempty"`
+	IssuedAt    int64  `json:"iat"`
+	ExpiresAt   int64  `json:"exp"`
 }
 
 // createSessionToken builds an HMAC-SHA256 signed JWT for the given user.
-func (p *GitHubProvider) createSessionToken(user *User) (string, error) {
+func (p *GitHubProvider) createSessionToken(user *User, githubToken string) (string, error) {
 	now := time.Now().UTC()
 	claims := sessionClaims{
-		UserID:    user.GitHubID,
-		Login:     user.Login,
-		IssuedAt:  now.Unix(),
-		ExpiresAt: now.Add(sessionDuration).Unix(),
+		UserID:      user.GitHubID,
+		Login:       user.Login,
+		GitHubToken: githubToken,
+		IssuedAt:    now.Unix(),
+		ExpiresAt:   now.Add(sessionDuration).Unix(),
 	}
 
 	// Header

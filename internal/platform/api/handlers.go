@@ -531,8 +531,9 @@ func searchEvalFiles(r *http.Request, owner, repo string, user *auth.User) ([]ev
 	}
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	req.Header.Set("User-Agent", "waza-platform")
-	// Note: auth token would come from the user's GitHub connection for private repos.
-	_ = user
+	if user.GitHubToken != "" {
+		req.Header.Set("Authorization", "Bearer "+user.GitHubToken)
+	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

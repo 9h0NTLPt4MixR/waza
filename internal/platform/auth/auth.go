@@ -14,11 +14,12 @@ import (
 
 // User represents an authenticated GitHub user.
 type User struct {
-	GitHubID  int64     `json:"github_id"`
-	Login     string    `json:"login"`
-	Name      string    `json:"name"`
-	AvatarURL string    `json:"avatar_url"`
-	CreatedAt time.Time `json:"created_at"`
+	GitHubID    int64     `json:"github_id"`
+	Login       string    `json:"login"`
+	Name        string    `json:"name"`
+	AvatarURL   string    `json:"avatar_url"`
+	CreatedAt   time.Time `json:"created_at"`
+	GitHubToken string    `json:"-"` // Not serialized to JSON responses; set from session
 }
 
 // Session represents an authenticated user session.

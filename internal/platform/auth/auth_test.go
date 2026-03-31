@@ -71,7 +71,7 @@ func seedUser(t *testing.T, p *GitHubProvider, store *mockAuthStore) (*User, str
 		CreatedAt: time.Now().UTC(),
 	}
 	store.users[user.GitHubID] = user
-	token, err := p.createSessionToken(user)
+	token, err := p.createSessionToken(user, "test-gh-token")
 	require.NoError(t, err)
 	return user, token
 }
