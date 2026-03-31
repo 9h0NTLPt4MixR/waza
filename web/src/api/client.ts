@@ -45,10 +45,13 @@ export interface TriggerRunConfig {
 
 export interface RunQueueItem {
   id: string;
-  status: string;
+  status: "queued" | "running" | "complete" | "failed" | "cancelled";
+  repo?: string;
   evalPath: string;
   model: string;
   workers: number;
+  storageDestination?: string;
+  error?: string;
   createdAt: string;
 }
 

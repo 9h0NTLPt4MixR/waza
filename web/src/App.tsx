@@ -7,6 +7,8 @@ import TrendsPage from "./components/TrendsPage";
 import LiveView from "./components/LiveView";
 import Settings from "./components/Settings";
 import NewRun from "./components/NewRun";
+import RunStatus from "./components/RunStatus";
+import RunQueue from "./components/RunQueue";
 
 type Route =
   | { page: "home" }
@@ -15,7 +17,9 @@ type Route =
   | { page: "trends" }
   | { page: "live" }
   | { page: "settings" }
-  | { page: "newRun" };
+  | { page: "newRun" }
+  | { page: "runStatus"; id: string }
+  | { page: "runQueue" };
 
 function parseHash(): Route {
   const hash = window.location.hash.slice(1);
@@ -24,6 +28,9 @@ function parseHash(): Route {
   if (hash === "/live" || hash.startsWith("/live?")) return { page: "live" };
   if (hash === "/settings") return { page: "settings" };
   if (hash === "/runs/new") return { page: "newRun" };
+  if (hash === "/runs/queue") return { page: "runQueue" };
+  const statusMatch = hash.match(/^\/runs\/status\/(.+)$/);
+  if (statusMatch?.[1]) return { page: "runStatus", id: statusMatch[1] };
   const runMatch = hash.match(/^\/runs\/(.+)$/);
   if (runMatch?.[1]) return { page: "run", id: runMatch[1] };
   return { page: "home" };
@@ -47,6 +54,8 @@ export default function App() {
       {route.page === "live" && <LiveView />}
       {route.page === "settings" && <Settings />}
       {route.page === "newRun" && <NewRun />}
+      {route.page === "runStatus" && <RunStatus id={route.id} />}
+      {route.page === "runQueue" && <RunQueue />}
     </Layout>
   );
 }

@@ -102,7 +102,19 @@ export function useRunQueue() {
   return useQuery({
     queryKey: ["runQueue"],
     queryFn: fetchRunQueue,
-    refetchInterval: 5000,
+    refetchInterval: 10_000,
+  });
+}
+
+export function useRunStatus(runId: string) {
+  return useQuery({
+    queryKey: ["runStatus", runId],
+    queryFn: async () => {
+      const queue = await fetchRunQueue();
+      return queue.find((r) => r.id === runId) ?? null;
+    },
+    enabled: !!runId,
+    refetchInterval: 3_000,
   });
 }
 

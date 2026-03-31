@@ -71,7 +71,7 @@ export default function NewRun() {
       },
       {
         onSuccess: (data) => {
-          window.location.hash = `/live?run=${data.runId}`;
+          window.location.hash = `/runs/status/${data.runId}`;
         },
       },
     );
