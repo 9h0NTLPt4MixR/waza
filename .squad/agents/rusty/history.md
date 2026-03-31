@@ -200,3 +200,22 @@ All code roles now use `claude-opus-4.6`. Docs/Scribe/diversity use `gemini-3-pr
 **Key observation:** E2e test mocks needed auth endpoint added — `mockAllAPIs` now returns a mock user for `/api/auth/me`. All 52 existing Playwright tests pass without changes to individual test files.
 
 **Build verified:** TypeScript clean, Vite production build clean, 52/52 Playwright e2e tests pass.
+
+### Storage Destination Selector (feature/waza-platform)
+
+**Date:** 2026-07 | **Branch:** `feature/waza-platform`
+
+**What:** Added results storage destination to the New Run wizard and backend. Cosmos DB is the primary/default; BYOS Azure Storage is optional.
+
+**Changes across 4 files:**
+- `web/src/components/NewRun.tsx` — Step 3 now includes a Results Storage section. If the user has no `azure-storage` connections, shows a static "💾 Results stored in Waza Cloud" label. If connections exist, shows a dropdown: "Waza Cloud (default)" + `{accountName}/{containerName}` for each connection. Step 4 review panel shows the selection. Uses existing `useConnections()` hook.
+- `web/src/api/client.ts` — `TriggerRunConfig.storageDestination` added (optional, values: `"cosmos"` or connection ID).
+- `internal/platform/api/handlers.go` — `triggerRunRequest.StorageDestination` field, defaults to `"cosmos"` when empty. Logged on trigger and passed through to `db.RunRequest`. `dispatchToADC` logs the destination for traceability.
+- `internal/platform/db/db.go` — `RunRequest.StorageDestination` field persisted to Cosmos.
+
+**Key decisions:**
+- No dropdown when zero storage connections — keeps the UI minimal for most users.
+- Default is always `"cosmos"` — BYOS is opt-in, not opt-out.
+- Storage destination is stored on the RunRequest, not resolved at dispatch time — this makes the intent auditable and replayable.
+
+**Build verified:** `go vet` clean, TypeScript + Vite production build clean. Deployed to Azure Container Apps (200 OK).
