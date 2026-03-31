@@ -228,7 +228,17 @@ func stringVal(m map[string]any, key string) string {
 // --- Connections ---
 
 func (s *CosmosStore) SaveConnection(ctx context.Context, conn *Connection) error {
-	data, err := json.Marshal(conn)
+	// Build document with string user_id to match partition key path.
+	doc := map[string]any{
+		"id":          conn.ID,
+		"user_id":     strconv.FormatInt(conn.UserID, 10),
+		"user_id_n":   conn.UserID,
+		"type":        conn.Type,
+		"config":      conn.Config,
+		"verified_at": conn.VerifiedAt,
+	}
+
+	data, err := json.Marshal(doc)
 	if err != nil {
 		return fmt.Errorf("marshaling connection: %w", err)
 	}
@@ -243,10 +253,11 @@ func (s *CosmosStore) SaveConnection(ctx context.Context, conn *Connection) erro
 
 func (s *CosmosStore) ListConnections(ctx context.Context, userID int64, connType ConnectionType) ([]*Connection, error) {
 	pk := userPartitionKey(userID)
+	uid := strconv.FormatInt(userID, 10)
 
 	query := "SELECT * FROM c WHERE c.user_id = @uid"
 	params := []azcosmos.QueryParameter{
-		{Name: "@uid", Value: userID},
+		{Name: "@uid", Value: uid},
 	}
 	if connType != "" {
 		query += " AND c.type = @type"
@@ -290,7 +301,21 @@ func (s *CosmosStore) CreateRunRequest(ctx context.Context, run *RunRequest) err
 	run.CreatedAt = now
 	run.Status = Queued
 
-	data, err := json.Marshal(run)
+	doc := map[string]any{
+		"id":              run.ID,
+		"user_id":         strconv.FormatInt(run.UserID, 10),
+		"user_id_n":       run.UserID,
+		"repo":            run.Repo,
+		"eval_spec":       run.EvalSpec,
+		"model":           run.Model,
+		"workers":         run.Workers,
+		"status":          run.Status,
+		"adc_sandbox_ids": run.ADCSandboxIDs,
+		"created_at":      run.CreatedAt,
+		"completed_at":    run.CompletedAt,
+	}
+
+	data, err := json.Marshal(doc)
 	if err != nil {
 		return fmt.Errorf("marshaling run request: %w", err)
 	}
@@ -304,7 +329,21 @@ func (s *CosmosStore) CreateRunRequest(ctx context.Context, run *RunRequest) err
 }
 
 func (s *CosmosStore) UpdateRunRequest(ctx context.Context, run *RunRequest) error {
-	data, err := json.Marshal(run)
+	doc := map[string]any{
+		"id":              run.ID,
+		"user_id":         strconv.FormatInt(run.UserID, 10),
+		"user_id_n":       run.UserID,
+		"repo":            run.Repo,
+		"eval_spec":       run.EvalSpec,
+		"model":           run.Model,
+		"workers":         run.Workers,
+		"status":          run.Status,
+		"adc_sandbox_ids": run.ADCSandboxIDs,
+		"created_at":      run.CreatedAt,
+		"completed_at":    run.CompletedAt,
+	}
+
+	data, err := json.Marshal(doc)
 	if err != nil {
 		return fmt.Errorf("marshaling run request: %w", err)
 	}
@@ -319,10 +358,11 @@ func (s *CosmosStore) UpdateRunRequest(ctx context.Context, run *RunRequest) err
 
 func (s *CosmosStore) ListRunRequests(ctx context.Context, userID int64, limit int) ([]*RunRequest, error) {
 	pk := userPartitionKey(userID)
+	uid := strconv.FormatInt(userID, 10)
 
 	query := "SELECT * FROM c WHERE c.user_id = @uid ORDER BY c.created_at DESC"
 	params := []azcosmos.QueryParameter{
-		{Name: "@uid", Value: userID},
+		{Name: "@uid", Value: uid},
 	}
 
 	pager := s.runRequests.NewQueryItemsPager(query, pk, &azcosmos.QueryOptions{
