@@ -573,3 +573,18 @@ Updated `mockAllAPIs` and `mockEmptyAPIs` in e2e helpers to mock `/api/auth/me` 
 **What:** Treat any non-empty `.waza.yaml` `tokens.limits` config as authoritative over legacy `.token-limits.json`, including overrides-only configs where `defaults` is omitted. The regression test covers the exact case with overrides-only YAML plus a legacy file present so future refactors don't accidentally reintroduce the fallback.
 
 **Why:** Ensures `.waza.yaml` is always authoritative and prevents subtle migration bugs.
+
+## 2026-03-31: User directive — Cosmos DB is primary results store
+
+**By:** Shayne Boyer (via Copilot)  
+**Date:** 2026-03-31
+
+**What:** Cosmos DB is the PRIMARY results store and is always used. Azure Storage (BYOS) is optional/secondary storage. When a user triggers a run:
+
+1. If no Azure Storage connection exists, store results directly in Cosmos DB (in the run-requests container or dedicated results container)
+2. If both Cosmos and a storage connection exist, show a dropdown on the New Run page allowing the user to choose destination
+3. Cosmos should be the default storage option
+
+Results should never be lost due to missing storage configuration.
+
+**Why:** User request — captured for team memory. Ensures data persistence and reduces friction for users without external storage configured.
