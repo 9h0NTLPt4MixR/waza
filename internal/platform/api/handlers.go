@@ -464,8 +464,11 @@ func handleListRepos(deps *Dependencies) http.HandlerFunc {
 			return
 		}
 
+		slog.Info("ListRepos", "user", user.Login, "github_id", user.GitHubID, "connections_count", len(connections))
+
 		repos := make([]repoInfo, 0, len(connections))
 		for _, conn := range connections {
+			slog.Info("ListRepos connection", "id", conn.ID, "type", conn.Type, "config", conn.Config)
 			owner, _ := conn.Config["owner"].(string)
 			repo, _ := conn.Config["repo"].(string)
 			desc, _ := conn.Config["description"].(string)

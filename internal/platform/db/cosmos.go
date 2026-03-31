@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -263,6 +264,8 @@ func (s *CosmosStore) ListConnections(ctx context.Context, userID int64, connTyp
 		query += " AND c.type = @type"
 		params = append(params, azcosmos.QueryParameter{Name: "@type", Value: string(connType)})
 	}
+
+	slog.Info("ListConnections query", "query", query, "uid", uid, "connType", connType)
 
 	pager := s.connections.NewQueryItemsPager(query, pk, &azcosmos.QueryOptions{
 		QueryParameters: params,
