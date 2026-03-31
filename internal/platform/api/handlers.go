@@ -442,10 +442,10 @@ func handleCancelRun(deps *Dependencies) http.HandlerFunc {
 
 // repoInfo is a slim representation of a GitHub repo.
 type repoInfo struct {
-	FullName    string `json:"full_name"`
+	FullName    string `json:"fullName"`
 	Description string `json:"description"`
 	Private     bool   `json:"private"`
-	HTMLURL     string `json:"html_url"`
+	HTMLURL     string `json:"htmlUrl"`
 }
 
 // handleListRepos lists the user's connected GitHub repos.
@@ -464,11 +464,8 @@ func handleListRepos(deps *Dependencies) http.HandlerFunc {
 			return
 		}
 
-		slog.Info("ListRepos", "user", user.Login, "github_id", user.GitHubID, "connections_count", len(connections))
-
 		repos := make([]repoInfo, 0, len(connections))
 		for _, conn := range connections {
-			slog.Info("ListRepos connection", "id", conn.ID, "type", conn.Type, "config", conn.Config)
 			owner, _ := conn.Config["owner"].(string)
 			repo, _ := conn.Config["repo"].(string)
 			desc, _ := conn.Config["description"].(string)
