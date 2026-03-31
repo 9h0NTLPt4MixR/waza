@@ -123,12 +123,21 @@ func RunEval(ctx context.Context, cfg RunConfig) (retErr error) {
 
 	logger.Info("executing waza run", "args", args)
 	if err := wazaCmd.Run(); err != nil {
-		msg := fmt.Sprintf("waza run failed: %s", sanitizeToken(stderr.String(), cfg.GitHubToken))
-		logger.Error(msg, "error", err, "stderr", sanitizeToken(stderr.String(), cfg.GitHubToken))
-		markFailed(cfg.Store, run, truncate(msg, 500))
-		return fmt.Errorf("waza run: %w", err)
+		// Exit code 1 = tests failed (normal eval result, not a platform error).
+		// Exit code 2 = configuration/runtime error.
+		// Only treat exit code 2+ as a real failure. For exit code 1,
+		// continue to read results.json — the eval completed.
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			logger.Info("waza run completed with test failures (exit code 1)")
+		} else {
+			msg := fmt.Sprintf("waza run failed: %s", sanitizeToken(stderr.String(), cfg.GitHubToken))
+			logger.Error(msg, "error", err, "stderr", sanitizeToken(stderr.String(), cfg.GitHubToken))
+			markFailed(cfg.Store, run, truncate(msg, 500))
+			return fmt.Errorf("waza run: %w", err)
+		}
+	} else {
+		logger.Info("waza run completed (all tests passed)")
 	}
-	logger.Info("waza run completed")
 
 	// 6. Read and persist results.
 	resultsData, err := os.ReadFile(resultsPath)
