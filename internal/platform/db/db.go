@@ -19,9 +19,9 @@ type ConnectionType string
 
 const (
 	// AzureStorage represents a user's Azure Blob Storage account (BYOS).
-	AzureStorage ConnectionType = "azure_storage"
+	AzureStorage ConnectionType = "azure-storage"
 	// GitHubRepo represents a connected GitHub repository.
-	GitHubRepo ConnectionType = "github_repo"
+	GitHubRepo ConnectionType = "github-repo"
 )
 
 // RunStatus tracks the lifecycle of an evaluation run.

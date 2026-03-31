@@ -102,7 +102,18 @@ export default function NewRun() {
                 Failed to load repos. Check your connections in Settings.
               </p>
             )}
-            {repos.data && (
+            {repos.data && repos.data.length === 0 && (
+              <div className="rounded border border-zinc-700 bg-zinc-800/50 p-4 text-sm text-zinc-400">
+                <p>No repositories connected yet.</p>
+                <a
+                  href="#/settings"
+                  className="mt-2 inline-block text-blue-400 hover:text-blue-300 underline"
+                >
+                  → Add a GitHub repo in Settings
+                </a>
+              </div>
+            )}
+            {repos.data && repos.data.length > 0 && (
               <select
                 value={selectedRepo}
                 onChange={(e) => {
