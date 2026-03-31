@@ -223,12 +223,13 @@ func runPlatformServer(cmd *cobra.Command, cfg *projectconfig.ProjectConfig, por
 	}
 
 	// Create the local file store for dashboard run data.
-	// Register only non-conflicting webapi routes (summary, health, storage status).
-	// The /api/runs endpoints are handled by the platform API with auth.
+	// Register dashboard webapi routes alongside platform API routes.
 	fileStore := webapi.NewFileStore(resultsDir)
 	dashHandlers := webapi.NewHandlers(fileStore)
 	mux.HandleFunc("GET /api/health", dashHandlers.HandleHealth)
 	mux.HandleFunc("GET /api/summary", dashHandlers.HandleSummary)
+	mux.HandleFunc("GET /api/runs", dashHandlers.HandleRuns)
+	mux.HandleFunc("GET /api/runs/{id}", dashHandlers.HandleRunDetail)
 	if storageCfg != nil {
 		dashWithStorage := webapi.NewHandlersWithStorage(fileStore, &webapi.StorageConfig{
 			Configured: true,
