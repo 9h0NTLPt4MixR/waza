@@ -156,10 +156,28 @@ func userPartitionKey(githubID int64) azcosmos.PartitionKey {
 	return azcosmos.NewPartitionKeyString(strconv.FormatInt(githubID, 10))
 }
 
+// cosmosDoc wraps any value with the required Cosmos DB "id" field
+// and a string-typed partition key field for consistent matching.
+type cosmosDoc struct {
+	ID          string `json:"id"`
+	GitHubIDStr string `json:"github_id"` // string to match partition key path
+}
+
 // --- Users ---
 
 func (s *CosmosStore) CreateUser(ctx context.Context, user *auth.User) error {
-	data, err := json.Marshal(user)
+	// Build a document with the required "id" field and string partition key.
+	doc := map[string]any{
+		"id":         strconv.FormatInt(user.GitHubID, 10),
+		"github_id":  strconv.FormatInt(user.GitHubID, 10),
+		"github_id_n": user.GitHubID,
+		"login":      user.Login,
+		"name":       user.Name,
+		"avatar_url": user.AvatarURL,
+		"created_at": user.CreatedAt,
+	}
+
+	data, err := json.Marshal(doc)
 	if err != nil {
 		return fmt.Errorf("marshaling user: %w", err)
 	}
@@ -182,11 +200,29 @@ func (s *CosmosStore) GetUser(ctx context.Context, githubID int64) (*auth.User, 
 		return nil, nil //nolint:nilerr // not-found is expected
 	}
 
-	var user auth.User
-	if err := json.Unmarshal(resp.Value, &user); err != nil {
+	// Parse the raw document which has string github_id.
+	var doc map[string]any
+	if err := json.Unmarshal(resp.Value, &doc); err != nil {
 		return nil, fmt.Errorf("unmarshaling user: %w", err)
 	}
-	return &user, nil
+
+	user := &auth.User{
+		GitHubID:  githubID,
+		Login:     stringVal(doc, "login"),
+		Name:      stringVal(doc, "name"),
+		AvatarURL: stringVal(doc, "avatar_url"),
+	}
+	if ts, ok := doc["created_at"].(string); ok {
+		user.CreatedAt, _ = time.Parse(time.RFC3339, ts)
+	}
+	return user, nil
+}
+
+func stringVal(m map[string]any, key string) string {
+	if v, ok := m[key].(string); ok {
+		return v
+	}
+	return ""
 }
 
 // --- Connections ---
