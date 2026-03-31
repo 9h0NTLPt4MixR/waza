@@ -26,6 +26,7 @@ const (
 	usersContainer       = "users"
 	connectionsContainer = "connections"
 	runRequestsContainer = "run-requests"
+	resultsContainer     = "results"
 	settingsContainer    = "settings"
 )
 
@@ -38,6 +39,7 @@ type CosmosStore struct {
 	users         *azcosmos.ContainerClient
 	connections   *azcosmos.ContainerClient
 	runRequests   *azcosmos.ContainerClient
+	results       *azcosmos.ContainerClient
 	settings      *azcosmos.ContainerClient
 }
 
@@ -82,6 +84,11 @@ func NewCosmosStore(endpoint, accountKey, encryptionKeyB64 string) (*CosmosStore
 		return nil, fmt.Errorf("getting run-requests container: %w", err)
 	}
 
+	results, err := db.NewContainer(resultsContainer)
+	if err != nil {
+		return nil, fmt.Errorf("getting results container: %w", err)
+	}
+
 	settings, err := db.NewContainer(settingsContainer)
 	if err != nil {
 		return nil, fmt.Errorf("getting settings container: %w", err)
@@ -93,6 +100,7 @@ func NewCosmosStore(endpoint, accountKey, encryptionKeyB64 string) (*CosmosStore
 		users:         users,
 		connections:   connections,
 		runRequests:   runRequests,
+		results:       results,
 		settings:      settings,
 	}, nil
 }
@@ -138,6 +146,11 @@ func NewCosmosStoreWithIdentity(endpoint, encryptionKeyB64 string) (*CosmosStore
 		return nil, fmt.Errorf("getting run-requests container: %w", err)
 	}
 
+	results, err := db.NewContainer(resultsContainer)
+	if err != nil {
+		return nil, fmt.Errorf("getting results container: %w", err)
+	}
+
 	settings, err := db.NewContainer(settingsContainer)
 	if err != nil {
 		return nil, fmt.Errorf("getting settings container: %w", err)
@@ -149,6 +162,7 @@ func NewCosmosStoreWithIdentity(endpoint, encryptionKeyB64 string) (*CosmosStore
 		users:         users,
 		connections:   connections,
 		runRequests:   runRequests,
+		results:       results,
 		settings:      settings,
 	}, nil
 }
@@ -428,6 +442,134 @@ func (s *CosmosStore) GetRunRequest(ctx context.Context, userID int64, runID str
 		return nil, fmt.Errorf("unmarshaling run request: %w", err)
 	}
 	return &req, nil
+}
+
+// --- Results ---
+
+func (s *CosmosStore) SaveResult(ctx context.Context, userID int64, runID string, result json.RawMessage) error {
+	uid := strconv.FormatInt(userID, 10)
+
+	// Extract summary fields from the result JSON for indexed querying.
+	var parsed map[string]any
+	if err := json.Unmarshal(result, &parsed); err != nil {
+		return fmt.Errorf("parsing result JSON: %w", err)
+	}
+
+	doc := map[string]any{
+		"id":        runID,
+		"user_id":   uid,
+		"user_id_n": userID,
+		"run_id":    runID,
+		"result":    parsed,
+		"spec":      stringVal(parsed, "spec"),
+		"model":     stringVal(parsed, "model"),
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	}
+
+	// Extract pass_rate from digest if present.
+	if digest, ok := parsed["digest"].(map[string]any); ok {
+		if pr, ok := digest["pass_rate"].(float64); ok {
+			doc["pass_rate"] = pr
+		}
+	}
+
+	data, err := json.Marshal(doc)
+	if err != nil {
+		return fmt.Errorf("marshaling result doc: %w", err)
+	}
+
+	pk := userPartitionKey(userID)
+	_, err = s.results.UpsertItem(ctx, pk, data, nil)
+	if err != nil {
+		return fmt.Errorf("upserting result %s: %w", runID, err)
+	}
+	return nil
+}
+
+func (s *CosmosStore) GetResult(ctx context.Context, userID int64, runID string) (json.RawMessage, error) {
+	pk := userPartitionKey(userID)
+	resp, err := s.results.ReadItem(ctx, pk, runID, nil)
+	if err != nil {
+		return nil, fmt.Errorf("reading result %s: %w", runID, err)
+	}
+
+	// The stored document wraps the original result under the "result" key.
+	var doc map[string]any
+	if err := json.Unmarshal(resp.Value, &doc); err != nil {
+		return nil, fmt.Errorf("unmarshaling result doc: %w", err)
+	}
+
+	resultData, ok := doc["result"]
+	if !ok {
+		return nil, fmt.Errorf("result document %s missing 'result' field", runID)
+	}
+
+	raw, err := json.Marshal(resultData)
+	if err != nil {
+		return nil, fmt.Errorf("re-marshaling result: %w", err)
+	}
+	return json.RawMessage(raw), nil
+}
+
+func (s *CosmosStore) ListResults(ctx context.Context, userID int64, limit int) ([]ResultSummary, error) {
+	pk := userPartitionKey(userID)
+	uid := strconv.FormatInt(userID, 10)
+
+	query := "SELECT c.id, c.user_id, c.run_id, c.spec, c.model, c.pass_rate, c.timestamp FROM c WHERE c.user_id = @uid ORDER BY c.timestamp DESC"
+	params := []azcosmos.QueryParameter{
+		{Name: "@uid", Value: uid},
+	}
+
+	if limit > 0 {
+		query += fmt.Sprintf(" OFFSET 0 LIMIT %d", limit)
+	}
+
+	pager := s.results.NewQueryItemsPager(query, pk, &azcosmos.QueryOptions{
+		QueryParameters: params,
+	})
+
+	var summaries []ResultSummary
+	for pager.More() {
+		page, err := pager.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("querying results: %w", err)
+		}
+		for _, item := range page.Items {
+			summary, err := parseResultSummary(item, userID)
+			if err != nil {
+				return nil, fmt.Errorf("unmarshaling result summary: %w", err)
+			}
+			summaries = append(summaries, summary)
+			if limit > 0 && len(summaries) >= limit {
+				return summaries, nil
+			}
+		}
+	}
+	return summaries, nil
+}
+
+// parseResultSummary extracts a ResultSummary from a Cosmos query result row.
+func parseResultSummary(data []byte, fallbackUserID int64) (ResultSummary, error) {
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return ResultSummary{}, err
+	}
+
+	s := ResultSummary{
+		ID:     stringVal(doc, "id"),
+		UserID: fallbackUserID,
+		RunID:  stringVal(doc, "run_id"),
+		Spec:   stringVal(doc, "spec"),
+		Model:  stringVal(doc, "model"),
+	}
+
+	if pr, ok := doc["pass_rate"].(float64); ok {
+		s.PassRate = pr
+	}
+	if ts, ok := doc["timestamp"].(string); ok {
+		s.Timestamp, _ = time.Parse(time.RFC3339, ts)
+	}
+	return s, nil
 }
 
 // --- Settings ---

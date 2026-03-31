@@ -334,6 +334,11 @@ func handleTriggerRun(deps *Dependencies) http.HandlerFunc {
 			go dispatchToADC(deps, run)
 		}
 
+		// TODO(linus): After ADC execution completes, save the EvaluationOutcome
+		// to Cosmos via deps.Store.SaveResult(ctx, user.GitHubID, run.ID, resultJSON).
+		// This ensures results are always persisted even without BYOS Azure Storage.
+		// The actual save will be wired in dispatchToADC once ADC returns results.
+
 		writeJSON(w, http.StatusAccepted, run)
 	}
 }
@@ -350,7 +355,14 @@ func dispatchToADC(deps *Dependencies, run *db.RunRequest) {
 	slog.Info("dispatching run to ADC", "run", run.ID, "repo", run.Repo)
 
 	// TODO: When ADC SDK is wired in go.mod, call deps.ADCEngine.Execute here.
-	// For now, mark as queued — the ADC engine integration is pending SDK availability.
+	// On success, persist the EvaluationOutcome to Cosmos:
+	//
+	//   resultJSON, _ := json.Marshal(outcome)
+	//   if err := deps.Store.SaveResult(context.Background(), run.UserID, run.ID, resultJSON); err != nil {
+	//       slog.Error("dispatchToADC: failed to save result to Cosmos", "error", err, "run", run.ID)
+	//   }
+	//
+	// This guarantees results are stored in Cosmos even if the user has no BYOS storage.
 }
 
 // handleListRuns returns the authenticated user's run queue.
@@ -610,3 +622,54 @@ func extractBearerOrCookie(r *http.Request) string {
 
 // context is imported for the goroutine dispatch.
 var _ = context.Background
+
+// --- Result handlers ---
+
+// handleListResults returns stored evaluation results for the authenticated user.
+func handleListResults(deps *Dependencies) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := auth.UserFromContext(r.Context())
+		if user == nil {
+			writeError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+
+		results, err := deps.Store.ListResults(r.Context(), user.GitHubID, 50)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to list results")
+			slog.Error("ListResults", "error", err, "user", user.Login)
+			return
+		}
+		if results == nil {
+			results = []db.ResultSummary{}
+		}
+		writeJSON(w, http.StatusOK, results)
+	}
+}
+
+// handleGetResult returns a full evaluation result by run ID.
+func handleGetResult(deps *Dependencies) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := auth.UserFromContext(r.Context())
+		if user == nil {
+			writeError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+
+		runID := r.PathValue("id")
+		if runID == "" {
+			writeError(w, http.StatusBadRequest, "result id is required")
+			return
+		}
+
+		result, err := deps.Store.GetResult(r.Context(), user.GitHubID, runID)
+		if err != nil {
+			writeError(w, http.StatusNotFound, "result not found")
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(result) //nolint:errcheck
+	}
+}

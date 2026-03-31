@@ -28,6 +28,10 @@ func RegisterRoutes(mux *http.ServeMux, deps *Dependencies) {
 	mux.Handle("GET /api/runs/queue", deps.AuthMiddleware(http.HandlerFunc(handleListRuns(deps))))
 	mux.Handle("POST /api/runs/cancel/{id}", deps.AuthMiddleware(http.HandlerFunc(handleCancelRun(deps))))
 
+	// --- Results (authenticated) ---
+	mux.Handle("GET /api/results", deps.AuthMiddleware(http.HandlerFunc(handleListResults(deps))))
+	mux.Handle("GET /api/results/{id}", deps.AuthMiddleware(http.HandlerFunc(handleGetResult(deps))))
+
 	// --- Repos (authenticated) ---
 	mux.Handle("GET /api/repos", deps.AuthMiddleware(http.HandlerFunc(handleListRepos(deps))))
 	mux.Handle("GET /api/repos/{owner}/{repo}/evals", deps.AuthMiddleware(http.HandlerFunc(handleListEvals(deps))))

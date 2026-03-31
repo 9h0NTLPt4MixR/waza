@@ -134,3 +134,17 @@ All code roles now use `claude-opus-4.6`. Docs/Scribe/diversity use `gemini-3-pr
 - **Key learning:** Go 1.22+ ServeMux pattern specificity means method-qualified routes like `GET /api/auth/me` always beat the bare `/` catch-all, so registration order doesn't matter — just mount the SPA on `/` and API routes coexist safely.
 - **Key learning:** Container Apps can briefly serve stale revisions during rollout — first curl after deploy may hit the old container. Wait a few seconds or use `Cache-Control: no-cache`.
 
+### Cosmos DB Results Container — Persistent Eval Storage
+- **Date:** 2026-03-31
+- **Branch:** `feature/waza-platform`
+- **Files created:** `internal/webapi/cosmos_adapter.go`
+- **Files modified:** `internal/platform/db/db.go`, `internal/platform/db/cosmos.go`, `internal/platform/db/cosmos_test.go`, `internal/platform/api/handlers.go`, `internal/platform/api/routes.go`, `internal/platform/api/routes_test.go`, `cmd/waza/cmd_serve.go`, `infra/main.bicep`
+- **What:** Added a `results` Cosmos container so eval outcomes are always persisted, even without BYOS Azure Storage:
+  1. **Store interface** — added `SaveResult`, `GetResult`, `ListResults` methods and `ResultSummary` type to `db.go`.
+  2. **CosmosStore** — implemented all three methods in `cosmos.go`. `SaveResult` extracts summary fields (spec, model, pass_rate) for indexed querying. Documents store the full EvaluationOutcome JSON under a `result` key. Uses string partition key (`user_id`) consistent with all other containers.
+  3. **Platform API** — added `GET /api/results` and `GET /api/results/{id}` endpoints. Updated `handleTriggerRun` and `dispatchToADC` with comments showing where Cosmos save will be wired after ADC returns results.
+  4. **Dashboard fallback** — `cmd_serve.go` now checks if BYOS storage is configured. If not, dashboard `/api/runs` uses a `CosmosRunStore` adapter that reads from the results container instead of local files.
+  5. **Infrastructure** — added `containerResults` resource to `infra/main.bicep` with partition key `/user_id`.
+- **Key learning:** When adding new methods to the `Store` interface, both the `cosmos_test.go` and `routes_test.go` mock stores must be updated to satisfy the compile-time interface check. Always grep for `var _ Store` / `var _ db.Store` to find all mock implementations.
+- **Key learning:** The `CosmosRunStore` adapter in `internal/webapi/cosmos_adapter.go` bridges the platform `db.Store` to the dashboard's `webapi.RunStore` interface. This allows the same dashboard UI to work regardless of whether results come from local files, Azure Blob Storage, or Cosmos DB.
+

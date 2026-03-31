@@ -223,15 +223,27 @@ func runPlatformServer(cmd *cobra.Command, cfg *projectconfig.ProjectConfig, por
 	}
 
 	// Create the local file store for dashboard run data.
+	// In platform mode, if the user has no BYOS storage, fall back to
+	// Cosmos-backed results. For now we use a user-agnostic default
+	// (userID 0) since the dashboard routes are not auth-scoped.
+	// Per-user scoping will come when dashboard routes are auth-aware.
+	var dashStore webapi.RunStore
+	if storageCfg != nil {
+		dashStore = webapi.NewFileStore(resultsDir)
+	} else {
+		// No BYOS configured — use Cosmos as the results backend.
+		dashStore = webapi.NewCosmosRunStore(store, 0)
+		logger.Info("dashboard using Cosmos-backed result store (no BYOS configured)")
+	}
+
 	// Register dashboard webapi routes alongside platform API routes.
-	fileStore := webapi.NewFileStore(resultsDir)
-	dashHandlers := webapi.NewHandlers(fileStore)
+	dashHandlers := webapi.NewHandlers(dashStore)
 	mux.HandleFunc("GET /api/health", dashHandlers.HandleHealth)
 	mux.HandleFunc("GET /api/summary", dashHandlers.HandleSummary)
 	mux.HandleFunc("GET /api/runs", dashHandlers.HandleRuns)
 	mux.HandleFunc("GET /api/runs/{id}", dashHandlers.HandleRunDetail)
 	if storageCfg != nil {
-		dashWithStorage := webapi.NewHandlersWithStorage(fileStore, &webapi.StorageConfig{
+		dashWithStorage := webapi.NewHandlersWithStorage(dashStore, &webapi.StorageConfig{
 			Configured: true,
 			Provider:   storageCfg.Provider,
 			Account:    storageCfg.AccountName,

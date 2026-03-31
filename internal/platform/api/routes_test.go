@@ -161,6 +161,18 @@ func (m *mockStore) SetSetting(_ context.Context, key, value string) error {
 
 func (m *mockStore) Close() error { return nil }
 
+func (m *mockStore) SaveResult(_ context.Context, _ int64, _ string, _ json.RawMessage) error {
+	return nil
+}
+
+func (m *mockStore) GetResult(_ context.Context, _ int64, _ string) (json.RawMessage, error) {
+	return nil, nil
+}
+
+func (m *mockStore) ListResults(_ context.Context, _ int64, _ int) ([]db.ResultSummary, error) {
+	return nil, nil
+}
+
 var _ db.Store = (*mockStore)(nil)
 
 // ---------------------------------------------------------------------------

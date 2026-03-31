@@ -273,6 +273,20 @@ resource containerSettings 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/c
   }
 }
 
+resource containerResults 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = {
+  parent: cosmosDatabase
+  name: 'results'
+  properties: {
+    resource: {
+      id: 'results'
+      partitionKey: {
+        paths: ['/user_id']
+        kind: 'Hash'
+      }
+    }
+  }
+}
+
 // Cosmos DB Built-in Data Contributor role for the managed identity
 resource cosmosDataContributorRole 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2024-05-15' = {
   parent: cosmosAccount

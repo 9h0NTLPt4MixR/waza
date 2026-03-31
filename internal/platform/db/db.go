@@ -9,6 +9,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/microsoft/waza/internal/platform/auth"
@@ -53,6 +54,18 @@ type Connection struct {
 // Verified reports whether this connection has been successfully tested.
 func (c *Connection) Verified() bool {
 	return c.VerifiedAt != nil
+}
+
+// ResultSummary is a lightweight projection of a stored evaluation result,
+// used in list views.
+type ResultSummary struct {
+	ID        string    `json:"id"`
+	UserID    int64     `json:"user_id"`
+	RunID     string    `json:"run_id"`
+	Spec      string    `json:"spec"`
+	Model     string    `json:"model"`
+	PassRate  float64   `json:"pass_rate"`
+	Timestamp time.Time `json:"timestamp"`
 }
 
 // RunRequest represents a queued or in-progress evaluation run.
@@ -112,6 +125,20 @@ type Store interface {
 	// GetRunRequest retrieves a single run by ID. Returns an error if the
 	// run does not exist or does not belong to the specified user.
 	GetRunRequest(ctx context.Context, userID int64, runID string) (*RunRequest, error)
+
+	// --- Results ---
+
+	// SaveResult persists an evaluation outcome as a JSON document keyed by
+	// runID. The result is stored in the results container partitioned by
+	// userID (as a string, consistent with other containers).
+	SaveResult(ctx context.Context, userID int64, runID string, result json.RawMessage) error
+
+	// GetResult retrieves a stored evaluation outcome by runID.
+	GetResult(ctx context.Context, userID int64, runID string) (json.RawMessage, error)
+
+	// ListResults returns result summaries for a user, ordered by timestamp
+	// descending. The limit parameter caps the result count (0 = no limit).
+	ListResults(ctx context.Context, userID int64, limit int) ([]ResultSummary, error)
 
 	// --- Settings ---
 

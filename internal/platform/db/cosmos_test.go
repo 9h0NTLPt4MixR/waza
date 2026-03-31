@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"sync"
 	"testing"
@@ -154,6 +155,18 @@ func (m *mockStore) SetSetting(_ context.Context, key, value string) error {
 }
 
 func (m *mockStore) Close() error { return nil }
+
+func (m *mockStore) SaveResult(_ context.Context, _ int64, _ string, _ json.RawMessage) error {
+	return nil
+}
+
+func (m *mockStore) GetResult(_ context.Context, _ int64, _ string) (json.RawMessage, error) {
+	return nil, errNotFound
+}
+
+func (m *mockStore) ListResults(_ context.Context, _ int64, _ int) ([]ResultSummary, error) {
+	return nil, nil
+}
 
 // Compile-time check
 var _ Store = (*mockStore)(nil)
