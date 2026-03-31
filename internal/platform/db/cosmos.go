@@ -275,14 +275,38 @@ func (s *CosmosStore) ListConnections(ctx context.Context, userID int64, connTyp
 			return nil, fmt.Errorf("querying connections: %w", err)
 		}
 		for _, item := range page.Items {
-			var conn Connection
-			if err := json.Unmarshal(item, &conn); err != nil {
+			conn, err := parseConnection(item, userID)
+			if err != nil {
 				return nil, fmt.Errorf("unmarshaling connection: %w", err)
 			}
-			connections = append(connections, &conn)
+			connections = append(connections, conn)
 		}
 	}
 	return connections, nil
+}
+
+// parseConnection handles the string user_id stored in Cosmos.
+func parseConnection(data []byte, fallbackUserID int64) (*Connection, error) {
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return nil, err
+	}
+
+	conn := &Connection{
+		ID:     stringVal(doc, "id"),
+		UserID: fallbackUserID,
+		Type:   ConnectionType(stringVal(doc, "type")),
+	}
+
+	if cfg, ok := doc["config"].(map[string]any); ok {
+		conn.Config = cfg
+	}
+
+	if va, ok := doc["verified_at"].(string); ok && va != "" {
+		t, _ := time.Parse(time.RFC3339, va)
+		conn.VerifiedAt = &t
+	}
+	return conn, nil
 }
 
 func (s *CosmosStore) DeleteConnection(ctx context.Context, userID int64, connectionID string) error {
