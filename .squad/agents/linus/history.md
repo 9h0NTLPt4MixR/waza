@@ -148,3 +148,16 @@ All code roles now use `claude-opus-4.6`. Docs/Scribe/diversity use `gemini-3-pr
 - **Key learning:** When adding new methods to the `Store` interface, both the `cosmos_test.go` and `routes_test.go` mock stores must be updated to satisfy the compile-time interface check. Always grep for `var _ Store` / `var _ db.Store` to find all mock implementations.
 - **Key learning:** The `CosmosRunStore` adapter in `internal/webapi/cosmos_adapter.go` bridges the platform `db.Store` to the dashboard's `webapi.RunStore` interface. This allows the same dashboard UI to work regardless of whether results come from local files, Azure Blob Storage, or Cosmos DB.
 
+### Platform API Run Endpoint Fixes
+- **Date:** 2026-03-31
+- **Branch:** `feature/waza-platform`
+- **Files changed:** `internal/platform/api/handlers.go`, `internal/platform/api/routes.go`, `internal/platform/api/handlers_test.go`, `internal/platform/api/routes_test.go`, `internal/platform/db/cosmos.go`
+- **What:** Fixed 5 issues in the run queue API:
+  1. `handleTriggerRun` now returns `{runId, status}` (camelCase) instead of the full `db.RunRequest` (snake_case). Frontend can redirect to `/runs/{runId}`.
+  2. `handleListRuns` (GET /api/runs/queue) now returns `[]runQueueItem` with camelCase field names (`evalSpec`, `storageDestination`, `createdAt`, etc.) instead of raw `db.RunRequest`.
+  3. Registered `GET /api/runs/queue/{id}` route using existing `handleGetRun` handler (was implemented but never wired). Returns single `runQueueItem` for status page polling.
+  4. Added missing `storage_destination` and `error` fields to Cosmos `CreateRunRequest` and `UpdateRunRequest` document maps — these were defined in the struct but never persisted.
+  5. Added `parseRunRequest` function (mirrors `parseConnection` pattern) to handle the string→int64 user_id mismatch when unmarshaling Cosmos documents back into Go structs.
+- **Key learning:** Cosmos stores `user_id` as a string (to match partition key) but `db.RunRequest.UserID` is `int64`. Direct `json.Unmarshal` fails silently (zero value). The `parseRunRequest` fallback pattern (try unmarshal, on failure re-parse without the mismatched field and use fallback) is the same pattern used by `parseConnection`. Always check that Cosmos doc maps include ALL struct fields.
+- **Key learning:** Integration tests in `handlers_test.go` used underscore connection types (`azure_storage`, `github_repo`) while the `db` constants use hyphens (`azure-storage`, `github-repo`). Test bugs are invisible when tests are green — always check that test assertions are actually exercising the right code paths.
+
