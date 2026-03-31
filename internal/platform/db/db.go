@@ -70,17 +70,18 @@ type ResultSummary struct {
 
 // RunRequest represents a queued or in-progress evaluation run.
 type RunRequest struct {
-	ID            string    `json:"id"`
-	UserID        int64     `json:"user_id"`
-	Repo          string    `json:"repo"`           // "owner/repo" format
-	EvalSpec      string    `json:"eval_spec"`      // path to eval YAML within the repo
-	Model         string    `json:"model"`          // target model for evaluation
-	Workers       int       `json:"workers"`        // parallel worker count
-	Status        RunStatus `json:"status"`         // current lifecycle state
-	ADCSandboxIDs []string  `json:"adc_sandbox_ids"` // allocated sandbox identifiers
-	Error         string    `json:"error,omitempty"` // error message if failed
-	CreatedAt     time.Time `json:"created_at"`
-	CompletedAt   *time.Time `json:"completed_at,omitempty"`
+	ID                 string    `json:"id"`
+	UserID             int64     `json:"user_id"`
+	Repo               string    `json:"repo"`                // "owner/repo" format
+	EvalSpec           string    `json:"eval_spec"`           // path to eval YAML within the repo
+	Model              string    `json:"model"`               // target model for evaluation
+	Workers            int       `json:"workers"`             // parallel worker count
+	StorageDestination string    `json:"storage_destination"` // "cosmos" or connection ID for BYOS
+	Status             RunStatus `json:"status"`              // current lifecycle state
+	ADCSandboxIDs      []string  `json:"adc_sandbox_ids"`     // allocated sandbox identifiers
+	Error              string    `json:"error,omitempty"`     // error message if failed
+	CreatedAt          time.Time `json:"created_at"`
+	CompletedAt        *time.Time `json:"completed_at,omitempty"`
 }
 
 // Store defines the data persistence contract for Waza Platform.

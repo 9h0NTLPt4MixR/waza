@@ -269,12 +269,13 @@ func testGitHubRepo(r *http.Request, config map[string]any) (bool, string) {
 
 // triggerRunRequest is the JSON body for POST /api/runs/trigger.
 type triggerRunRequest struct {
-	Owner    string `json:"owner"`    // repo owner (frontend sends separately)
-	Repo     string `json:"repo"`     // repo name or "owner/repo"
-	EvalPath string `json:"evalPath"` // path to eval YAML within the repo
-	EvalSpec string `json:"eval_spec"` // alias for evalPath
-	Model    string `json:"model"`
-	Workers  int    `json:"workers"`
+	Owner              string `json:"owner"`              // repo owner (frontend sends separately)
+	Repo               string `json:"repo"`               // repo name or "owner/repo"
+	EvalPath           string `json:"evalPath"`           // path to eval YAML within the repo
+	EvalSpec           string `json:"eval_spec"`          // alias for evalPath
+	Model              string `json:"model"`
+	Workers            int    `json:"workers"`
+	StorageDestination string `json:"storageDestination"` // "cosmos" (default) or connection ID
 }
 
 // handleTriggerRun creates a RunRequest and dispatches it to ADC asynchronously.
@@ -313,14 +314,26 @@ func handleTriggerRun(deps *Dependencies) http.HandlerFunc {
 		if req.Workers <= 0 {
 			req.Workers = 1
 		}
+		if req.StorageDestination == "" {
+			req.StorageDestination = "cosmos"
+		}
+
+		slog.Info("triggering run",
+			"user", user.Login,
+			"repo", req.Repo,
+			"eval", req.EvalSpec,
+			"model", req.Model,
+			"storageDestination", req.StorageDestination,
+		)
 
 		run := &db.RunRequest{
-			ID:       fmt.Sprintf("run-%d", time.Now().UnixNano()),
-			UserID:   user.GitHubID,
-			Repo:     req.Repo,
-			EvalSpec: req.EvalSpec,
-			Model:    req.Model,
-			Workers:  req.Workers,
+			ID:                 fmt.Sprintf("run-%d", time.Now().UnixNano()),
+			UserID:             user.GitHubID,
+			Repo:               req.Repo,
+			EvalSpec:           req.EvalSpec,
+			Model:              req.Model,
+			Workers:            req.Workers,
+			StorageDestination: req.StorageDestination,
 		}
 
 		if err := deps.Store.CreateRunRequest(r.Context(), run); err != nil {
@@ -352,7 +365,11 @@ func dispatchToADC(deps *Dependencies, run *db.RunRequest) {
 		return
 	}
 
-	slog.Info("dispatching run to ADC", "run", run.ID, "repo", run.Repo)
+	slog.Info("dispatching run to ADC",
+		"run", run.ID,
+		"repo", run.Repo,
+		"storageDestination", run.StorageDestination,
+	)
 
 	// TODO: When ADC SDK is wired in go.mod, call deps.ADCEngine.Execute here.
 	// On success, persist the EvaluationOutcome to Cosmos:

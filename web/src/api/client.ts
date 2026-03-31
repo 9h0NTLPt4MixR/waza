@@ -40,6 +40,7 @@ export interface TriggerRunConfig {
   model: string;
   workers: number;
   parallel: boolean;
+  storageDestination?: string; // "cosmos" (default) or connection ID for BYOS
 }
 
 export interface RunQueueItem {

@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Play, ChevronRight, Loader2, RefreshCw } from "lucide-react";
-import { useRepos, useRepoEvals, useTriggerRun } from "../hooks/useApi";
+import { Play, ChevronRight, Loader2, RefreshCw, Database } from "lucide-react";
+import { useRepos, useRepoEvals, useTriggerRun, useConnections } from "../hooks/useApi";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -49,8 +49,10 @@ export default function NewRun() {
   const [model, setModel] = useState("gpt-4o");
   const [workers, setWorkers] = useState(3);
   const [parallel, setParallel] = useState(true);
+  const [storageDestination, setStorageDestination] = useState("cosmos");
 
   const repos = useRepos();
+  const connections = useConnections();
   const [owner, repo] = selectedRepo.split("/");
   const evals = useRepoEvals(owner ?? "", repo ?? "");
   const triggerMutation = useTriggerRun();
@@ -65,6 +67,7 @@ export default function NewRun() {
         model,
         workers,
         parallel,
+        storageDestination,
       },
       {
         onSuccess: (data) => {
@@ -261,6 +264,47 @@ export default function NewRun() {
                   Run tasks in parallel
                 </span>
               </label>
+
+              {/* Results Storage */}
+              <div className="space-y-1">
+                <label className="block text-sm font-medium text-zinc-300">
+                  Results Storage
+                </label>
+                {(() => {
+                  const storageConnections = (connections.data ?? []).filter(
+                    (c) => c.type === "azure-storage",
+                  );
+                  if (storageConnections.length === 0) {
+                    return (
+                      <div className="flex items-center gap-2 rounded border border-zinc-700 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-300">
+                        <Database className="h-4 w-4 text-emerald-400" />
+                        💾 Results stored in Waza Cloud
+                      </div>
+                    );
+                  }
+                  return (
+                    <select
+                      value={storageDestination}
+                      onChange={(e) => setStorageDestination(e.target.value)}
+                      className="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
+                    >
+                      <option value="cosmos">Waza Cloud (default)</option>
+                      {storageConnections.map((c) => {
+                        const account = c.config["account_name"] ?? "storage";
+                        const container = c.config["container_name"] ?? "results";
+                        return (
+                          <option key={c.id} value={c.id}>
+                            {account}/{container}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  );
+                })()}
+                <p className="text-xs text-zinc-500">
+                  Cosmos DB is always available. Connect Azure Storage in Settings for BYOS.
+                </p>
+              </div>
             </div>
             <div className="rounded border border-zinc-700 bg-zinc-800/50 p-3">
               <p className="text-xs text-zinc-400">
@@ -303,6 +347,20 @@ export default function NewRun() {
                 <span className="text-zinc-400">Parallel</span>
                 <span className="font-mono text-zinc-100">
                   {parallel ? "Yes" : "No"}
+                </span>
+                <span className="text-zinc-400">Storage</span>
+                <span className="font-mono text-zinc-100">
+                  {storageDestination === "cosmos"
+                    ? "Waza Cloud (Cosmos DB)"
+                    : (() => {
+                        const conn = (connections.data ?? []).find(
+                          (c) => c.id === storageDestination,
+                        );
+                        if (!conn) return storageDestination;
+                        const account = conn.config["account_name"] ?? "storage";
+                        const container = conn.config["container_name"] ?? "results";
+                        return `${account}/${container}`;
+                      })()}
                 </span>
               </div>
             </div>
