@@ -126,3 +126,11 @@ All code roles now use `claude-opus-4.6`. Docs/Scribe/diversity use `gemini-3-pr
 - **Key learning:** Connection testing uses lightweight HTTP probes (list 1 blob, GET repo) rather than importing heavy Azure/GitHub SDKs. Keeps the API handler layer dependency-free.
 - **Pending:** ADC SDK still needed in go.mod. Storage proxy handlers (HandleProxyRuns, HandleProxyRunDetail) deferred until BYOS storage flow is finalized.
 
+### Platform SPA Fix — Serve embedded React app in platform mode
+- **Date:** 2026-03-30
+- **Branch:** `feature/waza-platform`
+- **Files changed:** `cmd/waza/cmd_serve.go`, `internal/webserver/routes.go`
+- **What:** Exported `SPAHandler()` from the webserver package and mounted it as the catch-all `/` handler in `runPlatformServer`. Platform mode was only registering API routes, causing 404 on root. API routes (`/api/*`) registered first take precedence via Go ServeMux specificity rules.
+- **Key learning:** Go 1.22+ ServeMux pattern specificity means method-qualified routes like `GET /api/auth/me` always beat the bare `/` catch-all, so registration order doesn't matter — just mount the SPA on `/` and API routes coexist safely.
+- **Key learning:** Container Apps can briefly serve stale revisions during rollout — first curl after deploy may hit the old container. Wait a few seconds or use `Cache-Control: no-cache`.
+
