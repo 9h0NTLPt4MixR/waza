@@ -17,6 +17,7 @@ import (
 	"github.com/microsoft/waza/internal/platform/auth"
 	"github.com/microsoft/waza/internal/platform/db"
 	"github.com/microsoft/waza/internal/projectconfig"
+	"github.com/microsoft/waza/internal/webapi"
 	"github.com/microsoft/waza/internal/webserver"
 	"github.com/spf13/cobra"
 )
@@ -220,10 +221,24 @@ func runPlatformServer(cmd *cobra.Command, cfg *projectconfig.ProjectConfig, por
 	if cfg.Storage.Enabled {
 		storageCfg = &cfg.Storage
 	}
-	_ = storageCfg
-	_ = resultsDir
-	// Note: existing webapi routes could be registered here for the dashboard.
-	// For platform mode the primary API surface is the platform routes.
+
+	// Create the local file store for dashboard run data.
+	// Register only non-conflicting webapi routes (summary, health, storage status).
+	// The /api/runs endpoints are handled by the platform API with auth.
+	fileStore := webapi.NewFileStore(resultsDir)
+	dashHandlers := webapi.NewHandlers(fileStore)
+	mux.HandleFunc("GET /api/health", dashHandlers.HandleHealth)
+	mux.HandleFunc("GET /api/summary", dashHandlers.HandleSummary)
+	if storageCfg != nil {
+		dashWithStorage := webapi.NewHandlersWithStorage(fileStore, &webapi.StorageConfig{
+			Configured: true,
+			Provider:   storageCfg.Provider,
+			Account:    storageCfg.AccountName,
+		})
+		mux.HandleFunc("GET /api/storage/status", dashWithStorage.HandleStorageStatus)
+	} else {
+		mux.HandleFunc("GET /api/storage/status", dashHandlers.HandleStorageStatus)
+	}
 
 	// Health check for container orchestrators.
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
