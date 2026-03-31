@@ -278,6 +278,44 @@ type triggerRunRequest struct {
 	StorageDestination string `json:"storageDestination"` // "cosmos" (default) or connection ID
 }
 
+// triggerRunResponse is returned by POST /api/runs/trigger so the frontend
+// can redirect to the run status page.
+type triggerRunResponse struct {
+	RunID  string       `json:"runId"`
+	Status db.RunStatus `json:"status"`
+}
+
+// runQueueItem is the camelCase JSON representation of a RunRequest sent to
+// the frontend for list and detail views.
+type runQueueItem struct {
+	ID                 string       `json:"id"`
+	Status             db.RunStatus `json:"status"`
+	Repo               string       `json:"repo"`
+	EvalSpec           string       `json:"evalSpec"`
+	Model              string       `json:"model"`
+	Workers            int          `json:"workers"`
+	StorageDestination string       `json:"storageDestination"`
+	CreatedAt          time.Time    `json:"createdAt"`
+	CompletedAt        *time.Time   `json:"completedAt,omitempty"`
+	Error              string       `json:"error,omitempty"`
+}
+
+// toRunQueueItem maps a db.RunRequest to its camelCase API representation.
+func toRunQueueItem(r *db.RunRequest) runQueueItem {
+	return runQueueItem{
+		ID:                 r.ID,
+		Status:             r.Status,
+		Repo:               r.Repo,
+		EvalSpec:           r.EvalSpec,
+		Model:              r.Model,
+		Workers:            r.Workers,
+		StorageDestination: r.StorageDestination,
+		CreatedAt:          r.CreatedAt,
+		CompletedAt:        r.CompletedAt,
+		Error:              r.Error,
+	}
+}
+
 // handleTriggerRun creates a RunRequest and dispatches it to ADC asynchronously.
 func handleTriggerRun(deps *Dependencies) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -352,7 +390,10 @@ func handleTriggerRun(deps *Dependencies) http.HandlerFunc {
 		// This ensures results are always persisted even without BYOS Azure Storage.
 		// The actual save will be wired in dispatchToADC once ADC returns results.
 
-		writeJSON(w, http.StatusAccepted, run)
+		writeJSON(w, http.StatusAccepted, triggerRunResponse{
+			RunID:  run.ID,
+			Status: run.Status,
+		})
 	}
 }
 
@@ -400,7 +441,11 @@ func handleListRuns(deps *Dependencies) http.HandlerFunc {
 		if runs == nil {
 			runs = []*db.RunRequest{}
 		}
-		writeJSON(w, http.StatusOK, runs)
+		items := make([]runQueueItem, len(runs))
+		for i, r := range runs {
+			items[i] = toRunQueueItem(r)
+		}
+		writeJSON(w, http.StatusOK, items)
 	}
 }
 
@@ -424,7 +469,7 @@ func handleGetRun(deps *Dependencies) http.HandlerFunc {
 			writeError(w, http.StatusNotFound, "run not found")
 			return
 		}
-		writeJSON(w, http.StatusOK, run)
+		writeJSON(w, http.StatusOK, toRunQueueItem(run))
 	}
 }
 

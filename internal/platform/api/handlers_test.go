@@ -91,7 +91,7 @@ func TestIntegration_FullHTTPCycle_ListRunsEmpty(t *testing.T) {
 	resp := doRequest(t, srv, http.MethodGet, "/api/runs/queue", "tok", nil)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var runs []db.RunRequest
+	var runs []runQueueItem
 	decodeJSON(t, resp, &runs)
 	assert.Empty(t, runs)
 }
@@ -122,7 +122,7 @@ func TestIntegration_ConnectionCRUD_EndToEnd(t *testing.T) {
 
 	// --- Step 1: Create connection ---
 	createBody := map[string]any{
-		"type":   "azure_storage",
+		"type":   "azure-storage",
 		"config": map[string]any{"account_name": "myaccount", "container_name": "results"},
 	}
 	resp := doRequest(t, srv, http.MethodPost, "/api/connections", "crud-tok", createBody)
@@ -146,7 +146,7 @@ func TestIntegration_ConnectionCRUD_EndToEnd(t *testing.T) {
 
 	// --- Step 3: Test connection (validates request, even though real Azure isn't reachable) ---
 	testBody := map[string]any{
-		"type":   "azure_storage",
+		"type":   "azure-storage",
 		"config": map[string]any{"account_name": "myaccount", "container_name": "results"},
 	}
 	resp = doRequest(t, srv, http.MethodPost, "/api/connections/test", "crud-tok", testBody)
@@ -210,7 +210,7 @@ func TestIntegration_TestConnection_MissingFields(t *testing.T) {
 
 	// Missing account_name
 	body := map[string]any{
-		"type":   "azure_storage",
+		"type":   "azure-storage",
 		"config": map[string]any{"container_name": "results"},
 	}
 	resp := doRequest(t, srv, http.MethodPost, "/api/connections/test", "tok", body)
@@ -229,7 +229,7 @@ func TestIntegration_TestConnection_GitHubRepo_MissingFields(t *testing.T) {
 	addTestUser(ap, "tok", user)
 
 	body := map[string]any{
-		"type":   "github_repo",
+		"type":   "github-repo",
 		"config": map[string]any{"owner": "myorg"},
 	}
 	resp := doRequest(t, srv, http.MethodPost, "/api/connections/test", "tok", body)
@@ -275,29 +275,26 @@ func TestIntegration_RunLifecycle_TriggerQueueCancel(t *testing.T) {
 	resp := doRequest(t, srv, http.MethodPost, "/api/runs/trigger", "run-tok", triggerBody)
 	require.Equal(t, http.StatusAccepted, resp.StatusCode)
 
-	var run db.RunRequest
-	decodeJSON(t, resp, &run)
-	assert.Equal(t, "myorg/myrepo", run.Repo)
-	assert.Equal(t, "evals/test.yaml", run.EvalSpec)
-	assert.Equal(t, "gpt-4o", run.Model)
-	assert.Equal(t, int64(200), run.UserID)
-	assert.Equal(t, db.Queued, run.Status)
-	runID := run.ID
+	var triggerResp triggerRunResponse
+	decodeJSON(t, resp, &triggerResp)
+	assert.NotEmpty(t, triggerResp.RunID, "response must include runId")
+	assert.Equal(t, db.Queued, triggerResp.Status)
+	runID := triggerResp.RunID
 
 	// --- Step 2: List queue — should contain the run ---
 	resp = doRequest(t, srv, http.MethodGet, "/api/runs/queue", "run-tok", nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var runs []db.RunRequest
+	var runs []runQueueItem
 	decodeJSON(t, resp, &runs)
 	require.Len(t, runs, 1)
 	assert.Equal(t, runID, runs[0].ID)
 
 	// --- Step 3: Get run by ID ---
-	resp = doRequest(t, srv, http.MethodGet, "/api/runs/"+runID, "run-tok", nil)
+	resp = doRequest(t, srv, http.MethodGet, "/api/runs/queue/"+runID, "run-tok", nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var detail db.RunRequest
+	var detail runQueueItem
 	decodeJSON(t, resp, &detail)
 	assert.Equal(t, runID, detail.ID)
 
@@ -307,10 +304,10 @@ func TestIntegration_RunLifecycle_TriggerQueueCancel(t *testing.T) {
 	resp.Body.Close()
 
 	// --- Step 5: Verify cancelled status ---
-	resp = doRequest(t, srv, http.MethodGet, "/api/runs/"+runID, "run-tok", nil)
+	resp = doRequest(t, srv, http.MethodGet, "/api/runs/queue/"+runID, "run-tok", nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var cancelled db.RunRequest
+	var cancelled runQueueItem
 	decodeJSON(t, resp, &cancelled)
 	assert.Equal(t, db.Cancelled, cancelled.Status)
 	assert.NotNil(t, cancelled.CompletedAt)
@@ -330,7 +327,15 @@ func TestIntegration_RunTrigger_DefaultsApplied(t *testing.T) {
 	resp := doRequest(t, srv, http.MethodPost, "/api/runs/trigger", "tok", body)
 	require.Equal(t, http.StatusAccepted, resp.StatusCode)
 
-	var run db.RunRequest
+	var trigResp triggerRunResponse
+	decodeJSON(t, resp, &trigResp)
+	assert.NotEmpty(t, trigResp.RunID, "response must include runId")
+
+	// Verify defaults were applied by fetching the run from the queue
+	resp = doRequest(t, srv, http.MethodGet, "/api/runs/queue/"+trigResp.RunID, "tok", nil)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var run runQueueItem
 	decodeJSON(t, resp, &run)
 	assert.Equal(t, "gpt-4o", run.Model, "default model should be gpt-4o")
 	assert.Equal(t, 1, run.Workers, "default workers should be 1")
@@ -362,9 +367,8 @@ func TestIntegration_GetRun_NotFound(t *testing.T) {
 	user := &auth.User{GitHubID: 100, Login: "alice"}
 	addTestUser(ap, "tok", user)
 
-	resp := doRequest(t, srv, http.MethodGet, "/api/runs/nonexistent", "tok", nil)
+	resp := doRequest(t, srv, http.MethodGet, "/api/runs/queue/nonexistent", "tok", nil)
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
-	resp.Body.Close()
 }
 
 // ===========================================================================
@@ -427,7 +431,7 @@ func TestIntegration_UserIsolation_Runs(t *testing.T) {
 	// Alice sees only her runs
 	resp := doRequest(t, srv, http.MethodGet, "/api/runs/queue", "tok-a", nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
-	var runsA []db.RunRequest
+	var runsA []runQueueItem
 	decodeJSON(t, resp, &runsA)
 	require.Len(t, runsA, 1)
 	assert.Equal(t, "run-a", runsA[0].ID)
@@ -435,13 +439,13 @@ func TestIntegration_UserIsolation_Runs(t *testing.T) {
 	// Bob sees only his runs
 	resp = doRequest(t, srv, http.MethodGet, "/api/runs/queue", "tok-b", nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
-	var runsB []db.RunRequest
+	var runsB []runQueueItem
 	decodeJSON(t, resp, &runsB)
 	require.Len(t, runsB, 1)
 	assert.Equal(t, "run-b", runsB[0].ID)
 
 	// Alice cannot access Bob's run by ID
-	resp = doRequest(t, srv, http.MethodGet, "/api/runs/run-b", "tok-a", nil)
+	resp = doRequest(t, srv, http.MethodGet, "/api/runs/queue/run-b", "tok-a", nil)
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 	resp.Body.Close()
 
@@ -470,7 +474,7 @@ func TestIntegration_AuthMiddleware_AllProtectedRoutes(t *testing.T) {
 		{http.MethodPost, "/api/connections/test"},
 		{http.MethodPost, "/api/runs/trigger"},
 		{http.MethodGet, "/api/runs/queue"},
-		{http.MethodGet, "/api/runs/some-id"},
+		{http.MethodGet, "/api/runs/queue/some-id"},
 		{http.MethodPost, "/api/runs/cancel/some-id"},
 		{http.MethodGet, "/api/repos"},
 	}
@@ -653,7 +657,7 @@ func TestIntegration_MultipleRuns(t *testing.T) {
 	resp := doRequest(t, srv, http.MethodGet, "/api/runs/queue", "tok", nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var runs []db.RunRequest
+	var runs []runQueueItem
 	decodeJSON(t, resp, &runs)
 	assert.Len(t, runs, 3)
 }
@@ -669,7 +673,7 @@ func TestIntegration_CreateConnection_GitHubRepo(t *testing.T) {
 	addTestUser(ap, "tok", user)
 
 	body := map[string]any{
-		"type":   "github_repo",
+		"type":   "github-repo",
 		"config": map[string]any{"owner": "myorg", "repo": "myrepo"},
 	}
 	resp := doRequest(t, srv, http.MethodPost, "/api/connections", "tok", body)

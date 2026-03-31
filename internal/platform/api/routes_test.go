@@ -214,7 +214,7 @@ func TestAuthRequired_ProtectedEndpoints(t *testing.T) {
 		{http.MethodPost, "/api/connections/test"},
 		{http.MethodPost, "/api/runs/trigger"},
 		{http.MethodGet, "/api/runs/queue"},
-		{http.MethodGet, "/api/runs/run-1"},
+		{http.MethodGet, "/api/runs/queue/run-1"},
 		{http.MethodPost, "/api/runs/cancel/run-1"},
 		{http.MethodGet, "/api/repos"},
 		{http.MethodGet, "/api/auth/me"},
@@ -287,7 +287,7 @@ func TestConnectionsCRUD(t *testing.T) {
 
 	// POST /api/connections — create
 	body, _ := json.Marshal(map[string]any{
-		"type":   "azure_storage",
+		"type":   "azure-storage",
 		"config": map[string]any{"account_name": "myaccount", "container_name": "results"},
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/connections", bytes.NewReader(body))
@@ -347,15 +347,19 @@ func TestRunTrigger_ValidRequest(t *testing.T) {
 
 	assert.Equal(t, http.StatusAccepted, rec.Code)
 
-	var run db.RunRequest
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &run))
-	assert.Equal(t, "testorg/testrepo", run.Repo)
-	assert.Equal(t, "gpt-4o", run.Model)
-	assert.Equal(t, int64(100), run.UserID)
+	var resp struct {
+		RunID  string `json:"runId"`
+		Status string `json:"status"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.NotEmpty(t, resp.RunID, "response must include runId")
+	assert.Equal(t, "queued", resp.Status)
 
 	// Verify persisted in store
 	runs, _ := store.ListRunRequests(context.Background(), 100, 10)
 	assert.Len(t, runs, 1)
+	assert.Equal(t, "testorg/testrepo", runs[0].Repo)
+	assert.Equal(t, "gpt-4o", runs[0].Model)
 }
 
 func TestRunTrigger_InvalidEvalSpec(t *testing.T) {
@@ -440,7 +444,11 @@ func TestRunQueue_UserIsolation(t *testing.T) {
 	mux.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	var runsA []db.RunRequest
+	var runsA []struct {
+		ID     string `json:"id"`
+		Repo   string `json:"repo"`
+		Status string `json:"status"`
+	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &runsA))
 	assert.Len(t, runsA, 1)
 	assert.Equal(t, "run-a", runsA[0].ID)
@@ -452,7 +460,11 @@ func TestRunQueue_UserIsolation(t *testing.T) {
 	mux.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	var runsB []db.RunRequest
+	var runsB []struct {
+		ID     string `json:"id"`
+		Repo   string `json:"repo"`
+		Status string `json:"status"`
+	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &runsB))
 	assert.Len(t, runsB, 1)
 	assert.Equal(t, "run-b", runsB[0].ID)
@@ -510,4 +522,71 @@ func TestLogout_Returns204(t *testing.T) {
 	mux.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusNoContent, rec.Code)
+}
+
+func TestGetRunFromQueue_ReturnsRun(t *testing.T) {
+	mux, ap, store := setupTestRouter()
+	user := &auth.User{GitHubID: 100, Login: "alice"}
+	addTestUser(ap, "tok", user)
+
+	store.runs["run-detail"] = &db.RunRequest{
+		ID:       "run-detail",
+		UserID:   100,
+		Repo:     "org/repo",
+		EvalSpec: "evals/test.yaml",
+		Model:    "gpt-4o",
+		Status:   db.Queued,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/runs/queue/run-detail", nil)
+	req.Header.Set("Authorization", "Bearer tok")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var got struct {
+		ID       string `json:"id"`
+		Repo     string `json:"repo"`
+		EvalSpec string `json:"evalSpec"`
+		Model    string `json:"model"`
+		Status   string `json:"status"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.Equal(t, "run-detail", got.ID)
+	assert.Equal(t, "org/repo", got.Repo)
+	assert.Equal(t, "evals/test.yaml", got.EvalSpec)
+	assert.Equal(t, "queued", got.Status)
+}
+
+func TestGetRunFromQueue_NotFound(t *testing.T) {
+	mux, ap, _ := setupTestRouter()
+	user := &auth.User{GitHubID: 100, Login: "alice"}
+	addTestUser(ap, "tok", user)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/runs/queue/nonexistent", nil)
+	req.Header.Set("Authorization", "Bearer tok")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestGetRunFromQueue_UserIsolation(t *testing.T) {
+	mux, ap, store := setupTestRouter()
+
+	userA := &auth.User{GitHubID: 100, Login: "alice"}
+	userB := &auth.User{GitHubID: 200, Login: "bob"}
+	addTestUser(ap, "tok-a", userA)
+	addTestUser(ap, "tok-b", userB)
+
+	store.runs["run-a-only"] = &db.RunRequest{ID: "run-a-only", UserID: 100, Repo: "a/repo", Status: db.Queued}
+
+	// User B cannot see user A's run
+	req := httptest.NewRequest(http.MethodGet, "/api/runs/queue/run-a-only", nil)
+	req.Header.Set("Authorization", "Bearer tok-b")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
 }

@@ -343,17 +343,19 @@ func (s *CosmosStore) CreateRunRequest(ctx context.Context, run *RunRequest) err
 	run.Status = Queued
 
 	doc := map[string]any{
-		"id":              run.ID,
-		"user_id":         strconv.FormatInt(run.UserID, 10),
-		"user_id_n":       run.UserID,
-		"repo":            run.Repo,
-		"eval_spec":       run.EvalSpec,
-		"model":           run.Model,
-		"workers":         run.Workers,
-		"status":          run.Status,
-		"adc_sandbox_ids": run.ADCSandboxIDs,
-		"created_at":      run.CreatedAt,
-		"completed_at":    run.CompletedAt,
+		"id":                  run.ID,
+		"user_id":             strconv.FormatInt(run.UserID, 10),
+		"user_id_n":           run.UserID,
+		"repo":                run.Repo,
+		"eval_spec":           run.EvalSpec,
+		"model":               run.Model,
+		"workers":             run.Workers,
+		"storage_destination": run.StorageDestination,
+		"status":              run.Status,
+		"error":               run.Error,
+		"adc_sandbox_ids":     run.ADCSandboxIDs,
+		"created_at":          run.CreatedAt,
+		"completed_at":        run.CompletedAt,
 	}
 
 	data, err := json.Marshal(doc)
@@ -371,17 +373,19 @@ func (s *CosmosStore) CreateRunRequest(ctx context.Context, run *RunRequest) err
 
 func (s *CosmosStore) UpdateRunRequest(ctx context.Context, run *RunRequest) error {
 	doc := map[string]any{
-		"id":              run.ID,
-		"user_id":         strconv.FormatInt(run.UserID, 10),
-		"user_id_n":       run.UserID,
-		"repo":            run.Repo,
-		"eval_spec":       run.EvalSpec,
-		"model":           run.Model,
-		"workers":         run.Workers,
-		"status":          run.Status,
-		"adc_sandbox_ids": run.ADCSandboxIDs,
-		"created_at":      run.CreatedAt,
-		"completed_at":    run.CompletedAt,
+		"id":                  run.ID,
+		"user_id":             strconv.FormatInt(run.UserID, 10),
+		"user_id_n":           run.UserID,
+		"repo":                run.Repo,
+		"eval_spec":           run.EvalSpec,
+		"model":               run.Model,
+		"workers":             run.Workers,
+		"storage_destination": run.StorageDestination,
+		"status":              run.Status,
+		"error":               run.Error,
+		"adc_sandbox_ids":     run.ADCSandboxIDs,
+		"created_at":          run.CreatedAt,
+		"completed_at":        run.CompletedAt,
 	}
 
 	data, err := json.Marshal(doc)
@@ -417,11 +421,11 @@ func (s *CosmosStore) ListRunRequests(ctx context.Context, userID int64, limit i
 			return nil, fmt.Errorf("querying run requests: %w", err)
 		}
 		for _, item := range page.Items {
-			var req RunRequest
-			if err := json.Unmarshal(item, &req); err != nil {
+			req, err := parseRunRequest(item, userID)
+			if err != nil {
 				return nil, fmt.Errorf("unmarshaling run request: %w", err)
 			}
-			requests = append(requests, &req)
+			requests = append(requests, req)
 			if limit > 0 && len(requests) >= limit {
 				return requests, nil
 			}
@@ -437,9 +441,52 @@ func (s *CosmosStore) GetRunRequest(ctx context.Context, userID int64, runID str
 		return nil, fmt.Errorf("reading run request %s: %w", runID, err)
 	}
 
+	return parseRunRequest(resp.Value, userID)
+}
+
+// parseRunRequest handles the string user_id stored in Cosmos. The document
+// stores user_id as a string (matching the partition key) and user_id_n as
+// the numeric int64. We unmarshal into a helper struct and set UserID from
+// the fallback to avoid json string→int64 mismatch.
+func parseRunRequest(data []byte, fallbackUserID int64) (*RunRequest, error) {
 	var req RunRequest
-	if err := json.Unmarshal(resp.Value, &req); err != nil {
-		return nil, fmt.Errorf("unmarshaling run request: %w", err)
+	if err := json.Unmarshal(data, &req); err != nil {
+		// UserID unmarshal fails because Cosmos stores it as a string.
+		// Parse everything else and set UserID from fallback.
+		type runNoUserID struct {
+			ID                 string     `json:"id"`
+			Repo               string     `json:"repo"`
+			EvalSpec           string     `json:"eval_spec"`
+			Model              string     `json:"model"`
+			Workers            int        `json:"workers"`
+			StorageDestination string     `json:"storage_destination"`
+			Status             RunStatus  `json:"status"`
+			Error              string     `json:"error,omitempty"`
+			ADCSandboxIDs      []string   `json:"adc_sandbox_ids"`
+			CreatedAt          time.Time  `json:"created_at"`
+			CompletedAt        *time.Time `json:"completed_at,omitempty"`
+		}
+		var raw runNoUserID
+		if err2 := json.Unmarshal(data, &raw); err2 != nil {
+			return nil, err2
+		}
+		req = RunRequest{
+			ID:                 raw.ID,
+			UserID:             fallbackUserID,
+			Repo:               raw.Repo,
+			EvalSpec:           raw.EvalSpec,
+			Model:              raw.Model,
+			Workers:            raw.Workers,
+			StorageDestination: raw.StorageDestination,
+			Status:             raw.Status,
+			Error:              raw.Error,
+			ADCSandboxIDs:      raw.ADCSandboxIDs,
+			CreatedAt:          raw.CreatedAt,
+			CompletedAt:        raw.CompletedAt,
+		}
+	}
+	if req.UserID == 0 {
+		req.UserID = fallbackUserID
 	}
 	return &req, nil
 }
