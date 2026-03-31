@@ -269,8 +269,10 @@ func testGitHubRepo(r *http.Request, config map[string]any) (bool, string) {
 
 // triggerRunRequest is the JSON body for POST /api/runs/trigger.
 type triggerRunRequest struct {
-	Repo     string `json:"repo"`      // "owner/repo"
-	EvalSpec string `json:"eval_spec"` // path to eval YAML within the repo
+	Owner    string `json:"owner"`    // repo owner (frontend sends separately)
+	Repo     string `json:"repo"`     // repo name or "owner/repo"
+	EvalPath string `json:"evalPath"` // path to eval YAML within the repo
+	EvalSpec string `json:"eval_spec"` // alias for evalPath
 	Model    string `json:"model"`
 	Workers  int    `json:"workers"`
 }
@@ -288,6 +290,13 @@ func handleTriggerRun(deps *Dependencies) http.HandlerFunc {
 		if err := readJSON(r, &req); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid request body")
 			return
+		}
+
+		if req.Owner != "" && !strings.Contains(req.Repo, "/") {
+			req.Repo = req.Owner + "/" + req.Repo
+		}
+		if req.EvalPath != "" && req.EvalSpec == "" {
+			req.EvalSpec = req.EvalPath
 		}
 
 		if req.Repo == "" {

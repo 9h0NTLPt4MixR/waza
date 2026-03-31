@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Play, ChevronRight, Loader2 } from "lucide-react";
+import { Play, ChevronRight, Loader2, RefreshCw } from "lucide-react";
 import { useRepos, useRepoEvals, useTriggerRun } from "../hooks/useApi";
 
 type Step = 1 | 2 | 3 | 4;
@@ -85,9 +85,20 @@ export default function NewRun() {
         {/* Step 1: Select Source */}
         {step === 1 && (
           <div className="space-y-4">
-            <h2 className="text-lg font-medium text-zinc-100">
-              Select Source Repository
-            </h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-medium text-zinc-100">
+                Select Source Repository
+              </h2>
+              <button
+                onClick={() => repos.refetch()}
+                disabled={repos.isFetching}
+                className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 transition-colors disabled:opacity-50"
+                title="Refresh repos"
+              >
+                <RefreshCw className={`h-3 w-3 ${repos.isFetching ? "animate-spin" : ""}`} />
+                Refresh
+              </button>
+            </div>
             <p className="text-sm text-zinc-400">
               Choose from your connected GitHub repos
             </p>
