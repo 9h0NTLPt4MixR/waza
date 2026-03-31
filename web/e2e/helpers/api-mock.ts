@@ -44,6 +44,20 @@ export async function mockAllAPIs(page: Page) {
     });
   });
 
+  // Results list — matches /api/results and /api/results?...
+  await page.route(/\/api\/results(\?|$)/, (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) }),
+  );
+
+  // Result detail — matches /api/results/{id}
+  await page.route(/\/api\/results\/(.+)/, (route) =>
+    route.fulfill({
+      status: 404,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "result not found" }),
+    }),
+  );
+
   // Runs list — matches /api/runs and /api/runs?sort=...&order=...
   await page.route(/\/api\/runs(\?|$)/, (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(RUNS) }),
@@ -69,5 +83,17 @@ export async function mockEmptyAPIs(page: Page) {
 
   await page.route(/\/api\/runs(\?|$)/, (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) }),
+  );
+
+  await page.route(/\/api\/results(\?|$)/, (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) }),
+  );
+
+  await page.route(/\/api\/results\/(.+)/, (route) =>
+    route.fulfill({
+      status: 404,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "result not found" }),
+    }),
   );
 }

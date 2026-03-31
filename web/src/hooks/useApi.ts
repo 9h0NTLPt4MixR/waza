@@ -3,6 +3,8 @@ import {
   fetchSummary,
   fetchRuns,
   fetchRunDetail,
+  fetchResults,
+  fetchResultDetail,
   fetchConnections,
   createConnection,
   testConnection,
@@ -115,6 +117,21 @@ export function useRunStatus(runId: string) {
     },
     enabled: !!runId,
     refetchInterval: 3_000,
+  });
+}
+
+export function useResults() {
+  return useQuery({
+    queryKey: ["results"],
+    queryFn: fetchResults,
+  });
+}
+
+export function useResultDetail(id: string) {
+  return useQuery({
+    queryKey: ["result", id],
+    queryFn: () => fetchResultDetail(id),
+    enabled: !!id,
   });
 }
 

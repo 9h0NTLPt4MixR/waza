@@ -55,6 +55,23 @@ export interface RunQueueItem {
   createdAt: string;
 }
 
+export interface ResultSummary {
+  id: string;
+  runId?: string;
+  spec: string;
+  model: string;
+  judgeModel?: string;
+  outcome: string;
+  passCount: number;
+  taskCount: number;
+  tokens: number;
+  cost: number;
+  duration: number;
+  timestamp: string;
+  weightedScore?: number;
+  source?: "cosmos";
+}
+
 // --- Existing types ---
 
 export interface SummaryResponse {
@@ -237,4 +254,14 @@ export async function cancelRun(id: string): Promise<void> {
     method: "POST",
   });
   if (!res.ok) throw new Error(`Failed to cancel run: ${res.status}`);
+}
+
+// --- Results API (Cosmos DB) ---
+
+export function fetchResults(): Promise<ResultSummary[]> {
+  return fetchJSON<ResultSummary[]>("/api/results");
+}
+
+export function fetchResultDetail(id: string): Promise<RunDetail> {
+  return fetchJSON<RunDetail>(`/api/results/${encodeURIComponent(id)}`);
 }

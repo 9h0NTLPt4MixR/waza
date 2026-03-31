@@ -1,5 +1,6 @@
 import { ArrowLeft, ExternalLink, Loader2, XCircle } from "lucide-react";
-import { useRunStatus } from "../hooks/useApi";
+import { useRunStatus, useResultDetail } from "../hooks/useApi";
+import { formatPercent } from "../lib/format";
 
 const STATUS_CONFIG: Record<
   string,
@@ -58,6 +59,8 @@ function formatTime(iso: string): string {
 
 export default function RunStatus({ id }: { id: string }) {
   const { data: run, isLoading, isError } = useRunStatus(id);
+  const isComplete = run?.status === "complete";
+  const { data: resultDetail } = useResultDetail(isComplete ? id : "");
 
   return (
     <div className="space-y-6">
@@ -228,6 +231,51 @@ export default function RunStatus({ id }: { id: string }) {
               )}
             </div>
           </div>
+
+          {/* Results summary (when complete + result data available) */}
+          {isComplete && resultDetail && (
+            <div className="rounded-lg border border-emerald-800/50 bg-emerald-500/5 p-6">
+              <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-emerald-400">
+                Results Summary
+              </h2>
+              <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm sm:grid-cols-4">
+                <div>
+                  <span className="block text-xs font-medium uppercase tracking-wider text-zinc-500">
+                    Pass Rate
+                  </span>
+                  <span className="text-lg font-semibold text-emerald-300">
+                    {resultDetail.taskCount > 0
+                      ? formatPercent(resultDetail.passCount / resultDetail.taskCount)
+                      : "—"}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-xs font-medium uppercase tracking-wider text-zinc-500">
+                    Tasks
+                  </span>
+                  <span className="text-lg font-semibold text-zinc-200">
+                    {resultDetail.passCount}/{resultDetail.taskCount}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-xs font-medium uppercase tracking-wider text-zinc-500">
+                    Tokens
+                  </span>
+                  <span className="text-lg font-semibold text-zinc-200">
+                    {resultDetail.tokens.toLocaleString()}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-xs font-medium uppercase tracking-wider text-zinc-500">
+                    Duration
+                  </span>
+                  <span className="text-lg font-semibold text-zinc-200">
+                    {resultDetail.duration}s
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Action buttons */}
           <div className="flex items-center gap-3">

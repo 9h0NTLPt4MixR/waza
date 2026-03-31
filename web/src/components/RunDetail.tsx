@@ -8,7 +8,7 @@ import {
   ChevronDown,
   Download,
 } from "lucide-react";
-import { useRunDetail } from "../hooks/useApi";
+import { useRunDetail, useResultDetail } from "../hooks/useApi";
 import type { TaskResult, GraderResult } from "../api/client";
 import {
   formatDuration,
@@ -196,7 +196,16 @@ function DetailSkeleton() {
 }
 
 export default function RunDetail({ id }: { id: string }) {
-  const { data, isLoading, isError, error, refetch } = useRunDetail(id);
+  const runQuery = useRunDetail(id);
+  const resultQuery = useResultDetail(id);
+
+  // Use local run data if available, fall back to Cosmos result
+  const data = runQuery.data ?? resultQuery.data ?? null;
+  const isLoading = runQuery.isLoading || (runQuery.isError && resultQuery.isLoading);
+  const isError = runQuery.isError && resultQuery.isError;
+  const error = runQuery.error ?? resultQuery.error;
+  const refetch = () => { void runQuery.refetch(); void resultQuery.refetch(); };
+
   const [activeTab, setActiveTab] = useState<"tasks" | "trajectory">("tasks");
   const [trajectoryTask, setTrajectoryTask] = useState<TaskResult | null>(null);
 
@@ -214,7 +223,7 @@ export default function RunDetail({ id }: { id: string }) {
             {error instanceof Error ? error.message : "Failed to load run"}
           </p>
           <button
-            onClick={() => void refetch()}
+            onClick={() => refetch()}
             className="mt-3 rounded bg-zinc-700 px-4 py-2 text-sm text-zinc-100"
           >
             Retry
