@@ -98,9 +98,15 @@ export default function NewRun() {
               </div>
             )}
             {repos.isError && (
-              <p className="text-sm text-red-400">
-                Failed to load repos. Check your connections in Settings.
-              </p>
+              <div className="rounded border border-red-800 bg-red-900/30 p-4 text-sm text-red-300">
+                <p>Failed to load repos.</p>
+                <a
+                  href="#/settings"
+                  className="mt-2 inline-block text-blue-400 hover:text-blue-300 underline"
+                >
+                  → Check your connections in Settings
+                </a>
+              </div>
             )}
             {repos.data && repos.data.length === 0 && (
               <div className="rounded border border-zinc-700 bg-zinc-800/50 p-4 text-sm text-zinc-400">
