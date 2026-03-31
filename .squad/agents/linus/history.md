@@ -161,3 +161,17 @@ All code roles now use `claude-opus-4.6`. Docs/Scribe/diversity use `gemini-3-pr
 - **Key learning:** Cosmos stores `user_id` as a string (to match partition key) but `db.RunRequest.UserID` is `int64`. Direct `json.Unmarshal` fails silently (zero value). The `parseRunRequest` fallback pattern (try unmarshal, on failure re-parse without the mismatched field and use fallback) is the same pattern used by `parseConnection`. Always check that Cosmos doc maps include ALL struct fields.
 - **Key learning:** Integration tests in `handlers_test.go` used underscore connection types (`azure_storage`, `github_repo`) while the `db` constants use hyphens (`azure-storage`, `github-repo`). Test bugs are invisible when tests are green — always check that test assertions are actually exercising the right code paths.
 
+
+### Wired Eval Execution into Run Trigger
+- **Date:** 2026-03-31
+- **Branch:** `feature/waza-platform`
+- **Files changed:** `internal/platform/execution/runner.go` (new), `internal/platform/execution/runner_test.go` (new), `internal/platform/api/handlers.go`
+- **What:** Connected the trigger handler to actual eval execution via local subprocess:
+  1. Created `internal/platform/execution` package with `RunEval()` — clones repo, finds eval spec, runs `waza run` as subprocess, captures results JSON, saves to Cosmos via `Store.SaveResult()`.
+  2. Replaced the stub `dispatchToADC()` goroutine with `dispatchRun()` that calls `execution.RunEval` with the user's GitHub token from auth context.
+  3. Full status lifecycle: queued → running → complete/failed. `CompletedAt` timestamp set on terminal states.
+  4. Safety: `defer recover()` in both `RunEval` and `dispatchRun`, context timeout (5 min default), token sanitization in error messages.
+  5. Tests cover clone failure, context cancellation, token sanitization, truncation, and markFailed.
+- **Key learning:** The waza binary is available in the container (it's the same binary serving the platform). Running `waza run` as a subprocess is the simplest path to end-to-end execution. ADC sandbox execution can replace the subprocess call later by swapping the `os/exec` call for ADC SDK sandbox creation — the handler wiring stays the same.
+- **Key learning:** GitHub tokens must NEVER appear in error messages or logs. Use `strings.ReplaceAll` to scrub before logging. The `sanitizeToken` helper handles this.
+- **Key learning:** `os.MkdirTemp` creates workspace dirs for cloning; `defer os.RemoveAll` ensures cleanup even on failure. Each run gets an isolated workspace.

@@ -15,6 +15,7 @@ import (
 
 	"github.com/microsoft/waza/internal/platform/auth"
 	"github.com/microsoft/waza/internal/platform/db"
+	"github.com/microsoft/waza/internal/platform/execution"
 )
 
 // maxRequestBody is the maximum body size accepted by mutation endpoints.
@@ -380,15 +381,9 @@ func handleTriggerRun(deps *Dependencies) http.HandlerFunc {
 			return
 		}
 
-		// Dispatch to ADC asynchronously if engine is configured.
-		if deps.ADCEngine != nil {
-			go dispatchToADC(deps, run)
-		}
-
-		// TODO(linus): After ADC execution completes, save the EvaluationOutcome
-		// to Cosmos via deps.Store.SaveResult(ctx, user.GitHubID, run.ID, resultJSON).
-		// This ensures results are always persisted even without BYOS Azure Storage.
-		// The actual save will be wired in dispatchToADC once ADC returns results.
+		// Dispatch execution asynchronously. Uses local subprocess for now;
+		// can be swapped to ADC sandbox later without changing this wiring.
+		go dispatchRun(deps, run, user.GitHubToken)
 
 		writeJSON(w, http.StatusAccepted, triggerRunResponse{
 			RunID:  run.ID,
@@ -397,30 +392,35 @@ func handleTriggerRun(deps *Dependencies) http.HandlerFunc {
 	}
 }
 
-// dispatchToADC runs the eval in an ADC sandbox. This runs in a goroutine.
-func dispatchToADC(deps *Dependencies, run *db.RunRequest) {
-	// Mark as running.
-	run.Status = db.Running
-	if err := deps.Store.UpdateRunRequest(context.Background(), run); err != nil {
-		slog.Error("dispatchToADC: failed to update status to running", "error", err, "run", run.ID)
-		return
+// dispatchRun executes the eval in a background goroutine. It wraps
+// execution.RunEval with panic recovery so a failed run never crashes
+// the server process.
+func dispatchRun(deps *Dependencies, run *db.RunRequest, githubToken string) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("dispatchRun: recovered panic", "run", run.ID, "panic", r)
+			now := time.Now()
+			run.Status = db.Failed
+			run.Error = fmt.Sprintf("internal panic: %v", r)
+			run.CompletedAt = &now
+			_ = deps.Store.UpdateRunRequest(context.Background(), run)
+		}
+	}()
+
+	cfg := execution.RunConfig{
+		Store:       deps.Store,
+		Run:         run,
+		GitHubToken: githubToken,
+		Timeout:     execution.DefaultTimeout,
 	}
 
-	slog.Info("dispatching run to ADC",
-		"run", run.ID,
-		"repo", run.Repo,
-		"storageDestination", run.StorageDestination,
-	)
-
-	// TODO: When ADC SDK is wired in go.mod, call deps.ADCEngine.Execute here.
-	// On success, persist the EvaluationOutcome to Cosmos:
-	//
-	//   resultJSON, _ := json.Marshal(outcome)
-	//   if err := deps.Store.SaveResult(context.Background(), run.UserID, run.ID, resultJSON); err != nil {
-	//       slog.Error("dispatchToADC: failed to save result to Cosmos", "error", err, "run", run.ID)
-	//   }
-	//
-	// This guarantees results are stored in Cosmos even if the user has no BYOS storage.
+	if err := execution.RunEval(context.Background(), cfg); err != nil {
+		slog.Error("dispatchRun: eval execution failed",
+			"run", run.ID,
+			"error", err,
+		)
+		// RunEval already marked the run as failed; nothing more to do.
+	}
 }
 
 // handleListRuns returns the authenticated user's run queue.
