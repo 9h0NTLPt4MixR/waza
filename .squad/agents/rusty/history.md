@@ -219,3 +219,40 @@ All code roles now use `claude-opus-4.6`. Docs/Scribe/diversity use `gemini-3-pr
 - Storage destination is stored on the RunRequest, not resolved at dispatch time — this makes the intent auditable and replayable.
 
 **Build verified:** `go vet` clean, TypeScript + Vite production build clean. Deployed to Azure Container Apps (200 OK).
+
+### Run Status & Queue UI (feature/waza-platform)
+
+**Date:** 2026-07 | **Branch:** `feature/waza-platform`
+
+**What:** Fixed the "black hole" UX after clicking "Run Eval" — users now get immediate feedback via a status page and can monitor all runs in a queue view.
+
+**Changes across 8 files (488 insertions):**
+
+1. **RunStatus.tsx** — New page at `#/runs/status/{runId}`. Polls `/api/runs/queue` every 3s via `useRunStatus` hook. Status card with run details + color-coded badges (🟡 Queued, 🔵 Running, ✅ Complete, ❌ Failed, ⚪ Cancelled). Timeline/log area. "View Results" link when complete.
+2. **RunQueue.tsx** — New page at `#/runs/queue`. Auto-refreshing table (10s) with cancel/results actions. Click row → RunStatus.
+3. **NewRun.tsx** — Redirect changed from `#/live?run={runId}` to `#/runs/status/{runId}` (the key UX fix).
+4. **App.tsx** — Two new routes. `/runs/status/:id` must match before `/runs/:id`.
+5. **Layout.tsx** — "Queue" nav link with `ListOrdered` icon.
+6. **useApi.ts** — `useRunStatus(runId)` hook (3s polling), `useRunQueue` updated to 10s.
+7. **client.ts** — `RunQueueItem` extended with `repo`, `storageDestination`, `error`, union status type.
+
+**Build verified:** TypeScript clean, Vite production build clean. `go vet` clean. Deployed to Azure Container Apps (200 OK).
+
+### Cosmos Results Integration (feature/waza-platform)
+
+**Date:** 2026-07 | **Branch:** `feature/waza-platform`
+
+**What:** Wired the dashboard to display Cosmos DB results alongside local file results. Five deliverables across 7 files (186 insertions):
+
+1. **API Client** (`web/src/api/client.ts`) — Added `ResultSummary` type with `runId` and `source` fields. Added `fetchResults()` (list) and `fetchResultDetail()` (single) functions hitting `/api/results` and `/api/results/{id}`.
+2. **React Query Hooks** (`web/src/hooks/useApi.ts`) — `useResults()` for the results list, `useResultDetail(id)` for individual result detail.
+3. **Dashboard** (`web/src/components/Dashboard.tsx`) — Merges `/api/runs` (local) and `/api/results` (Cosmos) into a single sorted table. Deduplication by ID — Cosmos wins on conflict (it's the authoritative completed result). Shows loading skeleton only when both sources are loading.
+4. **RunDetail** (`web/src/components/RunDetail.tsx`) — Dual-source fallback: tries `/api/runs/{id}` first, falls back to `/api/results/{id}`. Users can click any result row and get the full detail view regardless of source.
+5. **RunStatus** (`web/src/components/RunStatus.tsx`) — When a run completes, fetches result detail and shows a green summary card with pass rate, task count, tokens, and duration. "View Results" button was already present.
+6. **E2e Mocks** (`web/e2e/helpers/api-mock.ts`) — Added `/api/results` and `/api/results/{id}` mocks to both `mockAllAPIs` and `mockEmptyAPIs`. All 52 Playwright tests pass.
+
+**Key decisions:**
+- Cosmos results take precedence over local runs in merge — Cosmos is the authoritative store per team decision.
+- Dashboard shows unified table (not separate tabs) — simpler UX, users don't need to know the storage backend.
+- RunDetail falls back gracefully — no routing changes needed, existing `#/runs/{id}` route handles both sources.
+- RunStatus summary only appears when result data loads — no broken UI if results API is slow.
