@@ -615,3 +615,44 @@ There was no way to override the executor — it was purely determined by the ev
 - Future: frontend could expose an executor dropdown if needed
 - The `db.RunRequest.Executor` field is persisted to Cosmos, so we can audit which executor was used per run
 
+## 2026-04-01: Use debian:bookworm-slim for Dockerfile.platform runtime stage
+
+**Author:** Linus (Backend Developer)  
+**Date:** 2026-04-01  
+**Status:** Accepted & Deployed
+
+## Context
+
+The Copilot SDK CLI binary is embedded in the waza Go binary via `go:embed`. At runtime, it gets extracted to `/root/.cache/copilot-sdk/copilot_1.0.2`. This extracted binary is **dynamically linked against glibc** (ELF interpreter: `/lib64/ld-linux-x86-64.so.2`).
+
+The previous runtime base image was `alpine:3.21`, which uses **musl libc**. When waza tried to `fork/exec` the extracted Copilot CLI, it failed with `no such file or directory` because the glibc dynamic linker doesn't exist on Alpine.
+
+## Decision
+
+Switch the runtime stage of `Dockerfile.platform` from `alpine:3.21` to `debian:bookworm-slim`.
+
+- The **builder stage stays Alpine** (`golang:1.26-alpine`) — it only compiles the waza binary with `CGO_ENABLED=0`, producing a fully static binary.
+- The **runtime stage uses Debian** — provides glibc so the extracted Copilot SDK CLI can execute.
+- Package installation changed from `apk add` to `apt-get install` with `--no-install-recommends` and cleanup of `/var/lib/apt/lists/*`.
+
+## Trade-offs
+
+- **Image size:** ~30-50MB larger than Alpine. Acceptable given the platform runs on Container Apps with persistent storage.
+- **Security surface:** Debian has a slightly larger attack surface than Alpine. Mitigated by using `bookworm-slim` (minimal package set) and `--no-install-recommends`.
+- **Alternative considered:** Installing glibc compatibility packages on Alpine. Rejected as fragile and harder to maintain.
+
+## Applies to
+
+- `Dockerfile.platform` only
+- Does NOT affect `Dockerfile` (local dev) or `Dockerfile.adc-runner` (sandbox images)
+
+## 2026-04-01: User directive — Deploy anytime we make changes
+
+**By:** Shayne Boyer (via Copilot)  
+**Date:** 2026-04-01T19:04  
+**Status:** Captured for team memory
+
+**What:** Deploy anytime we make changes. Use local Docker build for now (not ACR remote builds).
+
+**Why:** User request — captured for team memory. Docker Hub rate limits break ACR remote builds. Local build + push is the reliable path.
+

@@ -188,3 +188,10 @@ All code roles now use `claude-opus-4.6`. Docs/Scribe/diversity use `gemini-3-pr
   4. In `db.go`, added `Executor` field to `RunRequest` struct with `json:"executor,omitempty"`.
 - **Key learning:** The override chain for CLI flags follows a consistent pattern: package-level var → cobra flag registration → apply in `runCommandForSpec` after spec load but before engine creation. Always place new overrides near existing ones for readability.
 - **Key learning:** Platform subprocess always defaults to `copilot-sdk` — never trust eval YAML from external repos to specify the right executor. The empty-string check in `runner.go` ensures backward compatibility if `RunConfig.Executor` is not set.
+
+### Dockerfile.platform — Switch runtime to glibc (debian:bookworm-slim)
+- **Date:** 2026-04-01
+- **Branch:** `feature/waza-platform`
+- **Files changed:** `Dockerfile.platform`
+- **What:** The embedded Copilot SDK CLI binary (`copilot_1.0.2`) is dynamically linked against glibc. Alpine uses musl libc, so `fork/exec` failed with `no such file or directory` when waza extracted and ran the binary at `/root/.cache/copilot-sdk/copilot_1.0.2`. Switched runtime stage from `alpine:3.21` to `debian:bookworm-slim`. Builder stage stays Alpine (waza itself is `CGO_ENABLED=0`, fully static).
+- **Key learning:** `no such file or directory` when exec'ing a binary in a container almost always means the dynamic linker is missing — check `readelf -l` or `file` output for the interpreter path. Alpine/musl can't run glibc-linked binaries without compatibility shims. Switching to a glibc-based slim image is the cleanest fix.
