@@ -588,3 +588,30 @@ Updated `mockAllAPIs` and `mockEmptyAPIs` in e2e helpers to mock `/api/auth/me` 
 Results should never be lost due to missing storage configuration.
 
 **Why:** User request — captured for team memory. Ensures data persistence and reduces friction for users without external storage configured.
+# Decision: CLI `--executor` Flag and Platform Default
+
+**Author:** Linus (Backend Developer)
+**Date:** 2026-04-01
+**Status:** Implemented
+
+## Context
+
+The platform (PaaS) runs eval specs from external repositories (e.g., `microsoft/GitHub-Copilot-for-Azure`). Those repos typically have `executor: mock` in their eval YAML for local testing. When the platform runs these evals, it needs to use `copilot-sdk` so the LLM is actually invoked via the Copilot SDK.
+
+There was no way to override the executor — it was purely determined by the eval YAML's `config.executor` field.
+
+## Decision
+
+1. **Added `--executor` CLI flag** to `waza run` that overrides the eval YAML's engine type. Valid values: `mock`, `copilot-sdk`. If not provided, behavior is unchanged (uses eval YAML value).
+
+2. **Platform always defaults to `copilot-sdk`** — `RunConfig.Executor` defaults to `copilot-sdk` when empty in `runner.go`. The platform subprocess always receives `--executor copilot-sdk` unless explicitly overridden.
+
+3. **API trigger request accepts `executor`** — the `triggerRunRequest` struct now includes an optional `executor` field (defaults to `copilot-sdk`). This flows through `db.RunRequest` → `RunConfig` → subprocess args.
+
+## Consequences
+
+- External repos with `executor: mock` will correctly use `copilot-sdk` on the platform
+- Local `waza run` behavior is unchanged (no flag = use YAML)
+- Future: frontend could expose an executor dropdown if needed
+- The `db.RunRequest.Executor` field is persisted to Cosmos, so we can audit which executor was used per run
+

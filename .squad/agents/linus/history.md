@@ -175,3 +175,16 @@ All code roles now use `claude-opus-4.6`. Docs/Scribe/diversity use `gemini-3-pr
 - **Key learning:** The waza binary is available in the container (it's the same binary serving the platform). Running `waza run` as a subprocess is the simplest path to end-to-end execution. ADC sandbox execution can replace the subprocess call later by swapping the `os/exec` call for ADC SDK sandbox creation — the handler wiring stays the same.
 - **Key learning:** GitHub tokens must NEVER appear in error messages or logs. Use `strings.ReplaceAll` to scrub before logging. The `sanitizeToken` helper handles this.
 - **Key learning:** `os.MkdirTemp` creates workspace dirs for cloning; `defer os.RemoveAll` ensures cleanup even on failure. Each run gets an isolated workspace.
+
+
+### Added `--executor` CLI Flag and Platform Executor Override
+- **Date:** 2026-04-01
+- **Branch:** `feature/waza-platform`
+- **Files changed:** `cmd/waza/cmd_run.go`, `internal/platform/execution/runner.go`, `internal/platform/api/handlers.go`, `internal/platform/db/db.go`
+- **What:** Added `--executor` flag to `waza run` so the platform can override eval YAML's `config.executor` field:
+  1. Added `executorOverride` package-level var and `--executor` cobra flag in `cmd_run.go`. Override applied after spec load, before engine factory switch — same pattern as `--model`, `--parallel`, `--judge-model`.
+  2. In `runner.go`, `RunConfig` gained an `Executor` field. `RunEval` defaults to `copilot-sdk` if empty, and always passes `--executor <value>` in subprocess args. This ensures external repos with `executor: mock` actually call the LLM on the platform.
+  3. In `handlers.go`, added `Executor` field to `triggerRunRequest` (defaults to `copilot-sdk`), `runQueueItem`, and `toRunQueueItem`. Wired through `db.RunRequest.Executor` → `dispatchRun` → `RunConfig.Executor`.
+  4. In `db.go`, added `Executor` field to `RunRequest` struct with `json:"executor,omitempty"`.
+- **Key learning:** The override chain for CLI flags follows a consistent pattern: package-level var → cobra flag registration → apply in `runCommandForSpec` after spec load but before engine creation. Always place new overrides near existing ones for readability.
+- **Key learning:** Platform subprocess always defaults to `copilot-sdk` — never trust eval YAML from external repos to specify the right executor. The empty-string check in `runner.go` ensures backward compatibility if `RunConfig.Executor` is not set.
