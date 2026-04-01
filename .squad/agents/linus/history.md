@@ -195,3 +195,10 @@ All code roles now use `claude-opus-4.6`. Docs/Scribe/diversity use `gemini-3-pr
 - **Files changed:** `Dockerfile.platform`
 - **What:** The embedded Copilot SDK CLI binary (`copilot_1.0.2`) is dynamically linked against glibc. Alpine uses musl libc, so `fork/exec` failed with `no such file or directory` when waza extracted and ran the binary at `/root/.cache/copilot-sdk/copilot_1.0.2`. Switched runtime stage from `alpine:3.21` to `debian:bookworm-slim`. Builder stage stays Alpine (waza itself is `CGO_ENABLED=0`, fully static).
 - **Key learning:** `no such file or directory` when exec'ing a binary in a container almost always means the dynamic linker is missing — check `readelf -l` or `file` output for the interpreter path. Alpine/musl can't run glibc-linked binaries without compatibility shims. Switching to a glibc-based slim image is the cleanest fix.
+
+### Rerun API Endpoint
+- **Date:** 2026-04-01
+- **Branch:** `feature/waza-platform`
+- **Files changed:** `internal/platform/api/handlers.go`, `internal/platform/api/routes.go`
+- **What:** Added `POST /api/runs/rerun/{id}` endpoint that clones config from an existing run (repo, evalSpec, model, executor, workers, storageDestination) into a new queued run with a fresh ID and timestamp. Dispatches via the same `dispatchRun` goroutine as `handleTriggerRun`. Returns `201 Created` with `{runId, status}`.
+- **Key learning:** Go's `net/http` ServeMux panics when two patterns like `POST /api/runs/{id}/rerun` and `POST /api/runs/cancel/{id}` both have wildcards in overlapping positions — they're ambiguous for paths like `/api/runs/cancel/rerun`. Solution: use `POST /api/runs/rerun/{id}` (action-first) to match the existing `cancel/{id}` convention. All action-scoped run routes should follow the `POST /api/runs/{action}/{id}` pattern.

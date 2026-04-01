@@ -256,3 +256,21 @@ All code roles now use `claude-opus-4.6`. Docs/Scribe/diversity use `gemini-3-pr
 - Dashboard shows unified table (not separate tabs) — simpler UX, users don't need to know the storage backend.
 - RunDetail falls back gracefully — no routing changes needed, existing `#/runs/{id}` route handles both sources.
 - RunStatus summary only appears when result data loads — no broken UI if results API is slow.
+
+### Re-Run Button on Run Detail Page (feature/waza-platform)
+
+**Date:** 2026-07 | **Branch:** `feature/waza-platform`
+
+**What:** Added a "Re-Run" button to the run detail page header that creates a new run with the same configuration as the current run. Three files changed (API client, hooks, RunDetail component).
+
+1. **API Client** (`web/src/api/client.ts`) — Added `rerunRun(runId)` function calling `POST /api/runs/{id}/rerun`. Returns `{ runId, status }`. Uses `credentials: "include"` for auth.
+2. **React Query Hook** (`web/src/hooks/useApi.ts`) — Added `useRerunRun()` mutation hook. On success, invalidates `runs` and `runQueue` queries so lists refresh.
+3. **RunDetail** (`web/src/components/RunDetail.tsx`) — Blue "Re-Run" button in header next to Export CSV. Only visible on completed runs (outcome starts with pass/fail/error). Shows spinner during API call. On success, navigates to `#/runs/{newRunId}`. Inline error banner below header on failure.
+
+**Key decisions:**
+- Button only on completed runs — checking `outcome` prefix rather than queue status since RunDetail data doesn't carry queue status.
+- Skipped RunsTable rerun action — table has no actions column, just clickable rows. Adding an actions column would be a larger change. Users can rerun from the detail page.
+- Blue button (bg-blue-600) to visually distinguish the action from the neutral Export CSV button — rerun is a primary action.
+- Inline error display (red banner) instead of toast — no toast system exists in the codebase yet.
+
+**Build verified:** TypeScript clean, Vite production build clean.

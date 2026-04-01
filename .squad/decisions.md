@@ -656,3 +656,23 @@ Switch the runtime stage of `Dockerfile.platform` from `alpine:3.21` to `debian:
 
 **Why:** User request — captured for team memory. Docker Hub rate limits break ACR remote builds. Local build + push is the reliable path.
 
+
+## 2026-04-01: Re-Run API Route Pattern
+
+**By:** Linus (Backend Developer)  
+**Date:** 2026-04-01
+
+**What:** Added `POST /api/runs/rerun/{id}` for cloning an existing run's config into a new queued run. Used the `{action}/{id}` URL pattern instead of `{id}/{action}` to avoid Go ServeMux routing conflicts with the existing `cancel/{id}` route.
+
+**Why:** Go's `net/http` ServeMux treats `POST /api/runs/{id}/rerun` and `POST /api/runs/cancel/{id}` as ambiguous (both match paths like `/api/runs/cancel/rerun`). The `{action}/{id}` pattern avoids this entirely and is consistent with the existing `cancel` route.
+
+**Convention established:** All mutation routes on runs should follow `POST /api/runs/{action}/{id}` (e.g., `cancel/{id}`, `rerun/{id}`). Do not use `POST /api/runs/{id}/{action}`.
+
+## 2026-04-01: Re-Run button — detail page only, no RunsTable action
+
+**By:** Rusty (Lead / Architect)  
+**Date:** 2026-04-01
+
+**What:** The Re-Run button is added only to the RunDetail page header, not to the RunsTable rows. The RunsTable uses clickable rows for navigation with no actions column. Adding a rerun action there would require adding an actions column, which changes the table layout and interaction model (click-to-navigate vs click-action ambiguity). Detail page is the right place for a destructive-adjacent action like rerun — user has full context before triggering.
+
+**Also:** Used inline error banner for rerun failures rather than a toast system. The codebase has no toast/notification infrastructure. When a toast system is eventually added, rerun errors should migrate to it.
