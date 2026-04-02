@@ -121,3 +121,31 @@ func TestDefaultCPU(t *testing.T) {
 func TestDefaultSandboxTimeout(t *testing.T) {
 	assert.Equal(t, 30*time.Minute, adc.DefaultSandboxTimeout)
 }
+
+// ---------------------------------------------------------------------------
+// Tests – Batch sandbox support
+// ---------------------------------------------------------------------------
+
+func TestADCConfig_CanAllocate_BatchSizes(t *testing.T) {
+	cfg := adc.ADCConfig{MaxSandboxes: 10}
+
+	// Batch of 5 with 0 active → OK
+	assert.True(t, cfg.CanAllocate(0, 5))
+
+	// Batch of 10 with 0 active → OK (at limit)
+	assert.True(t, cfg.CanAllocate(0, 10))
+
+	// Batch of 11 with 0 active → exceeds max
+	assert.False(t, cfg.CanAllocate(0, 11))
+
+	// Batch of 5 with 6 active → exceeds max
+	assert.False(t, cfg.CanAllocate(6, 5))
+
+	// Batch of 3 with 7 active → at limit, OK
+	assert.True(t, cfg.CanAllocate(7, 3))
+}
+
+func TestMaxSandboxesPerUser_Constant(t *testing.T) {
+	// MaxSandboxesPerUser is the hard cap agreed in platform design.
+	assert.Equal(t, 10, adc.MaxSandboxesPerUser)
+}

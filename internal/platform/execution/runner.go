@@ -16,10 +16,14 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
+	adcsdk "github.com/coreai-microsoft/adc-sdk-go"
 	"github.com/microsoft/waza/internal/platform/adc"
 	"github.com/microsoft/waza/internal/platform/db"
+	"golang.org/x/sync/errgroup"
+	"gopkg.in/yaml.v3"
 )
 
 // DefaultTimeout is the maximum wall-clock time for a single eval run.
@@ -52,9 +56,20 @@ func RunEval(ctx context.Context, cfg RunConfig) (retErr error) {
 	return runLocal(ctx, cfg)
 }
 
-// runViaADC creates an ADC sandbox, clones the repo inside it, runs waza,
-// reads results.json, saves to Cosmos, and deletes the sandbox.
+// runViaADC creates ADC sandbox(es), clones the repo inside, runs waza,
+// reads results.json, saves to Cosmos, and deletes the sandbox(es).
+//
+// When RunConfig.Run.Workers > 1, it creates multiple sandboxes via the
+// batch API and distributes tasks across them for parallel execution.
 func runViaADC(ctx context.Context, cfg RunConfig) (retErr error) {
+	if cfg.Run.Workers > 1 {
+		return runViaADCParallel(ctx, cfg)
+	}
+	return runViaADCSingle(ctx, cfg)
+}
+
+// runViaADCSingle is the original single-sandbox ADC execution path.
+func runViaADCSingle(ctx context.Context, cfg RunConfig) (retErr error) {
 	run := cfg.Run
 	logger := slog.With("run", run.ID, "repo", run.Repo, "eval", run.EvalSpec, "mode", "adc")
 
@@ -385,6 +400,609 @@ func runLocal(ctx context.Context, cfg RunConfig) (retErr error) {
 		"duration", time.Since(run.CreatedAt).Round(time.Second),
 	)
 	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Parallel ADC execution — multiple sandboxes with task sharding
+// ---------------------------------------------------------------------------
+
+// sandboxResult holds the results from a single sandbox worker.
+type sandboxResult struct {
+	SandboxID  string
+	ResultJSON json.RawMessage
+	LogTail    string
+	Err        error
+}
+
+// runViaADCParallel creates N sandboxes via the batch API, distributes tasks
+// across them, runs waza in each concurrently, merges results, and saves.
+func runViaADCParallel(ctx context.Context, cfg RunConfig) (retErr error) {
+	run := cfg.Run
+	workers := run.Workers
+	logger := slog.With("run", run.ID, "repo", run.Repo, "eval", run.EvalSpec, "mode", "adc-parallel", "workers", workers)
+
+	defer func() {
+		if r := recover(); r != nil {
+			retErr = fmt.Errorf("panic during parallel ADC eval: %v", r)
+			logger.Error("recovered panic in runViaADCParallel", "panic", r)
+			markFailed(cfg.Store, run, retErr.Error())
+		}
+	}()
+
+	if cfg.Timeout == 0 {
+		cfg.Timeout = DefaultTimeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, cfg.Timeout)
+	defer cancel()
+
+	// 1. Mark running.
+	run.Status = db.Running
+	if err := cfg.Store.UpdateRunRequest(ctx, run); err != nil {
+		logger.Error("failed to update status to running", "error", err)
+		return fmt.Errorf("update run status: %w", err)
+	}
+	logger.Info("parallel ADC run started")
+
+	// 2. Create batch sandboxes.
+	env := map[string]string{
+		"GITHUB_TOKEN": cfg.GitHubToken,
+	}
+
+	// Clamp workers to MaxSandboxesPerUser.
+	if workers > adc.MaxSandboxesPerUser {
+		workers = adc.MaxSandboxesPerUser
+		logger.Warn("clamped workers to max", "max", adc.MaxSandboxesPerUser)
+	}
+
+	sandboxes, err := cfg.ADCEngine.CreateBatchSandboxes(ctx, workers, cfg.GitHubToken, env)
+	if err != nil {
+		msg := fmt.Sprintf("ADC batch sandbox creation failed: %v", err)
+		logger.Error(msg, "error", err)
+		markFailed(cfg.Store, run, msg)
+		return fmt.Errorf("adc batch: %w", err)
+	}
+	defer func() {
+		if delErr := cfg.ADCEngine.DeleteBatchSandboxes(ctx, sandboxes); delErr != nil {
+			logger.Error("failed to delete ADC sandboxes", "error", delErr)
+		}
+	}()
+
+	// Track all sandbox IDs on the run for UI visibility.
+	for _, sb := range sandboxes {
+		run.ADCSandboxIDs = append(run.ADCSandboxIDs, sb.ID())
+	}
+	if err := cfg.Store.UpdateRunRequest(ctx, run); err != nil {
+		logger.Warn("failed to persist sandbox IDs", "error", err)
+	}
+	logger.Info("batch sandboxes created", "count", len(sandboxes))
+
+	// Actual worker count may be less than requested if some failed.
+	actualWorkers := len(sandboxes)
+
+	// 3. Clone repo in ALL sandboxes concurrently.
+	cloneCmd := fmt.Sprintf("git clone --depth=1 https://x-access-token:%s@github.com/%s.git /workspace/repo", cfg.GitHubToken, run.Repo)
+
+	g, gCtx := errgroup.WithContext(ctx)
+	for i, sb := range sandboxes {
+		g.Go(func() error {
+			result, err := sb.ExecuteShellCommand(gCtx, cloneCmd, "", nil, "/workspace")
+			if err != nil || (result != nil && result.ExitCode != 0) {
+				stderr := ""
+				if result != nil {
+					stderr = result.Stderr
+				}
+				return fmt.Errorf("sandbox %d (%s): git clone failed: %s", i, sb.ID(), sanitizeToken(stderr, cfg.GitHubToken))
+			}
+			logger.Debug("repo cloned in sandbox", "sandbox", sb.ID(), "worker", i)
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		msg := fmt.Sprintf("parallel clone failed: %v", err)
+		logger.Error(msg)
+		markFailed(cfg.Store, run, truncate(msg, 500))
+		return fmt.Errorf("adc parallel clone: %w", err)
+	}
+	logger.Info("repo cloned in all sandboxes")
+
+	// 4. Discover task files from sandbox 0 by reading the eval spec.
+	taskFiles, err := discoverTaskFiles(ctx, sandboxes[0], run.EvalSpec, logger)
+	if err != nil {
+		msg := fmt.Sprintf("task discovery failed: %v", err)
+		logger.Error(msg)
+		markFailed(cfg.Store, run, truncate(msg, 500))
+		return fmt.Errorf("adc task discovery: %w", err)
+	}
+	logger.Info("discovered tasks", "count", len(taskFiles))
+
+	// Clamp workers to task count — no point having more sandboxes than tasks.
+	if actualWorkers > len(taskFiles) {
+		actualWorkers = len(taskFiles)
+		sandboxes = sandboxes[:actualWorkers]
+		logger.Info("reduced workers to match task count", "workers", actualWorkers)
+	}
+
+	// 5. Distribute tasks round-robin and create shard evals.
+	shards := distributeTaskFiles(taskFiles, actualWorkers)
+
+	// Read the original eval YAML for shard creation.
+	evalYAML, err := readSandboxFile(ctx, sandboxes[0], "/workspace/repo/"+run.EvalSpec)
+	if err != nil {
+		msg := fmt.Sprintf("failed to read eval spec: %v", err)
+		logger.Error(msg)
+		markFailed(cfg.Store, run, truncate(msg, 500))
+		return fmt.Errorf("adc read eval: %w", err)
+	}
+
+	executor := cfg.Executor
+	if executor == "" {
+		executor = "copilot-sdk"
+	}
+
+	// 6. Write shard evals and run waza in each sandbox concurrently.
+	results := make([]sandboxResult, actualWorkers)
+	var wg sync.WaitGroup
+
+	for i, sb := range sandboxes {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			results[i] = runSandboxShard(ctx, sb, runShardConfig{
+				workerIdx:   i,
+				evalYAML:    evalYAML,
+				taskFiles:   shards[i],
+				evalSpec:    run.EvalSpec,
+				model:       run.Model,
+				executor:    executor,
+				githubToken: cfg.GitHubToken,
+				logger:      logger.With("worker", i, "sandbox", sb.ID()),
+			})
+		}()
+	}
+
+	// 7. Poll log tails while workers are running.
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	pollLogTails(ctx, cfg, sandboxes, done, logger)
+
+	// 8. Collect and merge results.
+	var validResults []json.RawMessage
+	var allLogs []string
+	var firstErr error
+	for i, r := range results {
+		if r.Err != nil {
+			logger.Error("sandbox worker failed", "worker", i, "sandbox", r.SandboxID, "error", r.Err)
+			if firstErr == nil {
+				firstErr = r.Err
+			}
+			continue
+		}
+		if r.ResultJSON != nil {
+			validResults = append(validResults, r.ResultJSON)
+		}
+		if r.LogTail != "" {
+			allLogs = append(allLogs, fmt.Sprintf("=== Worker %d (%s) ===\n%s", i, r.SandboxID, r.LogTail))
+		}
+	}
+
+	if len(validResults) == 0 {
+		msg := "all sandbox workers failed"
+		if firstErr != nil {
+			msg = fmt.Sprintf("all workers failed, first error: %v", firstErr)
+		}
+		logger.Error(msg)
+		markFailed(cfg.Store, run, truncate(msg, 500))
+		return fmt.Errorf("adc parallel: %s", msg)
+	}
+
+	// Persist combined log tails.
+	run.LogTail = strings.Join(allLogs, "\n\n")
+	_ = cfg.Store.UpdateRunRequest(ctx, run) // best-effort
+
+	// 9. Merge results from all sandboxes.
+	merged, err := mergeResults(validResults)
+	if err != nil {
+		msg := fmt.Sprintf("failed to merge results: %v", err)
+		logger.Error(msg)
+		markFailed(cfg.Store, run, truncate(msg, 500))
+		return fmt.Errorf("adc merge: %w", err)
+	}
+	logger.Info("merged results from workers", "shards", len(validResults), "totalTasks", len(taskFiles))
+
+	// 10. Save to Cosmos.
+	if err := cfg.Store.SaveResult(ctx, run.UserID, run.ID, merged); err != nil {
+		msg := "failed to save merged results to Cosmos"
+		logger.Error(msg, "error", err)
+		markFailed(cfg.Store, run, msg)
+		return fmt.Errorf("save result: %w", err)
+	}
+	logger.Info("parallel ADC results saved to Cosmos")
+
+	// 11. Mark complete.
+	now := time.Now()
+	run.Status = db.Complete
+	run.CompletedAt = &now
+	if err := cfg.Store.UpdateRunRequest(ctx, run); err != nil {
+		logger.Error("failed to mark run complete", "error", err)
+		return fmt.Errorf("update run complete: %w", err)
+	}
+
+	logger.Info("parallel ADC run completed",
+		"sandboxes", actualWorkers,
+		"tasks", len(taskFiles),
+		"duration", time.Since(run.CreatedAt).Round(time.Second),
+	)
+	return nil
+}
+
+// runShardConfig configures a single sandbox worker's execution.
+type runShardConfig struct {
+	workerIdx   int
+	evalYAML    string
+	taskFiles   []string
+	evalSpec    string
+	model       string
+	executor    string
+	githubToken string
+	logger      *slog.Logger
+}
+
+// runSandboxShard clones, writes a shard eval, runs waza, and reads results
+// for a single sandbox worker.
+func runSandboxShard(ctx context.Context, sb *adcsdk.Sandbox, cfg runShardConfig) sandboxResult {
+	result := sandboxResult{SandboxID: sb.ID()}
+
+	// Create shard eval YAML with only this worker's tasks.
+	shardYAML, err := createShardEval(cfg.evalYAML, cfg.taskFiles)
+	if err != nil {
+		result.Err = fmt.Errorf("worker %d: create shard eval: %w", cfg.workerIdx, err)
+		return result
+	}
+
+	// Write shard eval to sandbox.
+	shardPath := fmt.Sprintf("/workspace/repo/shard-%d-eval.yaml", cfg.workerIdx)
+	_, err = sb.WriteFileText(ctx, shardPath, shardYAML, nil)
+	if err != nil {
+		result.Err = fmt.Errorf("worker %d: write shard eval: %w", cfg.workerIdx, err)
+		return result
+	}
+	cfg.logger.Debug("shard eval written", "tasks", len(cfg.taskFiles))
+
+	// Build waza command using the shard eval.
+	wazaCmd := fmt.Sprintf(
+		"cd /workspace/repo && nohup waza run shard-%d-eval.yaml -o /workspace/results-%d.json --executor %s",
+		cfg.workerIdx, cfg.workerIdx, cfg.executor)
+	if cfg.model != "" {
+		wazaCmd += " --model " + cfg.model
+	}
+	wazaCmd += fmt.Sprintf(" > /workspace/waza-%d.log 2>&1 & echo $!", cfg.workerIdx)
+
+	// Start waza in background.
+	startResult, err := sb.ExecuteShellCommand(ctx, wazaCmd, "", nil, "/workspace/repo")
+	if err != nil {
+		result.Err = fmt.Errorf("worker %d: start waza: %w", cfg.workerIdx, err)
+		return result
+	}
+	pid := strings.TrimSpace(startResult.Stdout)
+	cfg.logger.Info("waza started", "pid", pid)
+
+	// Poll for completion.
+	pollCmd := fmt.Sprintf("kill -0 %s 2>/dev/null && echo RUNNING || echo DONE", pid)
+	for {
+		select {
+		case <-ctx.Done():
+			result.Err = fmt.Errorf("worker %d: timed out", cfg.workerIdx)
+			return result
+		case <-time.After(15 * time.Second):
+		}
+
+		pollResult, err := sb.ExecuteShellCommand(ctx, pollCmd, "", nil, "")
+		if err != nil {
+			cfg.logger.Warn("poll failed, retrying", "error", err)
+			continue
+		}
+		if strings.TrimSpace(pollResult.Stdout) == "DONE" {
+			break
+		}
+		cfg.logger.Debug("waza still running", "pid", pid)
+	}
+
+	// Check exit code.
+	logFile := fmt.Sprintf("/workspace/waza-%d.log", cfg.workerIdx)
+	exitResult, _ := sb.ExecuteShellCommand(ctx, "wait "+pid+" 2>/dev/null; tail -5 "+logFile, "", nil, "")
+	exitCode := 0
+	if exitResult != nil {
+		exitCode = exitResult.ExitCode
+		result.LogTail = exitResult.Stdout
+	}
+
+	if exitCode > 1 {
+		result.Err = fmt.Errorf("worker %d: waza exited with code %d", cfg.workerIdx, exitCode)
+		return result
+	}
+	cfg.logger.Info("waza completed", "exitCode", exitCode)
+
+	// Read results.
+	resultsPath := fmt.Sprintf("/workspace/results-%d.json", cfg.workerIdx)
+	resultsJSON, err := sb.ReadFileText(ctx, resultsPath)
+	if err != nil {
+		result.Err = fmt.Errorf("worker %d: read results: %w", cfg.workerIdx, err)
+		return result
+	}
+
+	if !json.Valid([]byte(resultsJSON)) {
+		result.Err = fmt.Errorf("worker %d: invalid results JSON", cfg.workerIdx)
+		return result
+	}
+
+	result.ResultJSON = json.RawMessage(resultsJSON)
+	return result
+}
+
+// discoverTaskFiles reads the eval YAML from the sandbox, parses out the task
+// globs, resolves them against the repo, and returns individual task file paths.
+func discoverTaskFiles(ctx context.Context, sb *adcsdk.Sandbox, evalSpec string, logger *slog.Logger) ([]string, error) {
+	// Read the eval YAML.
+	content, err := sb.ReadFileText(ctx, "/workspace/repo/"+evalSpec)
+	if err != nil {
+		return nil, fmt.Errorf("reading eval spec: %w", err)
+	}
+
+	// Parse just the tasks field.
+	var spec struct {
+		Tasks []string `yaml:"tasks"`
+	}
+	if err := yaml.Unmarshal([]byte(content), &spec); err != nil {
+		return nil, fmt.Errorf("parsing eval YAML: %w", err)
+	}
+
+	if len(spec.Tasks) == 0 {
+		return nil, fmt.Errorf("eval spec has no tasks defined")
+	}
+
+	// Resolve globs inside the sandbox to get actual file paths.
+	// The eval dir is the directory containing the eval spec.
+	evalDir := filepath.Dir(evalSpec)
+	var globExprs []string
+	for _, pattern := range spec.Tasks {
+		globExprs = append(globExprs, pattern)
+	}
+
+	// Use bash glob expansion in the sandbox.
+	lsCmd := fmt.Sprintf("cd /workspace/repo/%s && ls -1 %s 2>/dev/null | sort",
+		evalDir, strings.Join(globExprs, " "))
+
+	result, err := sb.ExecuteShellCommand(ctx, lsCmd, "", nil, "")
+	if err != nil {
+		return nil, fmt.Errorf("resolving task globs: %w", err)
+	}
+
+	var taskFiles []string
+	for _, line := range strings.Split(strings.TrimSpace(result.Stdout), "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			taskFiles = append(taskFiles, line)
+		}
+	}
+
+	if len(taskFiles) == 0 {
+		return nil, fmt.Errorf("no task files matched globs: %v", spec.Tasks)
+	}
+
+	logger.Debug("resolved task globs", "patterns", spec.Tasks, "files", taskFiles)
+	return taskFiles, nil
+}
+
+// distributeTaskFiles splits task files round-robin across N workers.
+func distributeTaskFiles(tasks []string, workers int) [][]string {
+	shards := make([][]string, workers)
+	for i, task := range tasks {
+		idx := i % workers
+		shards[idx] = append(shards[idx], task)
+	}
+	return shards
+}
+
+// createShardEval takes the original eval YAML and replaces the tasks field
+// with explicit task file paths for a single shard.
+func createShardEval(originalYAML string, taskFiles []string) (string, error) {
+	var spec map[string]any
+	if err := yaml.Unmarshal([]byte(originalYAML), &spec); err != nil {
+		return "", fmt.Errorf("parsing eval YAML: %w", err)
+	}
+
+	// Replace the tasks field with explicit file paths (no globs).
+	spec["tasks"] = taskFiles
+
+	out, err := yaml.Marshal(spec)
+	if err != nil {
+		return "", fmt.Errorf("marshaling shard eval: %w", err)
+	}
+
+	return string(out), nil
+}
+
+// readSandboxFile reads a text file from a sandbox.
+func readSandboxFile(ctx context.Context, sb *adcsdk.Sandbox, path string) (string, error) {
+	return sb.ReadFileText(ctx, path)
+}
+
+// pollLogTails periodically tails waza logs from all sandboxes and persists
+// combined log output to the run record. Stops when done channel is closed.
+func pollLogTails(ctx context.Context, cfg RunConfig, sandboxes []*adcsdk.Sandbox, done <-chan struct{}, logger *slog.Logger) {
+	ticker := time.NewTicker(20 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-done:
+			return
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+
+		var parts []string
+		for i, sb := range sandboxes {
+			logFile := fmt.Sprintf("/workspace/waza-%d.log", i)
+			tailCmd := fmt.Sprintf("tail -15 %s 2>/dev/null", logFile)
+			result, err := sb.ExecuteShellCommand(ctx, tailCmd, "", nil, "")
+			if err == nil && result != nil && result.ExitCode == 0 && result.Stdout != "" {
+				parts = append(parts, fmt.Sprintf("[worker-%d] %s", i, result.Stdout))
+			}
+		}
+
+		if len(parts) > 0 {
+			cfg.Run.LogTail = strings.Join(parts, "\n---\n")
+			_ = cfg.Store.UpdateRunRequest(ctx, cfg.Run) // best-effort
+		}
+	}
+}
+
+// mergeResults combines EvaluationOutcome JSON from multiple sandbox workers
+// into a single result. Tasks are concatenated and the summary is recalculated.
+func mergeResults(results []json.RawMessage) (json.RawMessage, error) {
+	if len(results) == 0 {
+		return nil, fmt.Errorf("no results to merge")
+	}
+	if len(results) == 1 {
+		return results[0], nil
+	}
+
+	// Parse all results as generic maps for flexible merging.
+	var base map[string]any
+	if err := json.Unmarshal(results[0], &base); err != nil {
+		return nil, fmt.Errorf("parsing base result: %w", err)
+	}
+
+	// Collect all tasks from all shards.
+	allTasks, _ := base["tasks"].([]any)
+
+	for _, raw := range results[1:] {
+		var shard map[string]any
+		if err := json.Unmarshal(raw, &shard); err != nil {
+			continue
+		}
+		if tasks, ok := shard["tasks"].([]any); ok {
+			allTasks = append(allTasks, tasks...)
+		}
+
+		// Merge usage stats if present.
+		mergeUsageStats(base, shard)
+	}
+
+	base["tasks"] = allTasks
+
+	// Recalculate the summary from merged tasks.
+	recalculateSummary(base, allTasks)
+
+	out, err := json.Marshal(base)
+	if err != nil {
+		return nil, fmt.Errorf("marshaling merged result: %w", err)
+	}
+
+	return json.RawMessage(out), nil
+}
+
+// recalculateSummary updates the summary/digest fields based on merged tasks.
+func recalculateSummary(result map[string]any, tasks []any) {
+	total := len(tasks)
+	succeeded := 0
+	failed := 0
+	errors := 0
+	skipped := 0
+	var totalScore float64
+	var maxDuration int64
+
+	for _, t := range tasks {
+		task, ok := t.(map[string]any)
+		if !ok {
+			continue
+		}
+		status, _ := task["status"].(string)
+		switch status {
+		case "passed":
+			succeeded++
+		case "failed":
+			failed++
+		case "error":
+			errors++
+		case "skipped":
+			skipped++
+		}
+
+		// Accumulate scores from runs/trials.
+		if runs, ok := task["runs"].([]any); ok {
+			for _, r := range runs {
+				if run, ok := r.(map[string]any); ok {
+					if dur, ok := run["duration_ms"].(float64); ok && int64(dur) > maxDuration {
+						maxDuration = int64(dur)
+					}
+				}
+			}
+		}
+
+		// Try extracting score from stats.
+		if stats, ok := task["stats"].(map[string]any); ok {
+			if avg, ok := stats["avg_score"].(float64); ok {
+				totalScore += avg
+			}
+		}
+	}
+
+	successRate := 0.0
+	avgScore := 0.0
+	if total > 0 {
+		successRate = float64(succeeded) / float64(total)
+		avgScore = totalScore / float64(total)
+	}
+
+	// Update the summary object (handles both "summary" and "digest" keys).
+	for _, key := range []string{"summary", "digest"} {
+		if s, ok := result[key].(map[string]any); ok {
+			s["total_tests"] = total
+			s["succeeded"] = succeeded
+			s["failed"] = failed
+			s["errors"] = errors
+			s["skipped"] = skipped
+			s["success_rate"] = successRate
+			s["pass_rate"] = successRate
+			s["aggregate_score"] = avgScore
+			s["total_tasks"] = total
+			s["passed"] = succeeded
+			break
+		}
+	}
+}
+
+// mergeUsageStats adds usage stats from a shard into the base result.
+func mergeUsageStats(base, shard map[string]any) {
+	// Look for usage in summary/digest.
+	for _, key := range []string{"summary", "digest"} {
+		baseDigest, ok1 := base[key].(map[string]any)
+		shardDigest, ok2 := shard[key].(map[string]any)
+		if !ok1 || !ok2 {
+			continue
+		}
+
+		baseUsage, ok1 := baseDigest["usage"].(map[string]any)
+		shardUsage, ok2 := shardDigest["usage"].(map[string]any)
+		if !ok1 || !ok2 {
+			continue
+		}
+
+		// Sum numeric fields.
+		for _, field := range []string{"turns", "input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens"} {
+			bv, _ := baseUsage[field].(float64)
+			sv, _ := shardUsage[field].(float64)
+			baseUsage[field] = bv + sv
+		}
+		break
+	}
 }
 
 // markFailed sets the run status to Failed with the given error message.

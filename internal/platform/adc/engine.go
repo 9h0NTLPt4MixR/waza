@@ -181,6 +181,81 @@ func (e *Engine) CreateSandbox(ctx context.Context, githubToken string, env map[
 	return sandbox, nil
 }
 
+// CreateBatchSandboxes creates count sandboxes via the ADC batch API and
+// returns them as ready-to-use Sandbox objects. Each sandbox gets the
+// same disk image, CPU, memory, and environment configuration.
+//
+// The batch API creates all sandboxes in a single request for faster
+// provisioning. Failed sandboxes are logged but not fatal — the caller
+// gets back however many succeeded (minimum 1 or error).
+func (e *Engine) CreateBatchSandboxes(ctx context.Context, count int, githubToken string, env map[string]string) ([]*adcsdk.Sandbox, error) {
+	if count <= 0 {
+		return nil, fmt.Errorf("adc: batch count must be > 0, got %d", count)
+	}
+	if count > MaxSandboxesPerUser {
+		count = MaxSandboxesPerUser
+	}
+
+	client := e.NewClient(githubToken)
+
+	batchReq := models.BatchSandboxRequest{
+		Count: count,
+		Sandbox: models.CreateSandboxRequest{
+			SourcesRef: models.SandboxSource{
+				DiskImage: &models.SandboxSourceDiskImage{ID: e.cfg.DiskImage},
+			},
+			Resources: &models.SandboxResources{
+				CPU:    fmt.Sprintf("%dm", e.cfg.CPU),
+				Memory: fmt.Sprintf("%dMi", e.cfg.MemoryMB),
+			},
+			SandboxGroupID: e.cfg.SandboxGroupID,
+			Environment:    env,
+		},
+	}
+
+	resp, err := client.Sandboxes.CreateBatch(ctx, batchReq)
+	if err != nil {
+		return nil, fmt.Errorf("adc: batch create: %w", err)
+	}
+
+	if resp.Succeeded == 0 {
+		return nil, fmt.Errorf("adc: batch create failed — 0 of %d sandboxes created: %v", count, resp.Errors)
+	}
+
+	// Convert SandboxData → *Sandbox via Get (needed for Execute methods).
+	sandboxes := make([]*adcsdk.Sandbox, 0, resp.Succeeded)
+	for _, data := range resp.Sandboxes {
+		sb, err := client.Sandboxes.Get(ctx, data.ID)
+		if err != nil {
+			// Log but continue — partial success is better than total failure.
+			continue
+		}
+		e.trackSandbox(sb)
+		sandboxes = append(sandboxes, sb)
+	}
+
+	if len(sandboxes) == 0 {
+		return nil, fmt.Errorf("adc: batch create succeeded (%d) but failed to retrieve sandbox handles", resp.Succeeded)
+	}
+
+	return sandboxes, nil
+}
+
+// DeleteBatchSandboxes deletes a slice of sandboxes, returning the last
+// error encountered. Best-effort: continues deleting even if one fails.
+func (e *Engine) DeleteBatchSandboxes(ctx context.Context, sandboxes []*adcsdk.Sandbox) error {
+	var lastErr error
+	for _, sb := range sandboxes {
+		e.mu.Lock()
+		delete(e.sandboxes, sb.ID())
+		e.mu.Unlock()
+		if err := sb.Delete(ctx); err != nil {
+			lastErr = fmt.Errorf("adc: deleting sandbox %s: %w", sb.ID(), err)
+		}
+	}
+	return lastErr
+}
+
 // DeleteSandbox deletes a sandbox by reference and removes it from tracking.
 func (e *Engine) DeleteSandbox(ctx context.Context, sandbox *adcsdk.Sandbox) error {
 	e.mu.Lock()

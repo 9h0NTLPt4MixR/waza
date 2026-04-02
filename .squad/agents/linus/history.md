@@ -242,3 +242,22 @@ All code roles now use `claude-opus-4.6`. Docs/Scribe/diversity use `gemini-3-pr
   4. **web/src/api/client.ts** — Changed `RunQueueItem.evalPath` → `RunQueueItem.evalSpec` to match the Go `runQueueItem` JSON tag (`json:"evalSpec"`). Components already referenced `evalSpec`; only the TypeScript interface was wrong.
 - **Key learning:** The Cosmos explicit document map pattern means EVERY new field on `db.RunRequest` must be added to three places independently: `CreateRunRequest` map, `UpdateRunRequest` map, and `parseRunRequest` fallback struct. The `Executor` field was added to the Go struct and handlers but missed in all three Cosmos persistence points.
 - **Key learning:** When frontend TypeScript interfaces diverge from Go JSON tags, the data silently arrives as `undefined`. Always grep both the interface definition AND the component usage — components may reference the correct field name (e.g., `run.evalSpec`) even if the interface defines the wrong one (`evalPath`), causing TypeScript to not flag the error.
+
+### Parallel ADC Workers with Batch Sandbox Creation
+- **Date:** 2026-04-02
+- **Branch:** `feature/waza-platform`
+- **Files changed:** `internal/platform/adc/engine.go`, `internal/platform/execution/runner.go`, `internal/platform/adc/engine_test.go`, `internal/platform/execution/runner_test.go`
+- **What:** Implemented multi-sandbox parallelism for ADC eval runs. When `RunRequest.Workers > 1`, the platform now creates N sandboxes via the ADC batch API, distributes eval tasks across them round-robin, runs waza concurrently in each sandbox, and merges results.
+- **Architecture decisions:**
+  1. **Batch API over sequential creation:** Used `client.Sandboxes.CreateBatch()` for faster provisioning. The batch response returns `SandboxData` (not `*Sandbox`), so we call `client.Sandboxes.Get()` per sandbox to get executable handles.
+  2. **Task sharding via eval YAML modification:** Each sandbox gets a modified eval YAML with only its subset of task file paths (replacing globs with explicit paths). This avoids needing `--shard` flags on the waza CLI.
+  3. **Graceful degradation:** If batch creates fewer sandboxes than requested, we proceed with however many succeeded. Workers are also clamped to task count.
+  4. **Result merging:** Lightweight JSON merge — concatenate `tasks` arrays, recalculate `summary` counts and success rates, sum `usage` stats. Uses `map[string]any` for schema flexibility.
+  5. **Single-sandbox fallback:** Workers=0 or Workers=1 takes the original `runViaADCSingle` path — zero behavioral change for existing users.
+- **Key patterns:**
+  - `errgroup` for concurrent clone operations (fail-fast)
+  - Bare goroutines + `sync.WaitGroup` for independent shard execution (partial success OK)
+  - `pollLogTails` runs as a separate goroutine with ticker, interleaving logs from all sandboxes with `[worker-N]` prefixes
+  - Task discovery: read eval YAML from sandbox → parse `tasks` globs → resolve via `ls` in sandbox → distribute round-robin
+- **Key files:** `engine.go:CreateBatchSandboxes`, `runner.go:runViaADCParallel`, `runner.go:mergeResults`
+- **Testing:** 7 new tests covering task distribution, shard eval creation, result merging (single, multi, empty, usage stats), and dispatch routing.
