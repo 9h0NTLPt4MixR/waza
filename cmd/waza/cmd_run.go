@@ -64,7 +64,8 @@ var (
 	discoverFlag    bool
 	strictFlag      bool
 	updateSnapshots bool
-	skipGradersFlag bool
+	skipGradersFlag    bool
+	executorOverride   string
 
 	// newCopilotClientFn allows you to override the client used by the copilot engine, for this command.
 	newCopilotClientFn func(clientOptions *copilot.ClientOptions) execution.CopilotClient
@@ -124,6 +125,7 @@ You can also specify a skill name to run its eval:
 	cmd.Flags().BoolVar(&strictFlag, "strict", false, "With --discover, fail if any SKILL.md lacks an eval.yaml")
 	cmd.Flags().BoolVar(&updateSnapshots, "update-snapshots", false, "Update or create diff grader snapshot files to match current workspace output")
 	cmd.Flags().BoolVar(&skipGradersFlag, "skip-graders", false, "Skip grading (execution only); use with waza grade to grade later")
+	cmd.Flags().StringVar(&executorOverride, "executor", "", "Override executor engine type (e.g., copilot-sdk, mock)")
 
 	return cmd
 }
@@ -469,6 +471,9 @@ func runCommandForSpec(cmd *cobra.Command, sp skillSpecPath, defaultSkills []str
 	}
 	if judgeModel != "" {
 		spec.Config.JudgeModel = judgeModel
+	}
+	if executorOverride != "" {
+		spec.Config.EngineType = executorOverride
 	}
 
 	// Determine the list of models to evaluate

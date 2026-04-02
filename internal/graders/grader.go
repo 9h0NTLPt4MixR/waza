@@ -79,6 +79,8 @@ func Create(identifier string, params models.GraderParameters) (Grader, error) {
 		return NewProgramGrader(identifier, p)
 	case models.TriggerHeuristicGraderParameters:
 		return NewTriggerHeuristicGrader(identifier, p)
+	case models.RegexGraderParameters:
+		return NewRegexGrader(identifier, p)
 	default:
 		return nil, fmt.Errorf("grader with identifier %q is using an unsupported grader type. Valid grader types: %s", identifier, strings.Join(models.AllGraderKinds(), ", "))
 	}

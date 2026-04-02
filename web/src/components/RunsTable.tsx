@@ -17,7 +17,8 @@ import {
   formatPercent,
 } from "../lib/format";
 
-function OutcomeBadge({ outcome }: { outcome: string }) {
+function OutcomeBadge({ outcome }: { outcome?: string }) {
+  if (!outcome) return <AlertCircle className="h-4 w-4 text-zinc-500" />;
   if (outcome.startsWith("pass"))
     return <CheckCircle2 className="h-4 w-4 text-green-500" />;
   if (outcome.startsWith("fail"))

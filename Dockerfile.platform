@@ -4,10 +4,17 @@ FROM golang:1.26-alpine AS builder
 RUN apk add --no-cache git nodejs npm
 
 WORKDIR /src
-COPY go.mod go.sum ./
-RUN go mod download
 
+# Copy vendored ADC SDK for the local replace directive
+COPY .adc-sdk/ /adc-sdk/
+
+# Copy everything
+COPY go.mod go.sum ./
 COPY . .
+
+# Rewrite the local replace to point to the copied SDK inside Docker
+RUN sed -i 's|=> /Users/shboyer/github/adc/client-sdk/go-sdk|=> /adc-sdk|' go.mod && \
+    go mod download
 
 # Build web SPA
 RUN cd web && npm ci && npm run build
@@ -16,10 +23,14 @@ RUN cd web && npm ci && npm run build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -trimpath -ldflags="-s -w" -o /out/waza ./cmd/waza
 
-# Runtime stage: minimal image
-FROM alpine:3.21
+# Runtime stage: glibc-based image (the embedded Copilot SDK CLI binary is
+# dynamically linked against glibc, so Alpine/musl won't work)
+FROM debian:bookworm-slim
 
-RUN apk add --no-cache ca-certificates tzdata git
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        ca-certificates tzdata git python3 nodejs npm && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY --from=builder /out/waza .

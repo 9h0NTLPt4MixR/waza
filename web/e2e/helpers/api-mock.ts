@@ -62,6 +62,11 @@ export async function mockAllAPIs(page: Page) {
   await page.route(/\/api\/runs(\?|$)/, (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(RUNS) }),
   );
+
+  // Run queue — return empty queue (no active runs in standard mock)
+  await page.route(/\/api\/runs\/queue/, (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) }),
+  );
 }
 
 /**
@@ -95,5 +100,10 @@ export async function mockEmptyAPIs(page: Page) {
       contentType: "application/json",
       body: JSON.stringify({ error: "result not found" }),
     }),
+  );
+
+  // Run queue — empty
+  await page.route(/\/api\/runs\/queue/, (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) }),
   );
 }

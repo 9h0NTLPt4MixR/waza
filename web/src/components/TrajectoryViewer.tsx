@@ -303,10 +303,30 @@ function buildFallbackEvents(task: TaskResult): FallbackEvent[] {
 
   // Add grader summaries
   for (const g of task.graderResults) {
+    const lines: string[] = [];
+    lines.push(`Passed: ${g.passed ? "✅ yes" : "❌ no"}`);
+    lines.push(`Score: ${Math.round(g.score * 100)}%`);
+    if (g.type) lines.push(`Type: ${g.type}`);
+    if ((g as any).weight) lines.push(`Weight: ${(g as any).weight}`);
+    if (g.message) lines.push(`Feedback: ${g.message}`);
+
+    // Show details if present (regex patterns, expected values, etc.)
+    const details = (g as any).details;
+    if (details && typeof details === "object") {
+      for (const [key, val] of Object.entries(details)) {
+        if (Array.isArray(val)) {
+          lines.push(`${key}: ${val.map(String).join(", ")}`);
+        } else if (val != null) {
+          lines.push(`${key}: ${String(val).slice(0, 200)}`);
+        }
+      }
+    }
+
+    const status = g.passed ? "✅" : "❌";
     events.push({
       type: "tool_call",
-      description: `Grader: ${g.name} (${g.type})`,
-      content: `Passed: ${g.passed ? "yes" : "no"}\nScore: ${Math.round(g.score * 100)}%\nMessage: ${g.message}`,
+      description: `${status} Grader: ${g.name} (${g.type || "unknown"})`,
+      content: lines.join("\n"),
     });
   }
 

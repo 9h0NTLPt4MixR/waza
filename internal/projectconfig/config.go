@@ -120,8 +120,10 @@ type StorageConfig struct {
 // sandboxed evaluation execution. Mirrors the canonical type in
 // internal/platform/adc — kept here to avoid an import dependency on the
 // platform package (which depends on the ADC SDK).
+//
+// ADC authenticates using the user's GitHub OAuth token — no platform-level
+// API key is needed.
 type ADCConfig struct {
-	APIKey         string        `yaml:"api_key,omitempty" json:"-"`
 	APIURL         string        `yaml:"api_url,omitempty" json:"api_url,omitempty"`
 	DiskImage      string        `yaml:"disk_image,omitempty" json:"disk_image,omitempty"`
 	CPU            int           `yaml:"cpu,omitempty" json:"cpu,omitempty"`
@@ -354,9 +356,6 @@ func mergeConfig(dst, src *ProjectConfig) {
 	dst.Storage.Enabled = src.Storage.Enabled
 
 	// ADC
-	if src.ADC.APIKey != "" {
-		dst.ADC.APIKey = src.ADC.APIKey
-	}
 	if src.ADC.APIURL != "" {
 		dst.ADC.APIURL = src.ADC.APIURL
 	}

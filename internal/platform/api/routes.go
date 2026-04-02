@@ -28,10 +28,17 @@ func RegisterRoutes(mux *http.ServeMux, deps *Dependencies) {
 	mux.Handle("GET /api/runs/queue", deps.AuthMiddleware(http.HandlerFunc(handleListRuns(deps))))
 	mux.Handle("GET /api/runs/queue/{id}", deps.AuthMiddleware(http.HandlerFunc(handleGetRun(deps))))
 	mux.Handle("POST /api/runs/cancel/{id}", deps.AuthMiddleware(http.HandlerFunc(handleCancelRun(deps))))
+	mux.Handle("POST /api/runs/rerun/{id}", deps.AuthMiddleware(http.HandlerFunc(handleRerun(deps))))
+
+	// --- Summary (authenticated) ---
+	mux.Handle("GET /api/summary", deps.AuthMiddleware(http.HandlerFunc(handleSummary(deps))))
 
 	// --- Results (authenticated) ---
+	// /api/results and /api/runs both serve from Cosmos — runs is the dashboard-facing alias.
 	mux.Handle("GET /api/results", deps.AuthMiddleware(http.HandlerFunc(handleListResults(deps))))
 	mux.Handle("GET /api/results/{id}", deps.AuthMiddleware(http.HandlerFunc(handleGetResult(deps))))
+	mux.Handle("GET /api/runs", deps.AuthMiddleware(http.HandlerFunc(handleListResults(deps))))
+	mux.Handle("GET /api/runs/{id}", deps.AuthMiddleware(http.HandlerFunc(handleGetResult(deps))))
 
 	// --- Repos (authenticated) ---
 	mux.Handle("GET /api/repos", deps.AuthMiddleware(http.HandlerFunc(handleListRepos(deps))))

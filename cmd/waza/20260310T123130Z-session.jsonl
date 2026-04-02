@@ -1,0 +1,7 @@
+{"timestamp":"2026-03-10T12:31:30.9224Z","type":"session_start","data":{"engine":"mock","model":"mock-model","spec_path":"/var/folders/4_/b31s94vn0wn0y0bhzmd0f9_h0000gn/T/TestRunCommandForSpec_NilCmd_OverridesTrials3985721402/001/eval.yaml","task_count":1}}
+{"timestamp":"2026-03-10T12:31:30.922446Z","type":"task_start","data":{"task_name":"","task_num":1,"total_tasks":1}}
+{"timestamp":"2026-03-10T12:31:30.922666Z","type":"grader_result","data":{"feedback":"All text checks passed","grader_name":"check","grader_type":"","passed":true,"score":1}}
+{"timestamp":"2026-03-10T12:31:30.922909Z","type":"grader_result","data":{"feedback":"All text checks passed","grader_name":"check","grader_type":"","passed":true,"score":1}}
+{"timestamp":"2026-03-10T12:31:30.923144Z","type":"grader_result","data":{"feedback":"All text checks passed","grader_name":"check","grader_type":"","passed":true,"score":1}}
+{"timestamp":"2026-03-10T12:31:30.923596Z","type":"task_complete","data":{"duration_ms":0,"score":1,"status":"passed","task_name":""}}
+{"timestamp":"2026-03-10T12:31:30.923609Z","type":"session_complete","data":{"duration_ms":1,"errors":0,"failed":0,"passed":1,"total_tests":1}}

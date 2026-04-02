@@ -274,3 +274,65 @@ All code roles now use `claude-opus-4.6`. Docs/Scribe/diversity use `gemini-3-pr
 - Inline error display (red banner) instead of toast — no toast system exists in the codebase yet.
 
 **Build verified:** TypeScript clean, Vite production build clean.
+
+### Live Log Panel on RunStatus (feature/waza-platform)
+
+**Date:** 2026-07 | **Branch:** `feature/waza-platform`
+
+**What:** Added a terminal-style live log panel to the RunStatus page that renders `logTail` from the queue API. Three files changed (API types, RunStatus component).
+
+1. **API Client** (`web/src/api/client.ts`) — Added `logTail?: string` to `RunQueueItem` interface. Backend (Linus) will populate this with newline-separated waza output from ADC sandbox runs.
+2. **RunStatus Component** (`web/src/components/RunStatus.tsx`) — New `LogPanel` component with:
+   - Dark terminal aesthetic: zinc-900 bg, emerald-400 monospace text, 320–480px height with overflow scroll
+   - Pulsing green dot + "Live" indicator when `isLive` is true (running status)
+   - Auto-scroll to bottom on new content via ref + useEffect, only when user is already at bottom
+   - "Bottom" scroll button appears when user scrolls up (uses onScroll + threshold check)
+   - Line count indicator in header bar
+   - "Waiting for output…" italic placeholder when logTail is empty/undefined
+   - Reused for completed/failed runs (isLive=false) when logTail data exists, preserving the log after a run finishes
+
+**Key decisions:**
+- LogPanel extracted as a separate function component — reused across running, complete, and failed states.
+- Auto-scroll only engages when user hasn't scrolled up (within 24px threshold) — prevents yanking focus while reading earlier output.
+- Kept existing status-specific messages for queued/cancelled states where logTail won't be present.
+- No changes to polling interval (3s via React Query) — logTail updates piggyback on existing queue polling.
+
+**Build verified:** TypeScript clean, Vite production build clean, 52/52 Playwright tests pass.
+
+---
+
+### Fix: Eval Spec display + Task fail reason explanation (2025-07-18)
+
+**Issue 1 — Eval Spec not showing on RunStatus/RunQueue pages:**
+- Root cause: Backend serializes as `evalSpec` (camelCase JSON tag) but frontend `RunQueueItem` interface had the field as `evalPath`. Mismatch → always `undefined`.
+- Fixed `web/src/api/client.ts` — renamed `evalPath` to `evalSpec` in `RunQueueItem`.
+- Fixed `RunStatus.tsx` and `RunQueue.tsx` — render `run.evalSpec` with last-2-segments formatting (e.g., `eval/eval.yaml`) and full path on hover via `title`.
+
+**Issue 2 — Task shows "fail" with 92% score but all graders passed:**
+- Root cause: Task outcome reflects threshold/trial failures, but UI only showed grader-level results from the first trial. No explanation for WHY the task failed.
+- Backend (`handlers.go`): Enhanced `transformWazaResult` to pass through `numTrials`, `passedTrials`, `failedTrials` from task stats, and `passThreshold` from top-level metrics.
+- Frontend (`client.ts`): Added `numTrials`, `passedTrials`, `failedTrials`, `passThreshold` optional fields to `TaskResult`.
+- Frontend (`RunDetail.tsx`): Added `FailReason` component that shows contextual explanation next to the outcome badge — e.g., "Score 92% below threshold 95%" or "2 of 3 trials passed". Only renders when task fails and the reason isn't already obvious from failed grader rows.
+
+**Files changed:** `web/src/api/client.ts`, `web/src/components/RunStatus.tsx`, `web/src/components/RunQueue.tsx`, `web/src/components/RunDetail.tsx`, `internal/platform/api/handlers.go`
+**Build verified:** TypeScript clean (`npx tsc --noEmit`), Go build clean, all API tests pass (17/17).
+
+### 2026-02-20: Merge Dashboard and Queue into unified page
+
+- **Task:** Combine the separate Dashboard (`/`) and Run Queue (`/runs/queue`) pages into a single unified view
+- **Problem:** Users confused by two separate pages showing different slices of run data
+- **Solution:** Rewrote `Dashboard.tsx` with a unified runs table that merges queue items (active/recent) with completed results, deduplicating by run ID with queue taking precedence
+- **Unified table columns:** Status (emoji badge), Spec, Model (with judge ⚖ indicator), Pass Rate, Tasks, Duration, When, Actions
+- **Status badges:** 🟡 Queued, 🔵 Running (with pulse animation), ✅ Complete, ❌ Failed, ⚪ Cancelled
+- **Click navigation:** Complete rows → RunDetail, Active rows → RunStatus, Failed rows show error tooltip
+- **Actions:** Results + Re-Run (completed/failed), Cancel (queued/running)
+- **Auto-refresh:** Queue data polls every 10s; auto-refresh indicator shows when active runs exist
+- **Nav change:** Removed "Queue" from nav; order is now Runs | Compare | Trends | Live | New Run | Settings
+- **Routing:** `/runs/queue` hash redirects to `/` (home); RunQueue route type removed from App.tsx
+- **RunStatus update:** "View Queue" button → "All Runs" button pointing to `/`
+- **CSS:** Added `animate-pulse-subtle` keyframe for running row animation
+- **E2e tests:** Added `/api/runs/queue` mock, updated 4 tests for new table structure (badge, judge indicator, column layout)
+- **Result:** 52/52 e2e tests pass, TypeScript clean, Vite build succeeds
+
+**Files changed:** `web/src/components/Dashboard.tsx`, `web/src/components/Layout.tsx`, `web/src/App.tsx`, `web/src/components/RunStatus.tsx`, `web/src/index.css`, `web/e2e/helpers/api-mock.ts`, `web/e2e/dashboard.spec.ts`, `web/e2e/judge-model.spec.ts`, `web/e2e/weighted-scores.spec.ts`
+**Decision:** `.squad/decisions/inbox/rusty-unified-dashboard.md`

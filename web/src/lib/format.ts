@@ -1,5 +1,5 @@
-export function formatDuration(seconds: number): string {
-  if (seconds <= 0) return "0s";
+export function formatDuration(seconds: number | undefined | null): string {
+  if (seconds == null || seconds <= 0) return "0s";
   if (seconds < 1) return "<1s";
 
   const rounded = Math.round(seconds);
@@ -10,17 +10,20 @@ export function formatDuration(seconds: number): string {
   return `${m}m ${s}s`;
 }
 
-export function formatCost(dollars: number): string {
+export function formatCost(dollars: number | undefined | null): string {
+  if (dollars == null) return "$0.00";
   return `$${dollars.toFixed(2)}`;
 }
 
-export function formatNumber(n: number): string {
+export function formatNumber(n: number | undefined | null): string {
+  if (n == null) return "0";
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return n.toString();
 }
 
-export function formatRelativeTime(iso: string): string {
+export function formatRelativeTime(iso: string | undefined | null): string {
+  if (!iso) return "—";
   const diff = Date.now() - new Date(iso).getTime();
   const seconds = Math.floor(diff / 1000);
 
@@ -36,6 +39,7 @@ export function formatRelativeTime(iso: string): string {
   return `${days} day${days === 1 ? "" : "s"} ago`;
 }
 
-export function formatPercent(ratio: number): string {
+export function formatPercent(ratio: number | undefined | null): string {
+  if (ratio == null) return "0%";
   return `${Math.round(ratio * 100)}%`;
 }

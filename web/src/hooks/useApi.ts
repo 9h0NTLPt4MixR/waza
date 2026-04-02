@@ -14,6 +14,7 @@ import {
   triggerRun,
   fetchRunQueue,
   cancelRun,
+  rerunRun,
 } from "../api/client";
 import type { CreateConnectionRequest, TriggerRunConfig } from "../api/client";
 
@@ -36,6 +37,7 @@ export function useRunDetail(id: string) {
     queryKey: ["run", id],
     queryFn: () => fetchRunDetail(id),
     enabled: !!id,
+    retry: false,
   });
 }
 
@@ -132,6 +134,7 @@ export function useResultDetail(id: string) {
     queryKey: ["result", id],
     queryFn: () => fetchResultDetail(id),
     enabled: !!id,
+    retry: false,
   });
 }
 
@@ -140,6 +143,17 @@ export function useCancelRun() {
   return useMutation({
     mutationFn: (id: string) => cancelRun(id),
     onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["runQueue"] });
+    },
+  });
+}
+
+export function useRerunRun() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: string) => rerunRun(runId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["runs"] });
       void qc.invalidateQueries({ queryKey: ["runQueue"] });
     },
   });

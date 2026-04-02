@@ -26,12 +26,12 @@ test.describe("Judge Model", () => {
     await page.goto("/");
 
     // run-002 (skill-checker) has judgeModel different from model → ⚖ indicator
-    const rows = page.locator("tbody tr");
-    const run002Row = rows.nth(1);
-    await expect(run002Row.locator("text=⚖")).toBeVisible();
+    // In the unified table, skill-checker row shows the judge indicator in the Model column
+    const skillCheckerRow = page.locator("tbody tr", { hasText: "skill-checker" });
+    await expect(skillCheckerRow.locator("text=⚖")).toBeVisible();
 
     // run-001 (code-explainer) has no judgeModel → no indicator
-    const run001Row = rows.nth(0);
-    await expect(run001Row.locator("text=⚖")).not.toBeVisible();
+    const codeExplainerRow = page.locator("tbody tr", { hasText: "code-explainer" });
+    await expect(codeExplainerRow.locator("text=⚖")).not.toBeVisible();
   });
 });

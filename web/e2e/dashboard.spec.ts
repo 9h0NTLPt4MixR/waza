@@ -85,7 +85,7 @@ test.describe("Runs Table", () => {
     await page.getByRole("button", { name: /Spec/ }).click();
 
     // After ascending sort: code-explainer, doc-writer, skill-checker
-    // Note: first column is the outcome icon, spec is the second column
+    // First column is Status badge, spec is the second column
     const rows = page.locator("tbody tr");
     await expect(rows).toHaveCount(3);
     await expect(rows.nth(0).locator("td:nth-child(2)")).toContainText("code-explainer");
@@ -96,18 +96,17 @@ test.describe("Runs Table", () => {
     await expect(rows.nth(0).locator("td:nth-child(2)")).toContainText("skill-checker");
   });
 
-  test("pass/fail badges display correctly", async ({ page }) => {
+  test("status badges display correctly", async ({ page }) => {
     await mockAllAPIs(page);
     await page.goto("/");
 
-    // The OutcomeBadge renders SVG icons — CheckCircle2 (green) for pass, XCircle (red) for fail
-    // We check for the SVG elements with the right color class in the table rows
-    const greenIcons = page.locator("tbody svg.text-green-500");
-    const redIcons = page.locator("tbody svg.text-red-500");
+    // The unified table uses StatusBadge with emoji text for run status
+    // All mock runs are completed, so they should show "✅ Complete"
+    const completeBadges = page.locator("tbody").getByText("Complete");
+    await expect(completeBadges.first()).toBeVisible();
 
-    // 2 passing runs (run-001, run-003) and 1 failing run (run-002)
-    await expect(greenIcons.first()).toBeVisible();
-    await expect(redIcons.first()).toBeVisible();
+    // There should be 3 complete badges (one per mock run)
+    await expect(completeBadges).toHaveCount(3);
   });
 
   test("empty state message when no runs exist", async ({ page }) => {

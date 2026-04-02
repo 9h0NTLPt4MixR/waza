@@ -76,10 +76,11 @@ func TestIntegration_FullHTTPCycle_Me(t *testing.T) {
 	resp := doRequest(t, srv, http.MethodGet, "/api/auth/me", "int-tok", nil)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var got auth.User
+	// handleMe returns camelCase JSON matching the frontend User interface.
+	var got map[string]any
 	decodeJSON(t, resp, &got)
-	assert.Equal(t, "integration-user", got.Login)
-	assert.Equal(t, int64(42), got.GitHubID)
+	assert.Equal(t, "integration-user", got["login"])
+	assert.Equal(t, float64(42), got["githubId"])
 }
 
 func TestIntegration_FullHTTPCycle_ListRunsEmpty(t *testing.T) {

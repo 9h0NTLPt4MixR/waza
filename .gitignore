@@ -114,3 +114,4 @@ web/blob-report/
 
 # Internal research docs
 docs/research/
+.adc-sdk/

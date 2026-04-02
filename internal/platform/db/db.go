@@ -59,13 +59,19 @@ func (c *Connection) Verified() bool {
 // ResultSummary is a lightweight projection of a stored evaluation result,
 // used in list views.
 type ResultSummary struct {
-	ID        string    `json:"id"`
-	UserID    int64     `json:"user_id"`
-	RunID     string    `json:"run_id"`
-	Spec      string    `json:"spec"`
-	Model     string    `json:"model"`
-	PassRate  float64   `json:"pass_rate"`
-	Timestamp time.Time `json:"timestamp"`
+	ID        string  `json:"id"`
+	RunID     string  `json:"runId,omitempty"`
+	Spec      string  `json:"spec"`
+	Model     string  `json:"model"`
+	Outcome   string  `json:"outcome"`
+	PassCount int     `json:"passCount"`
+	TaskCount int     `json:"taskCount"`
+	Tokens    int     `json:"tokens"`
+	Cost      float64 `json:"cost"`
+	Duration  float64 `json:"duration"`
+	PassRate  float64 `json:"passRate,omitempty"`
+	Timestamp string  `json:"timestamp"`
+	Source    string  `json:"source,omitempty"`
 }
 
 // RunRequest represents a queued or in-progress evaluation run.
@@ -77,9 +83,11 @@ type RunRequest struct {
 	Model              string    `json:"model"`               // target model for evaluation
 	Workers            int       `json:"workers"`             // parallel worker count
 	StorageDestination string    `json:"storage_destination"` // "cosmos" or connection ID for BYOS
+	Executor           string    `json:"executor,omitempty"`  // executor engine override; defaults to "copilot-sdk"
 	Status             RunStatus `json:"status"`              // current lifecycle state
 	ADCSandboxIDs      []string  `json:"adc_sandbox_ids"`     // allocated sandbox identifiers
 	Error              string    `json:"error,omitempty"`     // error message if failed
+	LogTail            string    `json:"log_tail,omitempty"` // last N lines of waza output
 	CreatedAt          time.Time `json:"created_at"`
 	CompletedAt        *time.Time `json:"completed_at,omitempty"`
 }

@@ -351,8 +351,10 @@ func (s *CosmosStore) CreateRunRequest(ctx context.Context, run *RunRequest) err
 		"model":               run.Model,
 		"workers":             run.Workers,
 		"storage_destination": run.StorageDestination,
+		"executor":            run.Executor,
 		"status":              run.Status,
 		"error":               run.Error,
+		"log_tail":            run.LogTail,
 		"adc_sandbox_ids":     run.ADCSandboxIDs,
 		"created_at":          run.CreatedAt,
 		"completed_at":        run.CompletedAt,
@@ -381,8 +383,10 @@ func (s *CosmosStore) UpdateRunRequest(ctx context.Context, run *RunRequest) err
 		"model":               run.Model,
 		"workers":             run.Workers,
 		"storage_destination": run.StorageDestination,
+		"executor":            run.Executor,
 		"status":              run.Status,
 		"error":               run.Error,
+		"log_tail":            run.LogTail,
 		"adc_sandbox_ids":     run.ADCSandboxIDs,
 		"created_at":          run.CreatedAt,
 		"completed_at":        run.CompletedAt,
@@ -460,8 +464,10 @@ func parseRunRequest(data []byte, fallbackUserID int64) (*RunRequest, error) {
 			Model              string     `json:"model"`
 			Workers            int        `json:"workers"`
 			StorageDestination string     `json:"storage_destination"`
+			Executor           string     `json:"executor,omitempty"`
 			Status             RunStatus  `json:"status"`
 			Error              string     `json:"error,omitempty"`
+			LogTail            string     `json:"log_tail,omitempty"`
 			ADCSandboxIDs      []string   `json:"adc_sandbox_ids"`
 			CreatedAt          time.Time  `json:"created_at"`
 			CompletedAt        *time.Time `json:"completed_at,omitempty"`
@@ -478,8 +484,10 @@ func parseRunRequest(data []byte, fallbackUserID int64) (*RunRequest, error) {
 			Model:              raw.Model,
 			Workers:            raw.Workers,
 			StorageDestination: raw.StorageDestination,
+			Executor:           raw.Executor,
 			Status:             raw.Status,
 			Error:              raw.Error,
+			LogTail:            raw.LogTail,
 			ADCSandboxIDs:      raw.ADCSandboxIDs,
 			CreatedAt:          raw.CreatedAt,
 			CompletedAt:        raw.CompletedAt,
@@ -562,7 +570,7 @@ func (s *CosmosStore) ListResults(ctx context.Context, userID int64, limit int) 
 	pk := userPartitionKey(userID)
 	uid := strconv.FormatInt(userID, 10)
 
-	query := "SELECT c.id, c.user_id, c.run_id, c.spec, c.model, c.pass_rate, c.timestamp FROM c WHERE c.user_id = @uid ORDER BY c.timestamp DESC"
+	query := "SELECT c.id, c.user_id, c.run_id, c.spec, c.model, c.pass_rate, c.timestamp, c.result.summary, c.result.config FROM c WHERE c.user_id = @uid ORDER BY c.timestamp DESC"
 	params := []azcosmos.QueryParameter{
 		{Name: "@uid", Value: uid},
 	}
@@ -582,10 +590,7 @@ func (s *CosmosStore) ListResults(ctx context.Context, userID int64, limit int) 
 			return nil, fmt.Errorf("querying results: %w", err)
 		}
 		for _, item := range page.Items {
-			summary, err := parseResultSummary(item, userID)
-			if err != nil {
-				return nil, fmt.Errorf("unmarshaling result summary: %w", err)
-			}
+			summary := parseResultSummary(item)
 			summaries = append(summaries, summary)
 			if limit > 0 && len(summaries) >= limit {
 				return summaries, nil
@@ -596,27 +601,57 @@ func (s *CosmosStore) ListResults(ctx context.Context, userID int64, limit int) 
 }
 
 // parseResultSummary extracts a ResultSummary from a Cosmos query result row.
-func parseResultSummary(data []byte, fallbackUserID int64) (ResultSummary, error) {
+func parseResultSummary(data []byte) ResultSummary {
 	var doc map[string]any
 	if err := json.Unmarshal(data, &doc); err != nil {
-		return ResultSummary{}, err
+		return ResultSummary{}
 	}
 
 	s := ResultSummary{
 		ID:     stringVal(doc, "id"),
-		UserID: fallbackUserID,
 		RunID:  stringVal(doc, "run_id"),
 		Spec:   stringVal(doc, "spec"),
 		Model:  stringVal(doc, "model"),
+		Source: "cosmos",
 	}
 
-	if pr, ok := doc["pass_rate"].(float64); ok {
-		s.PassRate = pr
-	}
 	if ts, ok := doc["timestamp"].(string); ok {
-		s.Timestamp, _ = time.Parse(time.RFC3339, ts)
+		s.Timestamp = ts
 	}
-	return s, nil
+
+	// Extract model from config if not at top level.
+	if s.Model == "" {
+		if config, ok := doc["config"].(map[string]any); ok {
+			s.Model = stringVal(config, "model_id")
+		}
+	}
+
+	// Extract stats from result summary.
+	if summary, ok := doc["summary"].(map[string]any); ok {
+		if total, ok := summary["total_tests"].(float64); ok {
+			s.TaskCount = int(total)
+		}
+		if succeeded, ok := summary["succeeded"].(float64); ok {
+			s.PassCount = int(succeeded)
+		}
+		failed := 0
+		if f, ok := summary["failed"].(float64); ok {
+			failed = int(f)
+		}
+		if s.TaskCount > 0 && failed == 0 {
+			s.Outcome = "pass"
+		} else if s.TaskCount > 0 {
+			s.Outcome = "fail"
+		}
+		if dur, ok := summary["duration_ms"].(float64); ok {
+			s.Duration = dur / 1000.0
+		}
+		if sr, ok := summary["success_rate"].(float64); ok {
+			s.PassRate = sr
+		}
+	}
+
+	return s
 }
 
 // --- Settings ---

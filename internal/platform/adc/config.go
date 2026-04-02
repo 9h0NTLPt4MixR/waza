@@ -15,23 +15,27 @@ const (
 	// Agreed in platform design: 10 concurrent sandboxes per user.
 	MaxSandboxesPerUser = 10
 
-	// DefaultCPU is the default vCPU allocation per sandbox.
-	DefaultCPU = 2
+	// DefaultCPU is the default vCPU allocation per sandbox in millicores.
+	DefaultCPU = 2000
 
 	// DefaultMemoryMB is the default memory allocation per sandbox in MB.
 	DefaultMemoryMB = 4096
 
 	// DefaultSandboxTimeout is how long a sandbox can run before forced termination.
-	DefaultSandboxTimeout = 30 * time.Minute
+	DefaultSandboxTimeout = 60 * time.Minute
 
 	// DefaultAPIURL is the default ADC management API endpoint.
-	DefaultAPIURL = "https://adc.dev.azure.com"
+	DefaultAPIURL = "https://management.azuredevcompute.io"
 )
 
-// ADCConfig holds the ADC connection and resource settings, typically loaded
-// from a .waza.yaml platform configuration file.
+// ADCConfig holds the ADC connection and resource settings. In platform mode
+// these are loaded from environment variables at startup. The ADC SDK
+// authenticates per-request using the user's GitHub OAuth token — no
+// platform-level API key is needed.
 type ADCConfig struct {
 	// APIKey authenticates requests to the ADC management API.
+	// If set, used for all sandbox operations (platform-level credential).
+	// If empty, falls back to per-user GitHub token auth.
 	APIKey string `yaml:"api_key" json:"-"` // never serialize to JSON
 
 	// APIURL is the ADC management API base URL.
@@ -41,7 +45,7 @@ type ADCConfig struct {
 	// "mcr.microsoft.com/waza/sandbox:latest").
 	DiskImage string `yaml:"disk_image" json:"disk_image"`
 
-	// CPU is the vCPU count per sandbox. Defaults to DefaultCPU.
+	// CPU is the vCPU allocation per sandbox in millicores. Defaults to DefaultCPU.
 	CPU int `yaml:"cpu" json:"cpu"`
 
 	// MemoryMB is the memory allocation per sandbox in MB. Defaults to DefaultMemoryMB.

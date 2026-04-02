@@ -202,3 +202,43 @@ All code roles now use `claude-opus-4.6`. Docs/Scribe/diversity use `gemini-3-pr
 - **Files changed:** `internal/platform/api/handlers.go`, `internal/platform/api/routes.go`
 - **What:** Added `POST /api/runs/rerun/{id}` endpoint that clones config from an existing run (repo, evalSpec, model, executor, workers, storageDestination) into a new queued run with a fresh ID and timestamp. Dispatches via the same `dispatchRun` goroutine as `handleTriggerRun`. Returns `201 Created` with `{runId, status}`.
 - **Key learning:** Go's `net/http` ServeMux panics when two patterns like `POST /api/runs/{id}/rerun` and `POST /api/runs/cancel/{id}` both have wildcards in overlapping positions — they're ambiguous for paths like `/api/runs/cancel/rerun`. Solution: use `POST /api/runs/rerun/{id}` (action-first) to match the existing `cancel/{id}` convention. All action-scoped run routes should follow the `POST /api/runs/{action}/{id}` pattern.
+
+### ADC SDK Integration — Wired Real SDK End-to-End
+- **Date:** 2026-04-02
+- **Branch:** `feature/waza-platform`
+- **Files modified:** `go.mod`, `go.sum`, `internal/platform/adc/config.go`, `internal/platform/adc/engine.go`, `internal/platform/adc/engine_test.go`, `internal/platform/api/deps.go`, `internal/platform/api/handlers.go`, `internal/platform/api/handlers_test.go`, `internal/platform/execution/runner.go`, `internal/projectconfig/config.go`, `cmd/waza/cmd_serve.go`
+- **Files created:** `.squad/decisions/inbox/linus-adc-integration.md`
+- **What:** Replaced the stub ADC engine with the real ADC Go SDK (`github.com/coreai-microsoft/adc-sdk-go`):
+  1. **go.mod** — Added `github.com/coreai-microsoft/adc-sdk-go` dependency with local `replace` directive pointing to `/Users/shboyer/github/adc/client-sdk/go-sdk` (mono-repo subdirectory).
+  2. **adc/config.go** — Removed `APIKey` field. Updated `DefaultAPIURL` to `"https://management.azuredevcompute.io"`. Changed `DefaultCPU` to 2000 (millicores format). ADC now authenticates per-user via GitHub OAuth token.
+  3. **adc/engine.go** — Removed `//go:build adcsdk` tag. Rewrote to use real SDK API: `adc.New(Config{GitHubToken})` (no error), `CreateFromDiskImage(ctx, models.CreateFromDiskImageOptions{})`, `sandbox.ID()` method, `sandbox.ExecuteShellCommand` returns `*models.CommandExecutionResult`, `sandbox.WriteFileText` takes `*models.WriteFileOptions{CreateDirs: true}`. Added `NewClient(githubToken)`, `CreateSandbox()`, `DeleteSandbox()`, and `Config()` methods.
+  4. **adc/engine_test.go** — Removed `//go:build adcsdk` tag and stub types. Rewrote tests to use real `adc.ADCConfig` and `adc.Engine` types. Tests cover config defaults, WithDefaults(), CanAllocate(), NewEngine, NewClient, Shutdown idempotency, and SessionUsage.
+  5. **api/deps.go** — Replaced `ADCDispatcher` interface + `ADCEngine` field with `ADCConfig *adc.ADCConfig`. Engine is created per-request in `dispatchRun` using the user's GitHub token.
+  6. **api/handlers.go** — Updated `dispatchRun` to create `adc.NewEngine(*deps.ADCConfig)` when ADC is configured, passing it to `RunConfig.ADCEngine`. Updated cancel handler from `deps.ADCEngine` to `deps.ADCConfig`.
+  7. **execution/runner.go** — Added `ADCEngine *adc.Engine` field to `RunConfig`. `RunEval` dispatches to `runViaADC()` or `runLocal()`. ADC path: create sandbox → clone repo inside → run waza → read results.json → save to Cosmos → delete sandbox. Full status lifecycle and token sanitization.
+  8. **cmd_serve.go** — Replaced commented-out ADC init with real config from env vars (`ADC_API_URL`, `ADC_DISK_IMAGE`, `ADC_SANDBOX_GROUP_ID`, `ADC_CPU`, `ADC_MEMORY_MB`). Added `envIntOrDefault` helper.
+  9. **projectconfig/config.go** — Removed `APIKey` from mirrored `ADCConfig` struct and merge function.
+  10. **handlers_test.go** — Fixed pre-existing test (`TestIntegration_FullHTTPCycle_Me`) that broke when cache was invalidated — `handleMe` returns camelCase map but test was decoding into `auth.User` with snake_case tags.
+- **Key learning:** The ADC SDK module path (`github.com/coreai-microsoft/adc-sdk-go`) doesn't match the repo path (`github.com/coreai-microsoft/adc/client-sdk/go-sdk`). A `replace` directive is required. Before shipping to main, the SDK team should either publish the module properly or we need a versioned replace.
+- **Key learning:** `adc.New(config)` returns `*Client` with no error — it's a pure constructor. The SDK sets auth headers from Config fields: `APIKey` → `X-API-Key` header, `Token` → `Authorization: Bearer` header, `GitHubToken` → `Authorization: GitHub` header.
+- **Key learning:** The SDK expects CPU in Kubernetes millicore string format (e.g., "2000m") and memory in mebibyte format (e.g., "4096Mi"). Storing as int millicores and formatting with `fmt.Sprintf("%dm", cpu)` avoids float arithmetic.
+- **Pending:** Local `replace` directive must be changed to a proper module reference before merging. The ADC SDK repo needs to either set up go module proxying for the subdirectory or publish the module at the repo root.
+
+### Log Tailing for ADC Poll Loop
+- **Date:** $(date +%Y-%m-%d)
+- **Branch:** `feature/waza-platform`
+- **Files changed:** `internal/platform/db/db.go`, `internal/platform/execution/runner.go`, `internal/platform/api/handlers.go`, `internal/platform/db/cosmos.go`
+- **What:** Added `LogTail` field to `RunRequest` to capture the last 30 lines of `/workspace/waza.log` from ADC sandboxes during each 15s poll cycle. Exposed via the queue API as `logTail` (camelCase). Persisted as `log_tail` in Cosmos. ADC-only — local subprocess mode skips log tailing (no file to tail). Best-effort updates: log tail failures don't block the eval.
+- **Key learning:** The Cosmos persistence layer uses explicit document maps (not struct marshaling), so new fields must be added to `CreateRunRequest`, `UpdateRunRequest`, and the `parseRunRequest` fallback struct independently.
+
+### Dashboard Summary Endpoint + Cosmos Executor Persistence + EvalSpec Frontend Alignment
+- **Date:** 2026-04-03
+- **Branch:** `feature/waza-platform`
+- **Files changed:** `internal/platform/api/handlers.go`, `internal/platform/api/routes.go`, `internal/platform/db/cosmos.go`, `web/src/api/client.ts`
+- **What:** Fixed two dashboard issues — KPI cards showing all zeros, and evalSpec field alignment:
+  1. **handlers.go** — Added `handleSummary` handler that queries `deps.Store.ListResults` from Cosmos (limit=0 for all results), aggregates total runs, total tasks, pass rate (totalPass/totalTasks), average tokens, average cost, and average duration per run. Returns `summaryResponse` struct with camelCase JSON tags matching frontend `SummaryResponse` interface.
+  2. **routes.go** — Registered `GET /api/summary` with auth middleware, placed before the results routes.
+  3. **cosmos.go** — Added missing `"executor"` field to `CreateRunRequest` and `UpdateRunRequest` document maps. Added `Executor` field to `parseRunRequest` fallback struct (`runNoUserID`) so it round-trips through Cosmos correctly. Same pattern as the log_tail fix.
+  4. **web/src/api/client.ts** — Changed `RunQueueItem.evalPath` → `RunQueueItem.evalSpec` to match the Go `runQueueItem` JSON tag (`json:"evalSpec"`). Components already referenced `evalSpec`; only the TypeScript interface was wrong.
+- **Key learning:** The Cosmos explicit document map pattern means EVERY new field on `db.RunRequest` must be added to three places independently: `CreateRunRequest` map, `UpdateRunRequest` map, and `parseRunRequest` fallback struct. The `Executor` field was added to the Go struct and handlers but missed in all three Cosmos persistence points.
+- **Key learning:** When frontend TypeScript interfaces diverge from Go JSON tags, the data silently arrives as `undefined`. Always grep both the interface definition AND the component usage — components may reference the correct field name (e.g., `run.evalSpec`) even if the interface defines the wrong one (`evalPath`), causing TypeScript to not flag the error.

@@ -41,12 +41,13 @@ func (c *CosmosRunStore) ListRuns(sortField, order string) ([]RunSummary, error)
 		if s.PassRate < 100.0 {
 			outcome = "failed"
 		}
+				ts, _ := time.Parse(time.RFC3339, s.Timestamp)
 		runs = append(runs, RunSummary{
 			ID:        s.RunID,
 			Spec:      s.Spec,
 			Model:     s.Model,
 			Outcome:   outcome,
-			Timestamp: s.Timestamp,
+			Timestamp: ts,
 			Source:    "cosmos",
 		})
 	}

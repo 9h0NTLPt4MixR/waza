@@ -2,25 +2,28 @@ import { test, expect } from "@playwright/test";
 import { mockAllAPIs } from "./helpers/api-mock";
 
 test.describe("Weighted Scores", () => {
-  test("runs table shows W. Score column with values", async ({ page }) => {
+  test("unified runs table shows pass rate for completed runs", async ({ page }) => {
     await mockAllAPIs(page);
     await page.goto("/");
 
-    // Header should include W. Score (display column, not sortable)
-    await expect(page.locator("th", { hasText: "W. Score" })).toBeVisible();
+    // The unified table shows Pass Rate instead of W. Score
+    await expect(page.locator("th", { hasText: "Pass Rate" })).toBeVisible();
 
-    // run-001 has weightedScore 0.92 → "92%"
+    // run-001 has passCount 4, taskCount 4 → "100%"
     const rows = page.locator("tbody tr");
-    await expect(rows.first().getByText("92%")).toBeVisible();
+    await expect(rows.first().getByText("100%")).toBeVisible();
   });
 
-  test("runs table shows dash when weightedScore is absent", async ({ page }) => {
+  test("unified runs table shows status column", async ({ page }) => {
     await mockAllAPIs(page);
     await page.goto("/");
 
-    // run-003 has no weightedScore → "—"
+    // The unified table has a Status column with badges
+    await expect(page.locator("th", { hasText: "Status" })).toBeVisible();
+
+    // All mock runs are completed → "Complete" badges
     const rows = page.locator("tbody tr");
-    await expect(rows.nth(2).getByText("—")).toBeVisible();
+    await expect(rows.first().getByText("Complete")).toBeVisible();
   });
 
   test("run detail task table shows W. Score column", async ({ page }) => {

@@ -63,7 +63,7 @@ export default function NewRun() {
       {
         owner,
         repo,
-        evalPath: selectedEval,
+        evalSpec: selectedEval,
         model,
         workers,
         parallel,

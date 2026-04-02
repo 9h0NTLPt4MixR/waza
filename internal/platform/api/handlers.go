@@ -10,9 +10,11 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/microsoft/waza/internal/platform/adc"
 	"github.com/microsoft/waza/internal/platform/auth"
 	"github.com/microsoft/waza/internal/platform/db"
 	"github.com/microsoft/waza/internal/platform/execution"
@@ -30,7 +32,14 @@ func handleMe(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	writeJSON(w, http.StatusOK, user)
+	// Return camelCase JSON matching the frontend User interface.
+	resp := map[string]any{
+		"githubId":  user.GitHubID,
+		"login":     user.Login,
+		"name":      user.Name,
+		"avatarUrl": user.AvatarURL,
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // handleLogout clears the session cookie and revokes the server-side session.
@@ -270,13 +279,14 @@ func testGitHubRepo(r *http.Request, config map[string]any) (bool, string) {
 
 // triggerRunRequest is the JSON body for POST /api/runs/trigger.
 type triggerRunRequest struct {
-	Owner              string `json:"owner"`              // repo owner (frontend sends separately)
-	Repo               string `json:"repo"`               // repo name or "owner/repo"
-	EvalPath           string `json:"evalPath"`           // path to eval YAML within the repo
-	EvalSpec           string `json:"eval_spec"`          // alias for evalPath
+	Owner              string `json:"owner"`                        // repo owner (frontend sends separately)
+	Repo               string `json:"repo"`                        // repo name or "owner/repo"
+	EvalPath           string `json:"evalPath"`                    // path to eval YAML within the repo
+	EvalSpec           string `json:"eval_spec"`                   // alias for evalPath
 	Model              string `json:"model"`
 	Workers            int    `json:"workers"`
-	StorageDestination string `json:"storageDestination"` // "cosmos" (default) or connection ID
+	StorageDestination string `json:"storageDestination"`          // "cosmos" (default) or connection ID
+	Executor           string `json:"executor,omitempty"`          // executor override; defaults to "copilot-sdk"
 }
 
 // triggerRunResponse is returned by POST /api/runs/trigger so the frontend
@@ -296,6 +306,9 @@ type runQueueItem struct {
 	Model              string       `json:"model"`
 	Workers            int          `json:"workers"`
 	StorageDestination string       `json:"storageDestination"`
+	Executor           string       `json:"executor,omitempty"`
+	ADCSandboxIDs      []string     `json:"adcSandboxIds,omitempty"`
+	LogTail            string       `json:"logTail,omitempty"`
 	CreatedAt          time.Time    `json:"createdAt"`
 	CompletedAt        *time.Time   `json:"completedAt,omitempty"`
 	Error              string       `json:"error,omitempty"`
@@ -311,6 +324,9 @@ func toRunQueueItem(r *db.RunRequest) runQueueItem {
 		Model:              r.Model,
 		Workers:            r.Workers,
 		StorageDestination: r.StorageDestination,
+		Executor:           r.Executor,
+		ADCSandboxIDs:      r.ADCSandboxIDs,
+		LogTail:            r.LogTail,
 		CreatedAt:          r.CreatedAt,
 		CompletedAt:        r.CompletedAt,
 		Error:              r.Error,
@@ -356,12 +372,16 @@ func handleTriggerRun(deps *Dependencies) http.HandlerFunc {
 		if req.StorageDestination == "" {
 			req.StorageDestination = "cosmos"
 		}
+		if req.Executor == "" {
+			req.Executor = "copilot-sdk"
+		}
 
 		slog.Info("triggering run",
 			"user", user.Login,
 			"repo", req.Repo,
 			"eval", req.EvalSpec,
 			"model", req.Model,
+			"executor", req.Executor,
 			"storageDestination", req.StorageDestination,
 		)
 
@@ -373,6 +393,7 @@ func handleTriggerRun(deps *Dependencies) http.HandlerFunc {
 			Model:              req.Model,
 			Workers:            req.Workers,
 			StorageDestination: req.StorageDestination,
+			Executor:           req.Executor,
 		}
 
 		if err := deps.Store.CreateRunRequest(r.Context(), run); err != nil {
@@ -412,6 +433,14 @@ func dispatchRun(deps *Dependencies, run *db.RunRequest, githubToken string) {
 		Run:         run,
 		GitHubToken: githubToken,
 		Timeout:     execution.DefaultTimeout,
+		Executor:    run.Executor,
+	}
+
+	// When ADC is configured, create a per-request ADC engine using the
+	// platform-level config. The engine authenticates with the user's
+	// GitHub token — no platform-level API key needed.
+	if deps.ADCConfig != nil {
+		cfg.ADCEngine = adc.NewEngine(*deps.ADCConfig)
 	}
 
 	if err := execution.RunEval(context.Background(), cfg); err != nil {
@@ -510,7 +539,7 @@ func handleCancelRun(deps *Dependencies) http.HandlerFunc {
 		}
 
 		// Best-effort ADC sandbox cleanup.
-		if deps.ADCEngine != nil && len(run.ADCSandboxIDs) > 0 {
+		if deps.ADCConfig != nil && len(run.ADCSandboxIDs) > 0 {
 			go func() {
 				slog.Info("cleaning up ADC sandboxes for cancelled run", "run", runID)
 				// Sandbox cleanup is handled by the engine's Shutdown or individual sandbox delete.
@@ -518,6 +547,63 @@ func handleCancelRun(deps *Dependencies) http.HandlerFunc {
 		}
 
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// handleRerun clones the configuration from an existing run into a new queued
+// run and dispatches it for execution. The original run must belong to the
+// authenticated user (user isolation).
+func handleRerun(deps *Dependencies) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := auth.UserFromContext(r.Context())
+		if user == nil {
+			writeError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+
+		runID := r.PathValue("id")
+		if runID == "" {
+			writeError(w, http.StatusBadRequest, "run id is required")
+			return
+		}
+
+		originalRun, err := deps.Store.GetRunRequest(r.Context(), user.GitHubID, runID)
+		if err != nil {
+			writeError(w, http.StatusNotFound, "run not found")
+			return
+		}
+
+		newRun := &db.RunRequest{
+			ID:                 fmt.Sprintf("run-%d", time.Now().UnixNano()),
+			UserID:             user.GitHubID,
+			Repo:               originalRun.Repo,
+			EvalSpec:           originalRun.EvalSpec,
+			Model:              originalRun.Model,
+			Executor:           originalRun.Executor,
+			Workers:            originalRun.Workers,
+			StorageDestination: originalRun.StorageDestination,
+			Status:             db.Queued,
+			CreatedAt:          time.Now().UTC(),
+		}
+
+		if err := deps.Store.CreateRunRequest(r.Context(), newRun); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to create rerun")
+			slog.Error("Rerun:CreateRunRequest", "error", err, "user", user.Login, "original", runID)
+			return
+		}
+
+		slog.Info("rerun created",
+			"user", user.Login,
+			"original", runID,
+			"new", newRun.ID,
+		)
+
+		go dispatchRun(deps, newRun, user.GitHubToken)
+
+		writeJSON(w, http.StatusCreated, triggerRunResponse{
+			RunID:  newRun.ID,
+			Status: newRun.Status,
+		})
 	}
 }
 
@@ -600,17 +686,18 @@ func handleListEvals(deps *Dependencies) http.HandlerFunc {
 	}
 }
 
-// searchEvalFiles uses the GitHub API to find eval.yaml files in a repo.
+// searchEvalFiles uses the GitHub Git Trees API to find eval.yaml files in a repo.
+// This is more reliable than the search API which can return intermittent 500s.
 func searchEvalFiles(r *http.Request, owner, repo string, user *auth.User) ([]evalFileInfo, error) {
-	// Use GitHub search API: filename:eval.yaml in the specified repo
+	// Use Git Trees API with recursive flag to get full file listing.
 	url := fmt.Sprintf(
-		"https://api.github.com/search/code?q=filename:eval.yaml+repo:%s/%s",
+		"https://api.github.com/repos/%s/%s/git/trees/HEAD?recursive=1",
 		owner, repo,
 	)
 
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("building search request: %w", err)
+		return nil, fmt.Errorf("building tree request: %w", err)
 	}
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	req.Header.Set("User-Agent", "waza-platform")
@@ -620,7 +707,7 @@ func searchEvalFiles(r *http.Request, owner, repo string, user *auth.User) ([]ev
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("GitHub search request: %w", err)
+		return nil, fmt.Errorf("GitHub tree request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -630,21 +717,29 @@ func searchEvalFiles(r *http.Request, owner, repo string, user *auth.User) ([]ev
 	}
 
 	var result struct {
-		Items []struct {
-			Name string `json:"name"`
+		Tree []struct {
 			Path string `json:"path"`
-		} `json:"items"`
+			Type string `json:"type"`
+		} `json:"tree"`
+		Truncated bool `json:"truncated"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decoding search results: %w", err)
+		return nil, fmt.Errorf("decoding tree response: %w", err)
 	}
 
-	evals := make([]evalFileInfo, 0, len(result.Items))
-	for _, item := range result.Items {
-		evals = append(evals, evalFileInfo{
-			Path: item.Path,
-			Name: item.Name,
-		})
+	var evals []evalFileInfo
+	for _, entry := range result.Tree {
+		if entry.Type != "blob" {
+			continue
+		}
+		// Match files named eval.yaml or eval.yml
+		base := filepath.Base(entry.Path)
+		if base == "eval.yaml" || base == "eval.yml" {
+			evals = append(evals, evalFileInfo{
+				Path: entry.Path,
+				Name: base,
+			})
+		}
 	}
 	return evals, nil
 }
@@ -710,6 +805,7 @@ func handleListResults(deps *Dependencies) http.HandlerFunc {
 }
 
 // handleGetResult returns a full evaluation result by run ID.
+// It transforms the raw waza output into the RunDetail format the dashboard expects.
 func handleGetResult(deps *Dependencies) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := auth.UserFromContext(r.Context())
@@ -730,8 +826,281 @@ func handleGetResult(deps *Dependencies) http.HandlerFunc {
 			return
 		}
 
+		// Transform raw waza output to dashboard RunDetail format.
+		var raw map[string]any
+		if err := json.Unmarshal(result, &raw); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write(result) //nolint:errcheck
+			return
+		}
+
+		transformed := transformWazaResult(runID, raw)
+		data, err := json.Marshal(transformed)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write(result) //nolint:errcheck
+			return
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write(result) //nolint:errcheck
+		w.Write(data) //nolint:errcheck
 	}
+}
+
+// transformWazaResult converts raw waza results.json into the RunDetail format.
+func transformWazaResult(runID string, raw map[string]any) map[string]any {
+	detail := map[string]any{
+		"id":        runID,
+		"spec":      stringVal(raw, "eval_name"),
+		"model":     "",
+		"outcome":   "unknown",
+		"passCount": 0,
+		"taskCount": 0,
+		"tokens":    0,
+		"cost":      0.0,
+		"duration":  0.0,
+		"timestamp": stringVal(raw, "timestamp"),
+		"tasks":     []any{},
+	}
+
+	// Extract model from config.
+	if config, ok := raw["config"].(map[string]any); ok {
+		detail["model"] = stringVal(config, "model_id")
+	}
+
+	// Extract summary stats.
+	if summary, ok := raw["summary"].(map[string]any); ok {
+		totalTests := intVal(summary, "total_tests")
+		succeeded := intVal(summary, "succeeded")
+		failed := intVal(summary, "failed")
+		detail["taskCount"] = totalTests
+		detail["passCount"] = succeeded
+		if totalTests > 0 && failed == 0 {
+			detail["outcome"] = "pass"
+		} else if totalTests > 0 {
+			detail["outcome"] = "fail"
+		}
+		if dur, ok := summary["duration_ms"].(float64); ok {
+			detail["duration"] = dur / 1000.0
+		}
+	}
+
+	// Extract a composite pass threshold from metrics (used per-task when available).
+	var passThreshold *float64
+	if metrics, ok := raw["metrics"].(map[string]any); ok {
+		// Use the task_completion threshold if present, otherwise pick the first metric's threshold.
+		for _, key := range []string{"task_completion", "composite_score"} {
+			if m, ok := metrics[key].(map[string]any); ok {
+				if t, ok := m["threshold"].(float64); ok && t > 0 {
+					passThreshold = &t
+					break
+				}
+			}
+		}
+		if passThreshold == nil {
+			for _, v := range metrics {
+				if m, ok := v.(map[string]any); ok {
+					if t, ok := m["threshold"].(float64); ok && t > 0 {
+						passThreshold = &t
+						break
+					}
+				}
+			}
+		}
+	}
+
+	// Transform tasks.
+	if tasks, ok := raw["tasks"].([]any); ok {
+		transformed := make([]map[string]any, 0, len(tasks))
+		for _, t := range tasks {
+			task, ok := t.(map[string]any)
+			if !ok {
+				continue
+			}
+
+			taskResult := map[string]any{
+				"name":          stringVal(task, "display_name"),
+				"outcome":       stringVal(task, "status"),
+				"score":         0.0,
+				"weightedScore": 0.0,
+				"duration":      0.0,
+				"graderResults": []any{},
+			}
+
+			// Extract stats.
+			if stats, ok := task["stats"].(map[string]any); ok {
+				if dur, ok := stats["avg_duration_ms"].(float64); ok {
+					taskResult["duration"] = dur / 1000.0
+				}
+				if score, ok := stats["avg_score"].(float64); ok {
+					taskResult["score"] = score
+				}
+				if ws, ok := stats["avg_weighted_score"].(float64); ok {
+					taskResult["weightedScore"] = ws
+				}
+				if total, ok := stats["total_runs"].(float64); ok && total > 0 {
+					taskResult["numTrials"] = int(total)
+					if passed, ok := stats["passed_runs"].(float64); ok {
+						taskResult["passedTrials"] = int(passed)
+					}
+					if failed, ok := stats["failed_runs"].(float64); ok {
+						taskResult["failedTrials"] = int(failed)
+					}
+				}
+			}
+
+			// Extract grader results from first run's validations or error.
+			if runs, ok := task["runs"].([]any); ok && len(runs) > 0 {
+				if run, ok := runs[0].(map[string]any); ok {
+					// Check for validations (grader results — stored as map[graderName]result).
+					if validations, ok := run["validations"].(map[string]any); ok && len(validations) > 0 {
+						graders := make([]map[string]any, 0, len(validations))
+						for graderName, v := range validations {
+							val, ok := v.(map[string]any)
+							if !ok {
+								continue
+							}
+							passed := false
+							if p, ok := val["passed"].(bool); ok {
+								passed = p
+							}
+							score := 0.0
+							if s, ok := val["score"].(float64); ok {
+								score = s
+							}
+							feedback := stringVal(val, "feedback")
+							graderType := stringVal(val, "type")
+							if graderType == "" {
+								graderType = stringVal(val, "grader_type")
+							}
+
+							// Build details from the validation's details map.
+							var details map[string]any
+							if d, ok := val["details"].(map[string]any); ok {
+								details = d
+							}
+
+							g := map[string]any{
+								"name":    graderName,
+								"type":    graderType,
+								"passed":  passed,
+								"score":   score,
+								"message": feedback,
+							}
+							if details != nil {
+								g["details"] = details
+							}
+							if w, ok := val["weight"].(float64); ok {
+								g["weight"] = w
+							}
+							if dur, ok := val["duration_ms"].(float64); ok {
+								g["durationMs"] = dur
+							}
+							graders = append(graders, g)
+						}
+						if len(graders) > 0 {
+							taskResult["graderResults"] = graders
+						}
+					}
+					// Fall back to error message if no validations.
+					graders, hasGraders := taskResult["graderResults"].([]map[string]any)
+					if (!hasGraders || len(graders) == 0) {
+						if errMsg := stringVal(run, "error_msg"); errMsg != "" {
+							taskResult["graderResults"] = []map[string]any{
+								{
+									"name":    "error",
+									"type":    "error",
+									"passed":  false,
+									"score":   0,
+									"message": errMsg,
+								},
+							}
+						}
+					}
+				}
+			}
+
+			if passThreshold != nil {
+				taskResult["passThreshold"] = *passThreshold
+			}
+
+			transformed = append(transformed, taskResult)
+		}
+		detail["tasks"] = transformed
+	}
+
+	return detail
+}
+
+// summaryResponse is the JSON payload for GET /api/summary — KPI cards on the dashboard.
+type summaryResponse struct {
+	TotalRuns   int     `json:"totalRuns"`
+	TotalTasks  int     `json:"totalTasks"`
+	PassRate    float64 `json:"passRate"`
+	AvgTokens   float64 `json:"avgTokens"`
+	AvgCost     float64 `json:"avgCost"`
+	AvgDuration float64 `json:"avgDuration"`
+}
+
+// handleSummary aggregates KPI metrics from stored Cosmos results for the
+// authenticated user.
+func handleSummary(deps *Dependencies) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := auth.UserFromContext(r.Context())
+		if user == nil {
+			writeError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+
+		results, err := deps.Store.ListResults(r.Context(), user.GitHubID, 0)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to list results")
+			slog.Error("handleSummary: ListResults", "error", err, "user", user.Login)
+			return
+		}
+
+		resp := summaryResponse{}
+		if len(results) == 0 {
+			writeJSON(w, http.StatusOK, resp)
+			return
+		}
+
+		resp.TotalRuns = len(results)
+		var totalTokens, totalTasks, totalPass int
+		var totalCost, totalDuration float64
+		for _, rs := range results {
+			totalTasks += rs.TaskCount
+			totalPass += rs.PassCount
+			totalTokens += rs.Tokens
+			totalCost += rs.Cost
+			totalDuration += rs.Duration
+		}
+		resp.TotalTasks = totalTasks
+		if totalTasks > 0 {
+			resp.PassRate = float64(totalPass) / float64(totalTasks)
+		}
+		n := float64(len(results))
+		resp.AvgTokens = float64(totalTokens) / n
+		resp.AvgCost = totalCost / n
+		resp.AvgDuration = totalDuration / n
+
+		writeJSON(w, http.StatusOK, resp)
+	}
+}
+
+func intVal(m map[string]any, key string) int {
+	if v, ok := m[key].(float64); ok {
+		return int(v)
+	}
+	return 0
+}
+
+func stringVal(m map[string]any, key string) string {
+	if v, ok := m[key].(string); ok {
+		return v
+	}
+	return ""
 }

@@ -1,29 +1,30 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License. See LICENSE in the project root for license information.
 
-//go:build adcsdk
-
 package adc
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"sync"
 	"time"
 
 	adcsdk "github.com/coreai-microsoft/adc-sdk-go"
+	"github.com/coreai-microsoft/adc-sdk-go/models"
 	"github.com/microsoft/waza/internal/execution"
-	"github.com/microsoft/waza/internal/models"
+	wazamodels "github.com/microsoft/waza/internal/models"
 )
 
 // Engine implements execution.AgentEngine using Azure Dev Compute sandboxes.
 // Each Execute call creates an isolated sandbox, uploads fixtures, runs the
 // waza CLI inside it, and collects the results.
+//
+// The ADC client is created per-request using the user's GitHub OAuth token.
+// The Engine stores platform-level config (disk image, CPU, memory) but
+// defers authentication to NewClient.
 type Engine struct {
-	cfg    ADCConfig
-	client *adcsdk.Client
+	cfg ADCConfig
 
 	mu        sync.Mutex
 	sandboxes map[string]*adcsdk.Sandbox // tracked for cleanup
@@ -38,43 +39,61 @@ func NewEngine(cfg ADCConfig) *Engine {
 	}
 }
 
-// Initialize creates the ADC client and validates credentials.
-func (e *Engine) Initialize(ctx context.Context) error {
-	client, err := adcsdk.New(adcsdk.Config{
-		APIKey: e.cfg.APIKey,
-		APIURL: e.cfg.APIURL,
-	})
-	if err != nil {
-		return fmt.Errorf("adc: creating client: %w", err)
+// NewClient creates an ADC client authenticated with the user's GitHub token.
+// Call this per-request — the SDK uses "Authorization: GitHub {token}" for auth.
+func (e *Engine) NewClient(githubToken string) *adcsdk.Client {
+	cfg := adcsdk.Config{
+		APIURL:  e.cfg.APIURL,
+		Timeout: e.cfg.SandboxTimeout, // match eval timeout (default 30m)
 	}
-	e.client = client
-	return nil
+	// Prefer platform-level API key. For GitHub tokens (gho_/ghp_), use
+	// the GitHubToken field which sends "Authorization: GitHub {token}".
+	// A real ADC API key uses the "x-ms-api-key" header instead.
+	if e.cfg.APIKey != "" {
+		if isGitHubToken(e.cfg.APIKey) {
+			cfg.GitHubToken = e.cfg.APIKey
+		} else {
+			cfg.APIKey = e.cfg.APIKey
+		}
+	} else {
+		cfg.GitHubToken = githubToken
+	}
+	return adcsdk.New(cfg)
+}
+
+// isGitHubToken returns true if the token looks like a GitHub OAuth/PAT token.
+func isGitHubToken(token string) bool {
+	return len(token) > 4 && (token[:4] == "gho_" || token[:4] == "ghp_" || token[:4] == "ghs_" || token[:4] == "ghr_")
 }
 
 // Execute runs a single evaluation task in an isolated ADC sandbox.
 //
 // Flow: create sandbox → upload fixture files → execute waza CLI →
 // read results JSON → parse into ExecutionResponse → delete sandbox.
-func (e *Engine) Execute(ctx context.Context, req *execution.ExecutionRequest) (*execution.ExecutionResponse, error) {
+func (e *Engine) Execute(ctx context.Context, req *execution.ExecutionRequest, githubToken string) (*execution.ExecutionResponse, error) {
 	start := time.Now()
+	client := e.NewClient(githubToken)
 
 	// Create sandbox from disk image
-	sandbox, err := e.client.Sandboxes.CreateFromDiskImage(ctx, adcsdk.CreateSandboxRequest{
-		DiskImageID:    e.cfg.DiskImage,
+	sandbox, err := client.Sandboxes.CreateFromDiskImage(ctx, models.CreateFromDiskImageOptions{
+		DiskImage:      models.SandboxSourceDiskImage{ID: e.cfg.DiskImage},
+		CPU:            fmt.Sprintf("%dm", e.cfg.CPU),
+		Memory:         fmt.Sprintf("%dMi", e.cfg.MemoryMB),
 		SandboxGroupID: e.cfg.SandboxGroupID,
-		CPU:            strconv.Itoa(e.cfg.CPU),
-		Memory:         strconv.Itoa(e.cfg.MemoryMB) + "Mi",
+		Environment: map[string]string{
+			"GITHUB_TOKEN": githubToken,
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("adc: creating sandbox: %w", err)
 	}
 
 	e.trackSandbox(sandbox)
-	defer e.cleanupSandbox(ctx, sandbox)
+	defer e.cleanupSandbox(ctx, sandbox, githubToken)
 
 	// Upload fixture files into the sandbox workspace
 	for _, res := range req.Resources {
-		if err := sandbox.WriteFileText(ctx, "/workspace/"+res.Path, string(res.Content)); err != nil {
+		if _, err := sandbox.WriteFileText(ctx, "/workspace/"+res.Path, string(res.Content), &models.WriteFileOptions{CreateDirs: true}); err != nil {
 			return nil, fmt.Errorf("adc: uploading file %s: %w", res.Path, err)
 		}
 	}
@@ -93,11 +112,21 @@ func (e *Engine) Execute(ctx context.Context, req *execution.ExecutionRequest) (
 	execCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	output, err := sandbox.ExecuteShellCommand(execCtx, cmd)
+	result, err := sandbox.ExecuteShellCommand(execCtx, cmd, "", nil, "/workspace")
 	if err != nil {
 		return &execution.ExecutionResponse{
-			FinalOutput: output,
+			FinalOutput: "",
 			ErrorMsg:    fmt.Sprintf("sandbox execution failed: %v", err),
+			Success:     false,
+			DurationMs:  time.Since(start).Milliseconds(),
+		}, nil
+	}
+
+	// Check command exit code
+	if result.ExitCode != 0 {
+		return &execution.ExecutionResponse{
+			FinalOutput: result.Stdout,
+			ErrorMsg:    fmt.Sprintf("sandbox command exited with code %d: %s", result.ExitCode, result.Stderr),
 			Success:     false,
 			DurationMs:  time.Since(start).Milliseconds(),
 		}, nil
@@ -107,7 +136,7 @@ func (e *Engine) Execute(ctx context.Context, req *execution.ExecutionRequest) (
 	resultsJSON, err := sandbox.ReadFileText(ctx, "/workspace/results.json")
 	if err != nil {
 		return &execution.ExecutionResponse{
-			FinalOutput: output,
+			FinalOutput: result.Stdout,
 			ErrorMsg:    fmt.Sprintf("reading results: %v", err),
 			Success:     false,
 			DurationMs:  time.Since(start).Milliseconds(),
@@ -115,7 +144,7 @@ func (e *Engine) Execute(ctx context.Context, req *execution.ExecutionRequest) (
 	}
 
 	resp := &execution.ExecutionResponse{
-		FinalOutput: output,
+		FinalOutput: result.Stdout,
 		Success:     true,
 		DurationMs:  time.Since(start).Milliseconds(),
 		ModelID:     req.ModelID,
@@ -130,6 +159,34 @@ func (e *Engine) Execute(ctx context.Context, req *execution.ExecutionRequest) (
 	}
 
 	return resp, nil
+}
+
+// CreateSandbox creates an ADC sandbox with the given GitHub token and returns
+// the sandbox ID. Used by the platform runner for repo-level eval execution.
+func (e *Engine) CreateSandbox(ctx context.Context, githubToken string, env map[string]string) (*adcsdk.Sandbox, error) {
+	client := e.NewClient(githubToken)
+
+	sandbox, err := client.Sandboxes.CreateFromDiskImage(ctx, models.CreateFromDiskImageOptions{
+		DiskImage:      models.SandboxSourceDiskImage{ID: e.cfg.DiskImage},
+		CPU:            fmt.Sprintf("%dm", e.cfg.CPU),
+		Memory:         fmt.Sprintf("%dMi", e.cfg.MemoryMB),
+		SandboxGroupID: e.cfg.SandboxGroupID,
+		Environment:    env,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("adc: creating sandbox: %w", err)
+	}
+
+	e.trackSandbox(sandbox)
+	return sandbox, nil
+}
+
+// DeleteSandbox deletes a sandbox by reference and removes it from tracking.
+func (e *Engine) DeleteSandbox(ctx context.Context, sandbox *adcsdk.Sandbox) error {
+	e.mu.Lock()
+	delete(e.sandboxes, sandbox.ID())
+	e.mu.Unlock()
+	return sandbox.Delete(ctx)
 }
 
 // Shutdown deletes all tracked sandboxes. Safe to call multiple times.
@@ -161,21 +218,26 @@ func (e *Engine) Shutdown(ctx context.Context) error {
 }
 
 // SessionUsage returns nil — ADC sandboxes don't track per-session token usage.
-func (e *Engine) SessionUsage(_ string) *models.UsageStats {
+func (e *Engine) SessionUsage(_ string) *wazamodels.UsageStats {
 	return nil
+}
+
+// Config returns the engine's ADC configuration.
+func (e *Engine) Config() ADCConfig {
+	return e.cfg
 }
 
 // trackSandbox registers a sandbox for cleanup tracking.
 func (e *Engine) trackSandbox(sb *adcsdk.Sandbox) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.sandboxes[sb.ID] = sb
+	e.sandboxes[sb.ID()] = sb
 }
 
 // cleanupSandbox removes and deletes a single sandbox.
-func (e *Engine) cleanupSandbox(ctx context.Context, sb *adcsdk.Sandbox) {
+func (e *Engine) cleanupSandbox(ctx context.Context, sb *adcsdk.Sandbox, githubToken string) {
 	e.mu.Lock()
-	delete(e.sandboxes, sb.ID)
+	delete(e.sandboxes, sb.ID())
 	e.mu.Unlock()
 	// Best-effort delete; Shutdown will catch stragglers.
 	_ = sb.Delete(ctx)

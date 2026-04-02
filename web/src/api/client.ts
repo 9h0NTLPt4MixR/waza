@@ -36,7 +36,7 @@ export interface EvalSpec {
 export interface TriggerRunConfig {
   owner: string;
   repo: string;
-  evalPath: string;
+  evalSpec: string;
   model: string;
   workers: number;
   parallel: boolean;
@@ -47,11 +47,14 @@ export interface RunQueueItem {
   id: string;
   status: "queued" | "running" | "complete" | "failed" | "cancelled";
   repo?: string;
-  evalPath: string;
+  evalSpec: string;
   model: string;
   workers: number;
   storageDestination?: string;
+  executor?: string;
+  adcSandboxIds?: string[];
   error?: string;
+  logTail?: string;
   createdAt: string;
 }
 
@@ -105,6 +108,8 @@ export interface GraderResult {
   score: number;
   weight?: number;
   message: string;
+  details?: Record<string, unknown>;
+  durationMs?: number;
 }
 
 export interface TranscriptEvent {
@@ -146,6 +151,10 @@ export interface TaskResult {
   sessionDigest?: SessionDigest;
   bootstrapCI?: BootstrapCI;
   isSignificant?: boolean;
+  numTrials?: number;
+  passedTrials?: number;
+  failedTrials?: number;
+  passThreshold?: number;
 }
 
 export interface RunDetail extends RunSummary {
@@ -254,6 +263,17 @@ export async function cancelRun(id: string): Promise<void> {
     method: "POST",
   });
   if (!res.ok) throw new Error(`Failed to cancel run: ${res.status}`);
+}
+
+export async function rerunRun(
+  runId: string,
+): Promise<{ runId: string; status: string }> {
+  const res = await fetch(`/api/runs/rerun/${encodeURIComponent(runId)}`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error(`Rerun failed: ${res.status}`);
+  return res.json() as Promise<{ runId: string; status: string }>;
 }
 
 // --- Results API (Cosmos DB) ---

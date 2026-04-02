@@ -6,14 +6,23 @@
 # Stage 1: Build Go binary
 FROM golang:1.26-alpine AS builder
 
+RUN apk add --no-cache git nodejs npm
+
 WORKDIR /build
 
-# Copy go mod files first for better layer caching
-COPY go.mod go.sum ./
-RUN go mod download
+# Copy vendored ADC SDK for the local replace directive
+COPY .adc-sdk/ /adc-sdk/
 
-# Copy source code
+# Copy everything
+COPY go.mod go.sum ./
 COPY . .
+
+# Rewrite the local replace to point to the copied SDK inside Docker
+RUN sed -i 's|=> /Users/shboyer/github/adc/client-sdk/go-sdk|=> /adc-sdk|' go.mod && \
+    go mod download
+
+# Build web SPA (required for go:embed in web/embed.go)
+RUN cd web && npm ci && npm run build
 
 # Build the binary with static linking
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-s -w' -o waza ./cmd/waza
@@ -22,15 +31,22 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-s -w' -o 
 RUN ./waza --version
 
 # Stage 2: Runtime image with tools needed for evaluation
-FROM alpine:3.19
+# Using debian:bookworm-slim (not Alpine) because the embedded Copilot SDK CLI
+# binary is dynamically linked against glibc. Alpine uses musl libc which causes
+# "no such file or directory" on fork/exec of the extracted binary.
+FROM debian:bookworm-slim
 
-RUN apk --no-cache add \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     git \
     bash \
     curl \
     jq \
-    openssh-client
+    openssh-client \
+    python3 \
+    nodejs \
+    npm \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
 

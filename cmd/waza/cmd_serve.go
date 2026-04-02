@@ -8,11 +8,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/microsoft/waza/internal/jsonrpc"
 	"github.com/microsoft/waza/internal/mcp"
+	"github.com/microsoft/waza/internal/platform/adc"
 	"github.com/microsoft/waza/internal/platform/api"
 	"github.com/microsoft/waza/internal/platform/auth"
 	"github.com/microsoft/waza/internal/platform/db"
@@ -188,25 +190,33 @@ func runPlatformServer(cmd *cobra.Command, cfg *projectconfig.ProjectConfig, por
 		Store:          store,
 		Auth:           authProvider,
 		AuthMiddleware: authMiddleware,
-		ADCEngine:      nil, // ADC engine initialized below if configured
+		ADCConfig:      nil, // ADC config initialized below if configured
 	}
 
-	// --- Initialize ADC engine (optional) ---
-	adcAPIKey := envOrDefault("ADC_API_KEY", "")
-	if adcAPIKey != "" {
-		logger.Info("ADC engine configured but SDK not yet in go.mod — dispatch is no-op")
-		// When the ADC SDK is added to go.mod, uncomment:
-		// adcCfg := adc.ADCConfig{
-		//     APIKey:    adcAPIKey,
-		//     APIURL:    envOrDefault("ADC_API_URL", adc.DefaultAPIURL),
-		//     DiskImage: envOrDefault("ADC_DISK_IMAGE", ""),
-		// }
-		// engine := adc.NewEngine(adcCfg)
-		// if err := engine.Initialize(ctx); err != nil {
-		//     return fmt.Errorf("initializing ADC engine: %w", err)
-		// }
-		// defer engine.Shutdown(ctx)
-		// deps.ADCEngine = engine
+	// --- Initialize ADC config (optional) ---
+	// ADC uses the user's GitHub OAuth token for auth — no platform-level
+	// API key needed. We only need the API URL, disk image, and resource
+	// settings at startup. Clients are created per-request in dispatchRun.
+	adcAPIURL := envOrDefault("ADC_API_URL", "")
+	adcDiskImage := envOrDefault("ADC_DISK_IMAGE", "")
+	if adcAPIURL != "" || adcDiskImage != "" {
+		adcCfg := adc.ADCConfig{
+			APIKey:         envOrDefault("ADC_API_KEY", ""),
+			APIURL:         envOrDefault("ADC_API_URL", adc.DefaultAPIURL),
+			DiskImage:      adcDiskImage,
+			SandboxGroupID: envOrDefault("ADC_SANDBOX_GROUP_ID", ""),
+			CPU:            envIntOrDefault("ADC_CPU", adc.DefaultCPU),
+			MemoryMB:       envIntOrDefault("ADC_MEMORY_MB", adc.DefaultMemoryMB),
+		}
+		deps.ADCConfig = &adcCfg
+		logger.Info("ADC sandbox execution enabled",
+			"apiURL", adcCfg.APIURL,
+			"diskImage", adcCfg.DiskImage,
+			"cpu", adcCfg.CPU,
+			"memoryMB", adcCfg.MemoryMB,
+		)
+	} else {
+		logger.Info("ADC not configured — using local subprocess for eval execution")
 	}
 
 	// --- Build HTTP mux ---
@@ -237,11 +247,10 @@ func runPlatformServer(cmd *cobra.Command, cfg *projectconfig.ProjectConfig, por
 	}
 
 	// Register dashboard webapi routes alongside platform API routes.
+	// NOTE: /api/summary is registered in platform api.RegisterRoutes (Cosmos-backed).
 	dashHandlers := webapi.NewHandlers(dashStore)
 	mux.HandleFunc("GET /api/health", dashHandlers.HandleHealth)
-	mux.HandleFunc("GET /api/summary", dashHandlers.HandleSummary)
-	mux.HandleFunc("GET /api/runs", dashHandlers.HandleRuns)
-	mux.HandleFunc("GET /api/runs/{id}", dashHandlers.HandleRunDetail)
+	// /api/runs and /api/runs/{id} are registered in platform api.RegisterRoutes (auth-aware, Cosmos-backed).
 	if storageCfg != nil {
 		dashWithStorage := webapi.NewHandlersWithStorage(dashStore, &webapi.StorageConfig{
 			Configured: true,
@@ -353,6 +362,17 @@ func resolveTCPAddr(addr string, allowRemote bool, logger *slog.Logger) string {
 func envOrDefault(key, defaultVal string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return defaultVal
+}
+
+// envIntOrDefault returns the integer value of the environment variable named key,
+// or defaultVal if the variable is empty, unset, or not a valid integer.
+func envIntOrDefault(key string, defaultVal int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
 	}
 	return defaultVal
 }

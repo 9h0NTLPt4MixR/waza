@@ -9,6 +9,7 @@
 !docs.go
 !docs/graders/
 !version.txt
+!.adc-sdk/
 
 # Re-exclude some files pulled in by the allowlist above
 **/*_test.go

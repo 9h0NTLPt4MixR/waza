@@ -21,7 +21,8 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function formatTime(iso: string): string {
+function formatTime(iso: string | undefined | null): string {
+  if (!iso) return "—";
   try {
     return new Date(iso).toLocaleString();
   } catch {
@@ -142,8 +143,10 @@ export default function RunQueue() {
                   <td className="px-4 py-3 font-mono text-zinc-200">
                     {run.repo ?? "—"}
                   </td>
-                  <td className="px-4 py-3 font-mono text-zinc-200">
-                    {run.evalPath}
+                  <td className="px-4 py-3 font-mono text-zinc-200" title={run.evalSpec}>
+                    {run.evalSpec
+                      ? run.evalSpec.split("/").slice(-2).join("/")
+                      : "—"}
                   </td>
                   <td className="px-4 py-3 font-mono text-zinc-300">
                     {run.model}

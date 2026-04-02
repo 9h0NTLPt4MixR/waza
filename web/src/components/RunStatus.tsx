@@ -1,4 +1,5 @@
-import { ArrowLeft, ExternalLink, Loader2, XCircle } from "lucide-react";
+import { useRef, useEffect, useState, useCallback } from "react";
+import { ArrowLeft, ArrowDownToLine, ExternalLink, Loader2, XCircle } from "lucide-react";
 import { useRunStatus, useResultDetail } from "../hooks/useApi";
 import { formatPercent } from "../lib/format";
 
@@ -49,12 +50,91 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function formatTime(iso: string): string {
+function formatTime(iso: string | undefined | null): string {
+  if (!iso) return "—";
   try {
     return new Date(iso).toLocaleString();
   } catch {
     return iso;
   }
+}
+
+function LogPanel({ logTail, isLive }: { logTail?: string; isLive: boolean }) {
+  const scrollRef = useRef<HTMLPreElement>(null);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+
+  const scrollToBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+      setIsAtBottom(true);
+    }
+  }, []);
+
+  // Auto-scroll when new content arrives (only if already at bottom)
+  useEffect(() => {
+    if (isAtBottom) scrollToBottom();
+  }, [logTail, isAtBottom, scrollToBottom]);
+
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    // Consider "at bottom" if within 24px of the end
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+    setIsAtBottom(atBottom);
+  }, []);
+
+  const lines = logTail?.split("\n").filter((l) => l.length > 0) ?? [];
+
+  return (
+    <div className="relative">
+      {/* Header bar */}
+      <div className="flex items-center justify-between rounded-t border border-zinc-700 bg-zinc-800/80 px-4 py-2">
+        <div className="flex items-center gap-2">
+          {isLive && (
+            <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-400">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+              </span>
+              Live
+            </span>
+          )}
+          <span className="text-xs text-zinc-500">
+            {lines.length > 0 ? `${lines.length} line${lines.length !== 1 ? "s" : ""}` : ""}
+          </span>
+        </div>
+      </div>
+
+      {/* Terminal output */}
+      <pre
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="min-h-[320px] max-h-[480px] overflow-y-auto rounded-b border border-t-0 border-zinc-700 bg-zinc-900 p-4 font-mono text-sm leading-relaxed text-emerald-400"
+      >
+        {lines.length > 0 ? (
+          lines.map((line, i) => (
+            <div key={i} className="whitespace-pre-wrap break-all">
+              {line}
+            </div>
+          ))
+        ) : (
+          <span className="text-zinc-500 italic">Waiting for output…</span>
+        )}
+      </pre>
+
+      {/* Scroll-to-bottom button */}
+      {!isAtBottom && lines.length > 0 && (
+        <button
+          onClick={scrollToBottom}
+          className="absolute bottom-4 right-4 flex items-center gap-1.5 rounded-md border border-zinc-600 bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-300 shadow-lg transition-colors hover:bg-zinc-700"
+        >
+          <ArrowDownToLine className="h-3 w-3" />
+          Bottom
+        </button>
+      )}
+    </div>
+  );
 }
 
 export default function RunStatus({ id }: { id: string }) {
@@ -150,7 +230,11 @@ export default function RunStatus({ id }: { id: string }) {
                 <span className="block text-xs font-medium uppercase tracking-wider text-zinc-500">
                   Eval Spec
                 </span>
-                <span className="font-mono text-zinc-200">{run.evalPath}</span>
+                <span className="font-mono text-zinc-200" title={run.evalSpec}>
+                  {run.evalSpec
+                    ? run.evalSpec.split("/").slice(-2).join("/")
+                    : "—"}
+                </span>
               </div>
               <div>
                 <span className="block text-xs font-medium uppercase tracking-wider text-zinc-500">
@@ -174,6 +258,16 @@ export default function RunStatus({ id }: { id: string }) {
                     : run.storageDestination}
                 </span>
               </div>
+              {run.adcSandboxIds && run.adcSandboxIds.length > 0 && (
+                <div>
+                  <span className="block text-xs font-medium uppercase tracking-wider text-zinc-500">
+                    ADC Sandbox
+                  </span>
+                  <span className="font-mono text-xs text-emerald-400">
+                    {(run.adcSandboxIds ?? [])[((run.adcSandboxIds ?? []).length) - 1]?.slice(0, 8) ?? ""}…
+                  </span>
+                </div>
+              )}
               <div>
                 <span className="block text-xs font-medium uppercase tracking-wider text-zinc-500">
                   Created
@@ -185,51 +279,55 @@ export default function RunStatus({ id }: { id: string }) {
             </div>
           </div>
 
-          {/* Timeline / Log area */}
+          {/* Execution Log */}
           <div className="rounded-lg border border-zinc-800 bg-zinc-800/30 p-6">
             <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-zinc-400">
               Execution Log
             </h2>
-            <div className="min-h-[120px] rounded border border-zinc-700 bg-zinc-900/50 p-4 font-mono text-sm">
-              {run.status === "queued" && (
-                <div className="flex items-center gap-2 text-yellow-400/70">
-                  <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-yellow-400" />
-                  Waiting for execution… Run is queued.
-                </div>
-              )}
-              {run.status === "running" && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-blue-400/70">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Evaluation in progress…
-                  </div>
-                  <div className="text-xs text-zinc-500">
-                    Allocating {run.workers} ADC sandbox
-                    {run.workers > 1 ? "es" : ""}…
-                  </div>
-                </div>
-              )}
-              {run.status === "complete" && (
-                <div className="text-emerald-400/80">
+
+            {run.status === "queued" && (
+              <div className="flex min-h-[120px] items-center gap-2 rounded border border-zinc-700 bg-zinc-900/50 p-4 font-mono text-sm text-yellow-400/70">
+                <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-yellow-400" />
+                Waiting for execution… Run is queued.
+              </div>
+            )}
+
+            {run.status === "running" && (
+              <LogPanel logTail={run.logTail} isLive />
+            )}
+
+            {run.status === "complete" && (
+              run.logTail ? (
+                <LogPanel logTail={run.logTail} isLive={false} />
+              ) : (
+                <div className="min-h-[120px] rounded border border-zinc-700 bg-zinc-900/50 p-4 font-mono text-sm text-emerald-400/80">
                   ✅ Evaluation completed successfully.
                 </div>
-              )}
-              {run.status === "failed" && (
-                <div className="space-y-2">
-                  <div className="text-red-400">❌ Evaluation failed.</div>
-                  {run.error && (
-                    <div className="rounded border border-red-800/50 bg-red-900/20 p-3 text-xs text-red-300">
-                      {run.error}
-                    </div>
-                  )}
-                </div>
-              )}
-              {run.status === "cancelled" && (
-                <div className="text-zinc-500">
-                  ⚪ Run was cancelled by user.
-                </div>
-              )}
-            </div>
+              )
+            )}
+
+            {run.status === "failed" && (
+              <div className="space-y-3">
+                {run.logTail ? (
+                  <LogPanel logTail={run.logTail} isLive={false} />
+                ) : (
+                  <div className="min-h-[120px] rounded border border-zinc-700 bg-zinc-900/50 p-4 font-mono text-sm text-red-400">
+                    ❌ Evaluation failed.
+                  </div>
+                )}
+                {run.error && (
+                  <div className="rounded border border-red-800/50 bg-red-900/20 p-3 font-mono text-xs text-red-300">
+                    {run.error}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {run.status === "cancelled" && (
+              <div className="min-h-[120px] rounded border border-zinc-700 bg-zinc-900/50 p-4 font-mono text-sm text-zinc-500">
+                ⚪ Run was cancelled by user.
+              </div>
+            )}
           </div>
 
           {/* Results summary (when complete + result data available) */}
@@ -262,7 +360,7 @@ export default function RunStatus({ id }: { id: string }) {
                     Tokens
                   </span>
                   <span className="text-lg font-semibold text-zinc-200">
-                    {resultDetail.tokens.toLocaleString()}
+                    {(resultDetail.tokens ?? 0).toLocaleString()}
                   </span>
                 </div>
                 <div>
@@ -289,10 +387,10 @@ export default function RunStatus({ id }: { id: string }) {
               </a>
             )}
             <a
-              href="#/runs/queue"
+              href="#/"
               className="inline-flex items-center gap-2 rounded bg-zinc-700 px-4 py-2 text-sm text-zinc-300 transition-colors hover:bg-zinc-600"
             >
-              View Queue
+              All Runs
             </a>
             <a
               href="#/"

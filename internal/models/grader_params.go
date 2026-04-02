@@ -71,11 +71,12 @@ type FileGraderParameters struct {
 func (FileGraderParameters) isGraderParameters() {}
 
 type BehaviorGraderParameters struct {
-	MaxToolCalls   int      `yaml:"max_tool_calls,omitempty" json:"max_tool_calls,omitempty"`
-	MaxTokens      int      `yaml:"max_tokens,omitempty" json:"max_tokens,omitempty"`
-	RequiredTools  []string `yaml:"required_tools,omitempty" json:"required_tools,omitempty"`
-	ForbiddenTools []string `yaml:"forbidden_tools,omitempty" json:"forbidden_tools,omitempty"`
-	MaxDurationMS  int64    `yaml:"max_duration_ms,omitempty" json:"max_duration_ms,omitempty"`
+	MaxToolCalls    int      `yaml:"max_tool_calls,omitempty" json:"max_tool_calls,omitempty"`
+	MaxTokens       int      `yaml:"max_tokens,omitempty" json:"max_tokens,omitempty"`
+	RequiredTools   []string `yaml:"required_tools,omitempty" json:"required_tools,omitempty"`
+	ForbiddenTools  []string `yaml:"forbidden_tools,omitempty" json:"forbidden_tools,omitempty"`
+	MaxDurationMS   int64    `yaml:"max_duration_ms,omitempty" json:"max_duration_ms,omitempty"`
+	SkipIfNoDigest  bool     `yaml:"skip_if_no_digest,omitempty" json:"skip_if_no_digest,omitempty"`
 }
 
 func (BehaviorGraderParameters) isGraderParameters() {}
@@ -194,6 +195,23 @@ type TriggerHeuristicGraderParameters struct {
 
 func (TriggerHeuristicGraderParameters) isGraderParameters() {}
 
+// RegexGraderParameters holds the arguments for creating a regex grader.
+type RegexGraderParameters struct {
+	// MustMatch lists regex patterns that must all match somewhere in the output.
+	MustMatch []string `yaml:"must_match,omitempty" json:"must_match,omitempty"`
+
+	// MustNotMatch lists regex patterns that must all NOT match anywhere in the output.
+	MustNotMatch []string `yaml:"must_not_match,omitempty" json:"must_not_match,omitempty"`
+
+	// Description is an optional human-readable note for the grader.
+	Description string `yaml:"description,omitempty" json:"description,omitempty"`
+
+	// SkipIfNoMatch makes the grader pass (instead of fail) when must_match patterns don't match.
+	SkipIfNoMatch bool `yaml:"skip_if_no_match,omitempty" json:"skip_if_no_match,omitempty"`
+}
+
+func (RegexGraderParameters) isGraderParameters() {}
+
 func decodeGraderParameters(kind GraderKind, configNode *yaml.Node) (GraderParameters, error) {
 	switch kind {
 	case GraderKindInlineScript:
@@ -220,6 +238,8 @@ func decodeGraderParameters(kind GraderKind, configNode *yaml.Node) (GraderParam
 		return decodeYAMLNode[ProgramGraderParameters](configNode)
 	case GraderKindTrigger:
 		return decodeYAMLNode[TriggerHeuristicGraderParameters](configNode)
+	case GraderKindRegex:
+		return decodeYAMLNode[RegexGraderParameters](configNode)
 	default:
 		return decodeYAMLNode[GenericGraderParameters](configNode)
 	}

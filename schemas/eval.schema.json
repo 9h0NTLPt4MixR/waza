@@ -304,7 +304,8 @@
             "skill_invocation",
             "trigger",
             "diff",
-            "tool_constraint"
+            "tool_constraint",
+            "regex"
           ],
           "description": "The grader type."
         },
@@ -585,6 +586,25 @@
               "config"
             ]
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "regex"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "config": {
+                "$ref": "#/$defs/regexGraderConfig"
+              }
+            }
+          }
         }
       ]
     },
@@ -688,6 +708,39 @@
           "description": "Regex patterns that MUST match somewhere in the output."
         },
         "regex_not_match": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Regex patterns that MUST NOT match anywhere in the output."
+        }
+      }
+    },
+    "regexGraderConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Config for the regex grader. Validates agent output using regex patterns.",
+      "anyOf": [
+        {
+          "required": [
+            "must_match"
+          ]
+        },
+        {
+          "required": [
+            "must_not_match"
+          ]
+        }
+      ],
+      "properties": {
+        "must_match": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Regex patterns that MUST all match somewhere in the output."
+        },
+        "must_not_match": {
           "type": "array",
           "items": {
             "type": "string"

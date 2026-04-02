@@ -8,7 +8,6 @@ import LiveView from "./components/LiveView";
 import Settings from "./components/Settings";
 import NewRun from "./components/NewRun";
 import RunStatus from "./components/RunStatus";
-import RunQueue from "./components/RunQueue";
 
 type Route =
   | { page: "home" }
@@ -18,8 +17,7 @@ type Route =
   | { page: "live" }
   | { page: "settings" }
   | { page: "newRun" }
-  | { page: "runStatus"; id: string }
-  | { page: "runQueue" };
+  | { page: "runStatus"; id: string };
 
 function parseHash(): Route {
   const hash = window.location.hash.slice(1);
@@ -28,7 +26,8 @@ function parseHash(): Route {
   if (hash === "/live" || hash.startsWith("/live?")) return { page: "live" };
   if (hash === "/settings") return { page: "settings" };
   if (hash === "/runs/new") return { page: "newRun" };
-  if (hash === "/runs/queue") return { page: "runQueue" };
+  // Redirect old queue route to home (unified page)
+  if (hash === "/runs/queue") return { page: "home" };
   const statusMatch = hash.match(/^\/runs\/status\/(.+)$/);
   if (statusMatch?.[1]) return { page: "runStatus", id: statusMatch[1] };
   const runMatch = hash.match(/^\/runs\/(.+)$/);
@@ -55,7 +54,6 @@ export default function App() {
       {route.page === "settings" && <Settings />}
       {route.page === "newRun" && <NewRun />}
       {route.page === "runStatus" && <RunStatus id={route.id} />}
-      {route.page === "runQueue" && <RunQueue />}
     </Layout>
   );
 }
