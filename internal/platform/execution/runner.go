@@ -230,9 +230,9 @@ func runViaADCSingle(ctx context.Context, cfg RunConfig) (retErr error) {
 
 	// 6. Save to Cosmos.
 	if err := cfg.Store.SaveResult(ctx, run.UserID, run.ID, json.RawMessage(resultsJSON)); err != nil {
-		msg := "failed to save results to Cosmos"
-		logger.Error(msg, "error", err)
-		markFailed(cfg.Store, run, msg)
+		msg := fmt.Sprintf("failed to save results to Cosmos: %v", err)
+		logger.Error(msg, "error", err, "resultSizeBytes", len(resultsJSON))
+		markFailed(cfg.Store, run, truncate(msg, 500))
 		return fmt.Errorf("save result: %w", err)
 	}
 	logger.Info("ADC results saved to Cosmos")
@@ -525,6 +525,13 @@ func runViaADCParallel(ctx context.Context, cfg RunConfig) (retErr error) {
 	// 5. Distribute tasks round-robin and create shard evals.
 	shards := distributeTaskFiles(taskFiles, actualWorkers)
 
+	// Track which tasks each worker is responsible for.
+	run.WorkerTasks = make(map[string][]string, actualWorkers)
+	for i, sb := range sandboxes {
+		run.WorkerTasks[sb.ID()] = shards[i]
+	}
+	_ = cfg.Store.UpdateRunRequest(ctx, run) // best-effort persist
+
 	// Read the original eval YAML for shard creation.
 	evalYAML, err := readSandboxFile(ctx, sandboxes[0], "/workspace/repo/"+run.EvalSpec)
 	if err != nil {
@@ -614,10 +621,11 @@ func runViaADCParallel(ctx context.Context, cfg RunConfig) (retErr error) {
 	logger.Info("merged results from workers", "shards", len(validResults), "totalTasks", len(taskFiles))
 
 	// 10. Save to Cosmos.
+	logger.Info("saving merged results", "size", len(merged))
 	if err := cfg.Store.SaveResult(ctx, run.UserID, run.ID, merged); err != nil {
-		msg := "failed to save merged results to Cosmos"
-		logger.Error(msg, "error", err)
-		markFailed(cfg.Store, run, msg)
+		msg := fmt.Sprintf("failed to save merged results to Cosmos: %v", err)
+		logger.Error(msg, "error", err, "resultSizeBytes", len(merged))
+		markFailed(cfg.Store, run, truncate(msg, 500))
 		return fmt.Errorf("save result: %w", err)
 	}
 	logger.Info("parallel ADC results saved to Cosmos")
@@ -785,7 +793,8 @@ func discoverTaskFiles(ctx context.Context, sb *adcsdk.Sandbox, evalSpec string,
 	for _, line := range strings.Split(strings.TrimSpace(result.Stdout), "\n") {
 		line = strings.TrimSpace(line)
 		if line != "" {
-			taskFiles = append(taskFiles, line)
+			// Prefix with evalDir so paths work from repo root (shard evals are at repo root).
+			taskFiles = append(taskFiles, filepath.Join(evalDir, line))
 		}
 	}
 

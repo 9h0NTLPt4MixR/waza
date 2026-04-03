@@ -288,6 +288,13 @@ func runPlatformServer(cmd *cobra.Command, cfg *projectconfig.ProjectConfig, por
 	logger.Info("platform server starting", "address", addr)
 	fmt.Printf("waza platform: http://%s\n", addr)
 
+	// Recover runs orphaned by previous container restarts.
+	if recovered, err := deps.Store.RecoverOrphanedRuns(ctx); err != nil {
+		logger.Warn("failed to recover orphaned runs", "error", err)
+	} else if recovered > 0 {
+		logger.Info("recovered orphaned runs", "count", recovered)
+	}
+
 	// Graceful shutdown.
 	go func() {
 		<-ctx.Done()

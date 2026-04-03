@@ -16,7 +16,7 @@ import {
   cancelRun,
   rerunRun,
 } from "../api/client";
-import type { CreateConnectionRequest, TriggerRunConfig } from "../api/client";
+import type { CreateConnectionRequest, TriggerRunConfig, TriggerRunResponse } from "../api/client";
 
 export function useSummary() {
   return useQuery({
@@ -93,7 +93,7 @@ export function useRepoEvals(owner: string, repo: string) {
 
 export function useTriggerRun() {
   const qc = useQueryClient();
-  return useMutation({
+  return useMutation<TriggerRunResponse, Error, TriggerRunConfig>({
     mutationFn: (config: TriggerRunConfig) => triggerRun(config),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["runs"] });

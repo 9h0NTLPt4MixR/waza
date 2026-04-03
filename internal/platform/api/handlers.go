@@ -279,27 +279,37 @@ func testGitHubRepo(r *http.Request, config map[string]any) (bool, string) {
 
 // triggerRunRequest is the JSON body for POST /api/runs/trigger.
 type triggerRunRequest struct {
-	Owner              string `json:"owner"`                        // repo owner (frontend sends separately)
-	Repo               string `json:"repo"`                        // repo name or "owner/repo"
-	EvalPath           string `json:"evalPath"`                    // path to eval YAML within the repo
-	EvalSpec           string `json:"eval_spec"`                   // alias for evalPath
-	Model              string `json:"model"`
-	Workers            int    `json:"workers"`
-	StorageDestination string `json:"storageDestination"`          // "cosmos" (default) or connection ID
-	Executor           string `json:"executor,omitempty"`          // executor override; defaults to "copilot-sdk"
+	Owner              string   `json:"owner"`                        // repo owner (frontend sends separately)
+	Repo               string   `json:"repo"`                        // repo name or "owner/repo"
+	EvalPath           string   `json:"evalPath"`                    // path to eval YAML within the repo
+	EvalSpec           string   `json:"eval_spec"`                   // alias for evalPath
+	EvalSpecCamel      string   `json:"evalSpec"`                    // camelCase alias (frontend sends this)
+	Model              string   `json:"model"`                       // single model (backward compat)
+	Models             []string `json:"models"`                      // multiple models for batch comparison
+	Workers            int      `json:"workers"`
+	StorageDestination string   `json:"storageDestination"`          // "cosmos" (default) or connection ID
+	Executor           string   `json:"executor,omitempty"`          // executor override; defaults to "copilot-sdk"
 }
 
-// triggerRunResponse is returned by POST /api/runs/trigger so the frontend
-// can redirect to the run status page.
+// triggerRunResponse is returned by POST /api/runs/trigger for single-model
+// runs so the frontend can redirect to the run status page.
 type triggerRunResponse struct {
 	RunID  string       `json:"runId"`
 	Status db.RunStatus `json:"status"`
+}
+
+// triggerBatchResponse is returned by POST /api/runs/trigger when multiple
+// models are requested. Each run shares the same BatchID.
+type triggerBatchResponse struct {
+	BatchID string   `json:"batchId"`
+	RunIDs  []string `json:"runIds"`
 }
 
 // runQueueItem is the camelCase JSON representation of a RunRequest sent to
 // the frontend for list and detail views.
 type runQueueItem struct {
 	ID                 string       `json:"id"`
+	BatchID            string       `json:"batchId,omitempty"`
 	Status             db.RunStatus `json:"status"`
 	Repo               string       `json:"repo"`
 	EvalSpec           string       `json:"evalSpec"`
@@ -307,8 +317,9 @@ type runQueueItem struct {
 	Workers            int          `json:"workers"`
 	StorageDestination string       `json:"storageDestination"`
 	Executor           string       `json:"executor,omitempty"`
-	ADCSandboxIDs      []string     `json:"adcSandboxIds,omitempty"`
-	LogTail            string       `json:"logTail,omitempty"`
+	ADCSandboxIDs      []string            `json:"adcSandboxIds,omitempty"`
+	WorkerTasks        map[string][]string `json:"workerTasks,omitempty"`
+	LogTail            string              `json:"logTail,omitempty"`
 	CreatedAt          time.Time    `json:"createdAt"`
 	CompletedAt        *time.Time   `json:"completedAt,omitempty"`
 	Error              string       `json:"error,omitempty"`
@@ -318,6 +329,7 @@ type runQueueItem struct {
 func toRunQueueItem(r *db.RunRequest) runQueueItem {
 	return runQueueItem{
 		ID:                 r.ID,
+		BatchID:            r.BatchID,
 		Status:             r.Status,
 		Repo:               r.Repo,
 		EvalSpec:           r.EvalSpec,
@@ -326,6 +338,7 @@ func toRunQueueItem(r *db.RunRequest) runQueueItem {
 		StorageDestination: r.StorageDestination,
 		Executor:           r.Executor,
 		ADCSandboxIDs:      r.ADCSandboxIDs,
+		WorkerTasks:        r.WorkerTasks,
 		LogTail:            r.LogTail,
 		CreatedAt:          r.CreatedAt,
 		CompletedAt:        r.CompletedAt,
@@ -334,6 +347,8 @@ func toRunQueueItem(r *db.RunRequest) runQueueItem {
 }
 
 // handleTriggerRun creates a RunRequest and dispatches it to ADC asynchronously.
+// When multiple models are specified, it creates one run per model sharing a
+// common BatchID and returns a batch response.
 func handleTriggerRun(deps *Dependencies) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := auth.UserFromContext(r.Context())
@@ -354,6 +369,9 @@ func handleTriggerRun(deps *Dependencies) http.HandlerFunc {
 		if req.EvalPath != "" && req.EvalSpec == "" {
 			req.EvalSpec = req.EvalPath
 		}
+		if req.EvalSpecCamel != "" && req.EvalSpec == "" {
+			req.EvalSpec = req.EvalSpecCamel
+		}
 
 		if req.Repo == "" {
 			writeError(w, http.StatusBadRequest, "repo is required")
@@ -363,9 +381,6 @@ func handleTriggerRun(deps *Dependencies) http.HandlerFunc {
 			writeError(w, http.StatusBadRequest, "eval_spec is required")
 			return
 		}
-		if req.Model == "" {
-			req.Model = "gpt-4o"
-		}
 		if req.Workers <= 0 {
 			req.Workers = 1
 		}
@@ -374,6 +389,63 @@ func handleTriggerRun(deps *Dependencies) http.HandlerFunc {
 		}
 		if req.Executor == "" {
 			req.Executor = "copilot-sdk"
+		}
+
+		// Multi-model batch: create one run per model.
+		if len(req.Models) > 0 {
+			batchID := fmt.Sprintf("batch-%d", time.Now().UnixNano())
+			runIDs := make([]string, 0, len(req.Models))
+
+			for i, model := range req.Models {
+				if model == "" {
+					continue
+				}
+				run := &db.RunRequest{
+					ID:                 fmt.Sprintf("run-%d-%d", time.Now().UnixNano(), i),
+					UserID:             user.GitHubID,
+					BatchID:            batchID,
+					Repo:               req.Repo,
+					EvalSpec:           req.EvalSpec,
+					Model:              model,
+					Workers:            req.Workers,
+					StorageDestination: req.StorageDestination,
+					Executor:           req.Executor,
+				}
+
+				if err := deps.Store.CreateRunRequest(r.Context(), run); err != nil {
+					writeError(w, http.StatusInternalServerError, "failed to create run request")
+					slog.Error("CreateRunRequest (batch)", "error", err, "user", user.Login, "model", model)
+					return
+				}
+
+				go dispatchRun(deps, run, user.GitHubToken)
+				runIDs = append(runIDs, run.ID)
+			}
+
+			if len(runIDs) == 0 {
+				writeError(w, http.StatusBadRequest, "models list must contain at least one non-empty model")
+				return
+			}
+
+			slog.Info("batch triggered",
+				"user", user.Login,
+				"repo", req.Repo,
+				"eval", req.EvalSpec,
+				"models", req.Models,
+				"batchId", batchID,
+				"runCount", len(runIDs),
+			)
+
+			writeJSON(w, http.StatusAccepted, triggerBatchResponse{
+				BatchID: batchID,
+				RunIDs:  runIDs,
+			})
+			return
+		}
+
+		// Single-model path (backward compatible).
+		if req.Model == "" {
+			req.Model = "gpt-4o"
 		}
 
 		slog.Info("triggering run",
@@ -499,6 +571,51 @@ func handleGetRun(deps *Dependencies) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, toRunQueueItem(run))
+	}
+}
+
+// handleGetBatchRuns returns all runs sharing a BatchID, enabling the frontend
+// to display a multi-model comparison view.
+func handleGetBatchRuns(deps *Dependencies) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := auth.UserFromContext(r.Context())
+		if user == nil {
+			writeError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+
+		batchID := r.PathValue("batchId")
+		if batchID == "" {
+			writeError(w, http.StatusBadRequest, "batchId is required")
+			return
+		}
+
+		// List all runs for the user and filter by batch ID.
+		// The store doesn't have a batch-specific query yet, so we filter in
+		// memory. Fine for v1 — batch sizes are small (typically 2-5 models).
+		allRuns, err := deps.Store.ListRunRequests(r.Context(), user.GitHubID, 0)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to list runs")
+			slog.Error("GetBatchRuns", "error", err, "user", user.Login, "batchId", batchID)
+			return
+		}
+
+		var items []runQueueItem
+		for _, run := range allRuns {
+			if run.BatchID == batchID {
+				items = append(items, toRunQueueItem(run))
+			}
+		}
+
+		if len(items) == 0 {
+			writeError(w, http.StatusNotFound, "batch not found")
+			return
+		}
+
+		writeJSON(w, http.StatusOK, map[string]any{
+			"batchId": batchID,
+			"runs":    items,
+		})
 	}
 }
 

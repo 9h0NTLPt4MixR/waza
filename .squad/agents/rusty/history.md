@@ -336,3 +336,16 @@ All code roles now use `claude-opus-4.6`. Docs/Scribe/diversity use `gemini-3-pr
 
 **Files changed:** `web/src/components/Dashboard.tsx`, `web/src/components/Layout.tsx`, `web/src/App.tsx`, `web/src/components/RunStatus.tsx`, `web/src/index.css`, `web/e2e/helpers/api-mock.ts`, `web/e2e/dashboard.spec.ts`, `web/e2e/judge-model.spec.ts`, `web/e2e/weighted-scores.spec.ts`
 **Decision:** `.squad/decisions/inbox/rusty-unified-dashboard.md`
+
+### Multi-Model Selection UI (Jul 2026)
+
+**Task:** Replace single-model dropdown on New Run page with multi-select card checkboxes for model comparison runs.
+
+**Changes:**
+- `web/src/api/client.ts`: Added `models?: string[]` to `TriggerRunConfig`, created `TriggerRunResponse` type for batch/single responses
+- `web/src/hooks/useApi.ts`: Typed `useTriggerRun` with explicit generic params for the new response shape
+- `web/src/components/NewRun.tsx`: Card-grid multi-select with blue-border highlight, model badges (Fast/Premium), count indicator, batch-aware navigation
+
+**Design:** Cards in 2-3 column grid, dark theme consistent (zinc/blue palette), at least one model required. Payload sends both `model` (primary, backward compat) and `models` (array). Multi-model triggers navigate to dashboard; single model navigates to run status.
+
+**Files changed:** `web/src/components/NewRun.tsx`, `web/src/api/client.ts`, `web/src/hooks/useApi.ts`

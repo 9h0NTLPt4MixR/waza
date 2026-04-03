@@ -62,6 +62,19 @@ const STATUS_CONFIG: Record<
   cancelled: { emoji: "⚪", label: "Cancelled", color: "text-zinc-400" },
 };
 
+/** Extract a human-friendly skill/eval name from a path like "tests/azure-deploy/eval/eval.yaml" → "azure-deploy" */
+function extractSkillName(evalPath: string): string {
+  const parts = evalPath.split("/").filter(Boolean);
+  // Find the segment before "eval/" — that's typically the skill name
+  const evalIdx = parts.findIndex((p) => p === "eval" || p === "evals");
+  if (evalIdx > 0 && parts[evalIdx - 1]) {
+    return parts[evalIdx - 1]!;
+  }
+  // Fallback: use the last meaningful directory name (skip the filename)
+  const withoutFile = parts.filter((p) => !p.includes("."));
+  return withoutFile[withoutFile.length - 1] ?? evalPath;
+}
+
 function StatusBadge({ status }: { status: string }) {
   const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.queued!;
   return (
@@ -98,7 +111,7 @@ function mapQueueItem(q: RunQueueItem): UnifiedRun {
     id: q.id,
     status: q.status,
     spec: q.evalSpec
-      ? q.evalSpec.split("/").slice(-2).join("/")
+      ? extractSkillName(q.evalSpec)
       : "—",
     model: q.model,
     passRate: null,
@@ -114,7 +127,7 @@ function mapResultRun(r: RunSummary): UnifiedRun {
   return {
     id: r.id,
     status: "complete",
-    spec: r.spec,
+    spec: r.spec?.includes("/") ? extractSkillName(r.spec) : (r.spec || "—"),
     model: r.model,
     judgeModel: r.judgeModel,
     passRate: r.taskCount > 0 ? r.passCount / r.taskCount : null,
@@ -329,9 +342,11 @@ function UnifiedRunsTable({
             const navigateTo =
               status === "complete"
                 ? `#/runs/${row.original.id}`
-                : isActive
+                : status === "failed"
                   ? `#/runs/status/${row.original.id}`
-                  : undefined;
+                  : isActive
+                    ? `#/runs/status/${row.original.id}`
+                    : undefined;
 
             return (
               <tr
@@ -404,10 +419,26 @@ export default function Dashboard() {
       }
     }
 
-    // Then overlay queue items — queue takes precedence for active runs
+    // Then overlay queue items — queue takes precedence for active runs,
+    // but for completed runs we merge result data (passRate, tasks, duration)
     const queueItems = queue.data ?? [];
     for (const q of queueItems) {
-      byId.set(q.id, mapQueueItem(q));
+      const existing = byId.get(q.id);
+      if (
+        existing &&
+        (q.status === "complete" || q.status === "failed") &&
+        existing.source === "results"
+      ) {
+        // Keep the richer result data, just update status/error from queue
+        byId.set(q.id, {
+          ...existing,
+          status: q.status,
+          error: q.error ?? existing.error,
+          spec: q.evalSpec ? extractSkillName(q.evalSpec) : existing.spec,
+        });
+      } else {
+        byId.set(q.id, mapQueueItem(q));
+      }
     }
 
     return Array.from(byId.values()).sort(

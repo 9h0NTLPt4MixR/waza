@@ -154,7 +154,8 @@ func (m *mockStore) SetSetting(_ context.Context, key, value string) error {
 	return nil
 }
 
-func (m *mockStore) Close() error { return nil }
+func (m *mockStore) Close() error                                          { return nil }
+func (m *mockStore) RecoverOrphanedRuns(_ context.Context) (int, error)     { return 0, nil }
 
 func (m *mockStore) SaveResult(_ context.Context, _ int64, _ string, _ json.RawMessage) error {
 	return nil

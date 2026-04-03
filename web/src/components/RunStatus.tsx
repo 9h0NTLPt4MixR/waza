@@ -3,6 +3,17 @@ import { ArrowLeft, ArrowDownToLine, ExternalLink, Loader2, XCircle } from "luci
 import { useRunStatus, useResultDetail } from "../hooks/useApi";
 import { formatPercent } from "../lib/format";
 
+/** Extract a human-friendly skill/eval name from a path like "tests/azure-deploy/eval/eval.yaml" → "azure-deploy" */
+function extractSkillName(evalPath: string): string {
+  const parts = evalPath.split("/").filter(Boolean);
+  const evalIdx = parts.findIndex((p) => p === "eval" || p === "evals");
+  if (evalIdx > 0 && parts[evalIdx - 1]) {
+    return parts[evalIdx - 1]!;
+  }
+  const withoutFile = parts.filter((p) => !p.includes("."));
+  return withoutFile[withoutFile.length - 1] ?? evalPath;
+}
+
 const STATUS_CONFIG: Record<
   string,
   { emoji: string; label: string; color: string; bg: string }
@@ -232,7 +243,7 @@ export default function RunStatus({ id }: { id: string }) {
                 </span>
                 <span className="font-mono text-zinc-200" title={run.evalSpec}>
                   {run.evalSpec
-                    ? run.evalSpec.split("/").slice(-2).join("/")
+                    ? extractSkillName(run.evalSpec)
                     : "—"}
                 </span>
               </div>
@@ -261,10 +272,10 @@ export default function RunStatus({ id }: { id: string }) {
               {run.adcSandboxIds && run.adcSandboxIds.length > 0 && (
                 <div>
                   <span className="block text-xs font-medium uppercase tracking-wider text-zinc-500">
-                    ADC Sandbox
+                    Workers
                   </span>
                   <span className="font-mono text-xs text-emerald-400">
-                    {(run.adcSandboxIds ?? [])[((run.adcSandboxIds ?? []).length) - 1]?.slice(0, 8) ?? ""}…
+                    {run.adcSandboxIds.length} sandbox{run.adcSandboxIds.length > 1 ? "es" : ""}
                   </span>
                 </div>
               )}
@@ -278,6 +289,51 @@ export default function RunStatus({ id }: { id: string }) {
               </div>
             </div>
           </div>
+
+          {/* Worker Task Assignments */}
+          {run.workerTasks && Object.keys(run.workerTasks).length > 0 && (
+            <div className="rounded-lg border border-zinc-800 bg-zinc-800/30 p-6">
+              <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-zinc-400">
+                Worker Task Assignments
+              </h2>
+              <div className="space-y-3">
+                {(run.adcSandboxIds ?? Object.keys(run.workerTasks)).map(
+                  (sandboxId, idx) => {
+                    const tasks = run.workerTasks?.[sandboxId] ?? [];
+                    return (
+                      <div
+                        key={sandboxId}
+                        className="rounded border border-zinc-700/50 bg-zinc-900/50 p-3"
+                      >
+                        <div className="mb-1 flex items-center gap-2">
+                          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-500/20 text-xs font-bold text-blue-300">
+                            {idx}
+                          </span>
+                          <span className="font-mono text-xs text-zinc-400">
+                            {sandboxId.slice(0, 8)}…
+                          </span>
+                          <span className="text-xs text-zinc-500">
+                            ({tasks.length} task{tasks.length !== 1 ? "s" : ""})
+                          </span>
+                        </div>
+                        <div className="ml-7 space-y-0.5">
+                          {tasks.map((task) => (
+                            <div
+                              key={task}
+                              className="font-mono text-xs text-zinc-400"
+                            >
+                              {task.split("/").pop()?.replace(".yaml", "") ??
+                                task}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  },
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Execution Log */}
           <div className="rounded-lg border border-zinc-800 bg-zinc-800/30 p-6">

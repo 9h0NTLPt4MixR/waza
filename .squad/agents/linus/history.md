@@ -261,3 +261,15 @@ All code roles now use `claude-opus-4.6`. Docs/Scribe/diversity use `gemini-3-pr
   - Task discovery: read eval YAML from sandbox → parse `tasks` globs → resolve via `ls` in sandbox → distribute round-robin
 - **Key files:** `engine.go:CreateBatchSandboxes`, `runner.go:runViaADCParallel`, `runner.go:mergeResults`
 - **Testing:** 7 new tests covering task distribution, shard eval creation, result merging (single, multi, empty, usage stats), and dispatch routing.
+
+### Multi-Model Batch Trigger API
+- **Date:** 2026-04-03
+- **Branch:** `feature/waza-platform`
+- **Files modified:** `internal/platform/db/db.go`, `internal/platform/api/handlers.go`, `internal/platform/api/routes.go`, `internal/platform/api/routes_test.go`
+- **What:** Added multi-model batch trigger to POST /api/runs/trigger. When `models` array is sent instead of single `model`, creates one run per model sharing a `BatchID`. Added `GET /api/runs/batch/{batchId}` endpoint for grouped status. Fully backward compatible — single `model` field still works as before.
+- **Key patterns:**
+  - `BatchID` field on `db.RunRequest` (omitempty) — grouping key only, no orchestration
+  - `triggerBatchResponse` returns `{batchId, runIds}` vs `triggerRunResponse` for single runs
+  - Batch status endpoint filters in-memory (fine for v1, batch sizes are 2-5 models)
+  - Empty string models are skipped; all-empty returns 400
+- **Testing:** 8 new tests: batch trigger, empty array fallback, backward compat, all-empty validation, batch status retrieval, batch not found, user isolation, batchId in queue items

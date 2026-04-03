@@ -27,6 +27,7 @@ func RegisterRoutes(mux *http.ServeMux, deps *Dependencies) {
 	mux.Handle("POST /api/runs/trigger", deps.AuthMiddleware(http.HandlerFunc(handleTriggerRun(deps))))
 	mux.Handle("GET /api/runs/queue", deps.AuthMiddleware(http.HandlerFunc(handleListRuns(deps))))
 	mux.Handle("GET /api/runs/queue/{id}", deps.AuthMiddleware(http.HandlerFunc(handleGetRun(deps))))
+	mux.Handle("GET /api/runs/batch/{batchId}", deps.AuthMiddleware(http.HandlerFunc(handleGetBatchRuns(deps))))
 	mux.Handle("POST /api/runs/cancel/{id}", deps.AuthMiddleware(http.HandlerFunc(handleCancelRun(deps))))
 	mux.Handle("POST /api/runs/rerun/{id}", deps.AuthMiddleware(http.HandlerFunc(handleRerun(deps))))
 

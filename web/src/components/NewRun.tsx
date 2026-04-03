@@ -1,15 +1,22 @@
 import { useState } from "react";
-import { Play, ChevronRight, Loader2, RefreshCw, Database } from "lucide-react";
+import { Play, ChevronRight, Loader2, RefreshCw, Database, Check } from "lucide-react";
 import { useRepos, useRepoEvals, useTriggerRun, useConnections } from "../hooks/useApi";
 
 type Step = 1 | 2 | 3 | 4;
 
-const MODELS = [
-  "gpt-4o",
-  "gpt-4o-mini",
-  "claude-sonnet-4",
-  "claude-opus-4",
-  "o3-mini",
+interface ModelOption {
+  id: string;
+  label: string;
+  badge?: string;
+  badgeColor?: string;
+}
+
+const MODELS: ModelOption[] = [
+  { id: "gpt-4o", label: "gpt-4o" },
+  { id: "gpt-4o-mini", label: "gpt-4o-mini", badge: "Fast", badgeColor: "bg-emerald-600" },
+  { id: "claude-sonnet-4", label: "claude-sonnet-4" },
+  { id: "claude-opus-4", label: "claude-opus-4", badge: "Premium", badgeColor: "bg-purple-600" },
+  { id: "o3-mini", label: "o3-mini", badge: "Fast", badgeColor: "bg-emerald-600" },
 ];
 
 function StepIndicator({ current, total }: { current: number; total: number }) {
@@ -46,10 +53,20 @@ export default function NewRun() {
   const [step, setStep] = useState<Step>(1);
   const [selectedRepo, setSelectedRepo] = useState("");
   const [selectedEval, setSelectedEval] = useState("");
-  const [model, setModel] = useState("gpt-4o");
+  const [selectedModels, setSelectedModels] = useState<string[]>(["gpt-4o"]);
   const [workers, setWorkers] = useState(3);
   const [parallel, setParallel] = useState(true);
   const [storageDestination, setStorageDestination] = useState("cosmos");
+
+  const toggleModel = (modelId: string) => {
+    setSelectedModels((prev) => {
+      if (prev.includes(modelId)) {
+        if (prev.length === 1) return prev; // keep at least one
+        return prev.filter((m) => m !== modelId);
+      }
+      return [...prev, modelId];
+    });
+  };
 
   const repos = useRepos();
   const connections = useConnections();
@@ -58,20 +75,30 @@ export default function NewRun() {
   const triggerMutation = useTriggerRun();
 
   const handleTrigger = () => {
-    if (!owner || !repo || !selectedEval) return;
+    if (!owner || !repo || !selectedEval || selectedModels.length === 0) return;
     triggerMutation.mutate(
       {
         owner,
         repo,
         evalSpec: selectedEval,
-        model,
+        model: selectedModels[0] ?? "",
+        models: selectedModels,
         workers,
         parallel,
         storageDestination,
       },
       {
         onSuccess: (data) => {
-          window.location.hash = `/runs/status/${data.runId}`;
+          if (data.batchId && data.runIds && data.runIds.length > 1) {
+            window.location.hash = "/";
+          } else {
+            const runId = data.runId ?? data.runIds?.[0];
+            if (runId) {
+              window.location.hash = `/runs/status/${runId}`;
+            } else {
+              window.location.hash = "/";
+            }
+          }
         },
       },
     );
@@ -216,23 +243,59 @@ export default function NewRun() {
             <h2 className="text-lg font-medium text-zinc-100">
               Configure Run
             </h2>
-            <div className="grid max-w-md gap-4">
-              <div className="space-y-1">
+            <div className="space-y-4">
+              {/* Model Selection */}
+              <div className="space-y-2">
                 <label className="block text-sm font-medium text-zinc-300">
-                  Model
+                  Models
                 </label>
-                <select
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  className="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
-                >
-                  {MODELS.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
+                <p className="text-xs text-zinc-500">
+                  Select one or more models to evaluate against
+                </p>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {MODELS.map((m) => {
+                    const checked = selectedModels.includes(m.id);
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => toggleModel(m.id)}
+                        className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
+                          checked
+                            ? "border-blue-500 bg-blue-500/10 text-zinc-100"
+                            : "border-zinc-700 bg-zinc-800/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-300"
+                        }`}
+                      >
+                        <div
+                          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                            checked
+                              ? "border-blue-500 bg-blue-600"
+                              : "border-zinc-600 bg-zinc-800"
+                          }`}
+                        >
+                          {checked && <Check className="h-3 w-3 text-white" />}
+                        </div>
+                        <span className="font-mono text-xs">{m.label}</span>
+                        {m.badge && (
+                          <span
+                            className={`ml-auto rounded px-1.5 py-0.5 text-[10px] font-medium text-white ${m.badgeColor}`}
+                          >
+                            {m.badge}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                {selectedModels.length > 1 && (
+                  <p className="text-xs text-blue-400">
+                    {selectedModels.length} models selected — will create{" "}
+                    {selectedModels.length} parallel runs
+                  </p>
+                )}
               </div>
+
+              <div className="grid max-w-md gap-4">
               <div className="space-y-1">
                 <label className="block text-sm font-medium text-zinc-300">
                   Workers (ADC sandboxes)
@@ -305,10 +368,20 @@ export default function NewRun() {
                   Cosmos DB is always available. Connect Azure Storage in Settings for BYOS.
                 </p>
               </div>
+              </div>
             </div>
             <div className="rounded border border-zinc-700 bg-zinc-800/50 p-3">
               <p className="text-xs text-zinc-400">
                 Estimated sandboxes: <span className="font-mono text-zinc-200">{workers}</span>
+                {selectedModels.length > 1 && (
+                  <span>
+                    {" "}× {selectedModels.length} models ={" "}
+                    <span className="font-mono text-zinc-200">
+                      {workers * selectedModels.length}
+                    </span>{" "}
+                    total
+                  </span>
+                )}
               </p>
             </div>
             <div className="flex justify-between">
@@ -340,8 +413,25 @@ export default function NewRun() {
                 <span className="font-mono text-zinc-100">{selectedRepo}</span>
                 <span className="text-zinc-400">Eval</span>
                 <span className="font-mono text-zinc-100">{selectedEval}</span>
-                <span className="text-zinc-400">Model</span>
-                <span className="font-mono text-zinc-100">{model}</span>
+                <span className="text-zinc-400">
+                  {selectedModels.length > 1 ? "Models" : "Model"}
+                </span>
+                <span className="font-mono text-zinc-100">
+                  {selectedModels.length > 1 ? (
+                    <span className="flex flex-wrap gap-1">
+                      {selectedModels.map((m) => (
+                        <span
+                          key={m}
+                          className="rounded bg-zinc-700 px-1.5 py-0.5 text-xs"
+                        >
+                          {m}
+                        </span>
+                      ))}
+                    </span>
+                  ) : (
+                    selectedModels[0]
+                  )}
+                </span>
                 <span className="text-zinc-400">Workers</span>
                 <span className="font-mono text-zinc-100">{workers}</span>
                 <span className="text-zinc-400">Parallel</span>
@@ -390,7 +480,9 @@ export default function NewRun() {
                 ) : (
                   <Play className="h-4 w-4" />
                 )}
-                Run Evaluation
+                {selectedModels.length > 1
+                  ? `Run ${selectedModels.length} Evaluations`
+                  : "Run Evaluation"}
               </button>
             </div>
           </div>

@@ -159,7 +159,8 @@ func (m *mockStore) SetSetting(_ context.Context, key, value string) error {
 	return nil
 }
 
-func (m *mockStore) Close() error { return nil }
+func (m *mockStore) Close() error                                          { return nil }
+func (m *mockStore) RecoverOrphanedRuns(_ context.Context) (int, error)     { return 0, nil }
 
 func (m *mockStore) SaveResult(_ context.Context, _ int64, _ string, _ json.RawMessage) error {
 	return nil
@@ -216,6 +217,7 @@ func TestAuthRequired_ProtectedEndpoints(t *testing.T) {
 		{http.MethodGet, "/api/runs/queue"},
 		{http.MethodGet, "/api/runs/queue/run-1"},
 		{http.MethodPost, "/api/runs/cancel/run-1"},
+		{http.MethodGet, "/api/runs/batch/batch-1"},
 		{http.MethodGet, "/api/repos"},
 		{http.MethodGet, "/api/auth/me"},
 		{http.MethodPost, "/api/auth/logout"},
@@ -589,4 +591,245 @@ func TestGetRunFromQueue_UserIsolation(t *testing.T) {
 	mux.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+// ---------------------------------------------------------------------------
+// Tests – Multi-model batch trigger
+// ---------------------------------------------------------------------------
+
+func TestRunTrigger_MultiModel_Batch(t *testing.T) {
+	mux, ap, store := setupTestRouter()
+	user := &auth.User{GitHubID: 100, Login: "alice"}
+	addTestUser(ap, "tok", user)
+
+	body, _ := json.Marshal(map[string]any{
+		"repo":      "testorg/testrepo",
+		"eval_spec": "evals/test.yaml",
+		"models":    []string{"gpt-4o", "claude-sonnet-4", "o3-mini"},
+		"workers":   2,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/runs/trigger", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer tok")
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusAccepted, rec.Code)
+
+	var resp struct {
+		BatchID string   `json:"batchId"`
+		RunIDs  []string `json:"runIds"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.NotEmpty(t, resp.BatchID, "batch response must include batchId")
+	assert.Len(t, resp.RunIDs, 3, "should create one run per model")
+
+	// All runs should be in the store with the same BatchID
+	runs, _ := store.ListRunRequests(nil, 100, 0)
+	assert.Len(t, runs, 3)
+
+	models := make(map[string]bool)
+	for _, r := range runs {
+		assert.Equal(t, resp.BatchID, r.BatchID)
+		assert.Equal(t, "testorg/testrepo", r.Repo)
+		assert.Equal(t, "evals/test.yaml", r.EvalSpec)
+		assert.Equal(t, 2, r.Workers)
+		models[r.Model] = true
+	}
+	assert.True(t, models["gpt-4o"])
+	assert.True(t, models["claude-sonnet-4"])
+	assert.True(t, models["o3-mini"])
+}
+
+func TestRunTrigger_MultiModel_EmptyModelsArray(t *testing.T) {
+	mux, ap, _ := setupTestRouter()
+	user := &auth.User{GitHubID: 100, Login: "alice"}
+	addTestUser(ap, "tok", user)
+
+	// Empty models array should fall through to single-model path with default
+	body, _ := json.Marshal(map[string]any{
+		"repo":      "testorg/testrepo",
+		"eval_spec": "evals/test.yaml",
+		"models":    []string{},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/runs/trigger", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer tok")
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusAccepted, rec.Code)
+
+	// Should get single-run response (backward compat)
+	var resp struct {
+		RunID  string `json:"runId"`
+		Status string `json:"status"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.NotEmpty(t, resp.RunID)
+	assert.Equal(t, "queued", resp.Status)
+}
+
+func TestRunTrigger_SingleModel_BackwardCompat(t *testing.T) {
+	mux, ap, store := setupTestRouter()
+	user := &auth.User{GitHubID: 100, Login: "alice"}
+	addTestUser(ap, "tok", user)
+
+	// Old-style single model request — must still work
+	body, _ := json.Marshal(map[string]string{
+		"repo":      "testorg/testrepo",
+		"eval_spec": "evals/test.yaml",
+		"model":     "gpt-4o",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/runs/trigger", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer tok")
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusAccepted, rec.Code)
+
+	var resp struct {
+		RunID  string `json:"runId"`
+		Status string `json:"status"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.NotEmpty(t, resp.RunID)
+	assert.Equal(t, "queued", resp.Status)
+
+	runs, _ := store.ListRunRequests(nil, 100, 0)
+	assert.Len(t, runs, 1)
+	assert.Empty(t, runs[0].BatchID, "single-model run should have no BatchID")
+}
+
+func TestRunTrigger_MultiModel_AllEmptyStrings(t *testing.T) {
+	mux, ap, _ := setupTestRouter()
+	user := &auth.User{GitHubID: 100, Login: "alice"}
+	addTestUser(ap, "tok", user)
+
+	body, _ := json.Marshal(map[string]any{
+		"repo":      "testorg/testrepo",
+		"eval_spec": "evals/test.yaml",
+		"models":    []string{"", ""},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/runs/trigger", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer tok")
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+// ---------------------------------------------------------------------------
+// Tests – Batch status endpoint
+// ---------------------------------------------------------------------------
+
+func TestGetBatchRuns_ReturnsGroupedRuns(t *testing.T) {
+	mux, ap, store := setupTestRouter()
+	user := &auth.User{GitHubID: 100, Login: "alice"}
+	addTestUser(ap, "tok", user)
+
+	// Seed runs with a common BatchID
+	store.runs["run-a"] = &db.RunRequest{
+		ID: "run-a", UserID: 100, BatchID: "batch-123",
+		Repo: "org/repo", Model: "gpt-4o", Status: db.Complete,
+	}
+	store.runs["run-b"] = &db.RunRequest{
+		ID: "run-b", UserID: 100, BatchID: "batch-123",
+		Repo: "org/repo", Model: "claude-sonnet-4", Status: db.Running,
+	}
+	store.runs["run-c"] = &db.RunRequest{
+		ID: "run-c", UserID: 100, BatchID: "batch-other",
+		Repo: "org/repo", Model: "o3-mini", Status: db.Queued,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/runs/batch/batch-123", nil)
+	req.Header.Set("Authorization", "Bearer tok")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp struct {
+		BatchID string         `json:"batchId"`
+		Runs    []runQueueItem `json:"runs"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, "batch-123", resp.BatchID)
+	assert.Len(t, resp.Runs, 2, "should only return runs in the requested batch")
+
+	ids := map[string]bool{}
+	for _, r := range resp.Runs {
+		ids[r.ID] = true
+		assert.Equal(t, "batch-123", r.BatchID)
+	}
+	assert.True(t, ids["run-a"])
+	assert.True(t, ids["run-b"])
+}
+
+func TestGetBatchRuns_NotFound(t *testing.T) {
+	mux, ap, _ := setupTestRouter()
+	user := &auth.User{GitHubID: 100, Login: "alice"}
+	addTestUser(ap, "tok", user)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/runs/batch/nonexistent", nil)
+	req.Header.Set("Authorization", "Bearer tok")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestGetBatchRuns_UserIsolation(t *testing.T) {
+	mux, ap, store := setupTestRouter()
+
+	userA := &auth.User{GitHubID: 100, Login: "alice"}
+	userB := &auth.User{GitHubID: 200, Login: "bob"}
+	addTestUser(ap, "tok-a", userA)
+	addTestUser(ap, "tok-b", userB)
+
+	store.runs["run-a"] = &db.RunRequest{
+		ID: "run-a", UserID: 100, BatchID: "batch-private",
+		Repo: "org/repo", Model: "gpt-4o", Status: db.Queued,
+	}
+
+	// User B should not see user A's batch
+	req := httptest.NewRequest(http.MethodGet, "/api/runs/batch/batch-private", nil)
+	req.Header.Set("Authorization", "Bearer tok-b")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+// ---------------------------------------------------------------------------
+// Tests – BatchID in queue items
+// ---------------------------------------------------------------------------
+
+func TestRunQueueItem_IncludesBatchID(t *testing.T) {
+	mux, ap, store := setupTestRouter()
+	user := &auth.User{GitHubID: 100, Login: "alice"}
+	addTestUser(ap, "tok", user)
+
+	store.runs["run-batch"] = &db.RunRequest{
+		ID: "run-batch", UserID: 100, BatchID: "batch-456",
+		Repo: "org/repo", Model: "gpt-4o", Status: db.Queued,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/runs/queue/run-batch", nil)
+	req.Header.Set("Authorization", "Bearer tok")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var got struct {
+		ID      string `json:"id"`
+		BatchID string `json:"batchId"`
+		Model   string `json:"model"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.Equal(t, "run-batch", got.ID)
+	assert.Equal(t, "batch-456", got.BatchID)
 }

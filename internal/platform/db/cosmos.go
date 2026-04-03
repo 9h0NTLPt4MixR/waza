@@ -499,7 +499,61 @@ func parseRunRequest(data []byte, fallbackUserID int64) (*RunRequest, error) {
 	return &req, nil
 }
 
-// --- Results ---
+// RecoverOrphanedRuns finds all runs in Running or Queued state across all
+// users and marks them as Failed. This handles runs orphaned by container
+// restarts. Uses a cross-partition query (no user filter).
+func (s *CosmosStore) RecoverOrphanedRuns(ctx context.Context) (int, error) {
+	query := "SELECT * FROM c WHERE c.status IN ('running', 'queued')"
+	boolTrue := true
+	opt := &azcosmos.QueryOptions{
+		EnableCrossPartitionQuery: &boolTrue,
+	}
+
+	pager := s.runRequests.NewQueryItemsPager(query, azcosmos.NewPartitionKey(), opt)
+	recovered := 0
+
+	for pager.More() {
+		page, err := pager.NextPage(ctx)
+		if err != nil {
+			return recovered, fmt.Errorf("querying orphaned runs: %w", err)
+		}
+
+		for _, item := range page.Items {
+			var doc map[string]any
+			if err := json.Unmarshal(item, &doc); err != nil {
+				continue
+			}
+
+			id, _ := doc["id"].(string)
+			uid, _ := doc["user_id"].(string)
+			if id == "" || uid == "" {
+				continue
+			}
+
+			// Update status to failed with orphan error message.
+			doc["status"] = string(Failed)
+			doc["error"] = "run orphaned by server restart"
+			now := time.Now().UTC().Format(time.RFC3339)
+			doc["completed_at"] = now
+
+			data, err := json.Marshal(doc)
+			if err != nil {
+				continue
+			}
+
+			pk := azcosmos.NewPartitionKeyString(uid)
+			_, err = s.runRequests.UpsertItem(ctx, pk, data, nil)
+			if err != nil {
+				slog.Error("failed to recover orphaned run", "id", id, "error", err)
+				continue
+			}
+			recovered++
+			slog.Info("recovered orphaned run", "id", id, "previousStatus", doc["status"])
+		}
+	}
+
+	return recovered, nil
+}
 
 func (s *CosmosStore) SaveResult(ctx context.Context, userID int64, runID string, result json.RawMessage) error {
 	uid := strconv.FormatInt(userID, 10)
@@ -509,6 +563,9 @@ func (s *CosmosStore) SaveResult(ctx context.Context, userID int64, runID string
 	if err := json.Unmarshal(result, &parsed); err != nil {
 		return fmt.Errorf("parsing result JSON: %w", err)
 	}
+
+	// Trim large fields (transcripts, raw output) to stay under Cosmos 2MB doc limit.
+	trimResultForStorage(parsed)
 
 	doc := map[string]any{
 		"id":        runID,
@@ -539,6 +596,76 @@ func (s *CosmosStore) SaveResult(ctx context.Context, userID int64, runID string
 		return fmt.Errorf("upserting result %s: %w", runID, err)
 	}
 	return nil
+}
+
+// trimResultForStorage strips large text fields from eval results to stay
+// under the Cosmos DB 2MB document size limit. Removes transcripts, raw
+// output, and conversation logs from individual task trials while preserving
+// summaries, scores, and grader results needed for the dashboard.
+func trimResultForStorage(result map[string]any) {
+	const maxFieldLen = 2000 // keep first 2KB of any large text field
+
+	tasks, ok := result["tasks"].([]any)
+	if !ok {
+		return
+	}
+
+	for _, t := range tasks {
+		task, ok := t.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		// Trim fields at task level.
+		trimTextField(task, "output", maxFieldLen)
+		trimTextField(task, "transcript", maxFieldLen)
+		trimTextField(task, "raw_output", maxFieldLen)
+
+		// Trim within each trial.
+		trials, ok := task["trials"].([]any)
+		if !ok {
+			continue
+		}
+		for _, tr := range trials {
+			trial, ok := tr.(map[string]any)
+			if !ok {
+				continue
+			}
+			trimTextField(trial, "output", maxFieldLen)
+			trimTextField(trial, "transcript", maxFieldLen)
+			trimTextField(trial, "raw_output", maxFieldLen)
+			trimTextField(trial, "transcript_summary", maxFieldLen)
+
+			// Trim within execution block if present.
+			if exec, ok := trial["execution"].(map[string]any); ok {
+				trimTextField(exec, "transcript", maxFieldLen)
+				trimTextField(exec, "output", maxFieldLen)
+				trimTextField(exec, "raw_output", maxFieldLen)
+
+				// Trim individual conversation turns.
+				if turns, ok := exec["turns"].([]any); ok && len(turns) > 10 {
+					exec["turns"] = turns[:5]
+					exec["turns_trimmed"] = true
+					exec["turns_total"] = len(turns)
+				}
+			}
+		}
+	}
+}
+
+// trimTextField truncates a string field in a map if it exceeds maxLen.
+func trimTextField(m map[string]any, key string, maxLen int) {
+	v, ok := m[key]
+	if !ok {
+		return
+	}
+	s, ok := v.(string)
+	if !ok {
+		return
+	}
+	if len(s) > maxLen {
+		m[key] = s[:maxLen] + "\n... [trimmed for storage]"
+	}
 }
 
 func (s *CosmosStore) GetResult(ctx context.Context, userID int64, runID string) (json.RawMessage, error) {

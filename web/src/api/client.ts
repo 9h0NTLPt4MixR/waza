@@ -38,9 +38,16 @@ export interface TriggerRunConfig {
   repo: string;
   evalSpec: string;
   model: string;
+  models?: string[];
   workers: number;
   parallel: boolean;
   storageDestination?: string; // "cosmos" (default) or connection ID for BYOS
+}
+
+export interface TriggerRunResponse {
+  runId?: string;
+  batchId?: string;
+  runIds?: string[];
 }
 
 export interface RunQueueItem {
@@ -53,6 +60,7 @@ export interface RunQueueItem {
   storageDestination?: string;
   executor?: string;
   adcSandboxIds?: string[];
+  workerTasks?: Record<string, string[]>;
   error?: string;
   logTail?: string;
   createdAt: string;
@@ -244,14 +252,14 @@ export function fetchRepoEvals(owner: string, repo: string): Promise<EvalSpec[]>
 
 export async function triggerRun(
   config: TriggerRunConfig,
-): Promise<{ runId: string }> {
+): Promise<TriggerRunResponse> {
   const res = await fetch("/api/runs/trigger", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(config),
   });
   if (!res.ok) throw new Error(`Failed to trigger run: ${res.status}`);
-  return res.json() as Promise<{ runId: string }>;
+  return res.json() as Promise<TriggerRunResponse>;
 }
 
 export function fetchRunQueue(): Promise<RunQueueItem[]> {

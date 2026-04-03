@@ -78,6 +78,7 @@ type ResultSummary struct {
 type RunRequest struct {
 	ID                 string    `json:"id"`
 	UserID             int64     `json:"user_id"`
+	BatchID            string    `json:"batch_id,omitempty"`  // groups runs triggered together for multi-model comparison
 	Repo               string    `json:"repo"`                // "owner/repo" format
 	EvalSpec           string    `json:"eval_spec"`           // path to eval YAML within the repo
 	Model              string    `json:"model"`               // target model for evaluation
@@ -85,9 +86,10 @@ type RunRequest struct {
 	StorageDestination string    `json:"storage_destination"` // "cosmos" or connection ID for BYOS
 	Executor           string    `json:"executor,omitempty"`  // executor engine override; defaults to "copilot-sdk"
 	Status             RunStatus `json:"status"`              // current lifecycle state
-	ADCSandboxIDs      []string  `json:"adc_sandbox_ids"`     // allocated sandbox identifiers
-	Error              string    `json:"error,omitempty"`     // error message if failed
-	LogTail            string    `json:"log_tail,omitempty"` // last N lines of waza output
+	ADCSandboxIDs      []string            `json:"adc_sandbox_ids"`     // allocated sandbox identifiers
+	WorkerTasks        map[string][]string `json:"worker_tasks,omitempty"` // sandbox ID → assigned task files
+	Error              string              `json:"error,omitempty"`     // error message if failed
+	LogTail            string              `json:"log_tail,omitempty"` // last N lines of waza output
 	CreatedAt          time.Time `json:"created_at"`
 	CompletedAt        *time.Time `json:"completed_at,omitempty"`
 }
@@ -134,6 +136,10 @@ type Store interface {
 	// GetRunRequest retrieves a single run by ID. Returns an error if the
 	// run does not exist or does not belong to the specified user.
 	GetRunRequest(ctx context.Context, userID int64, runID string) (*RunRequest, error)
+
+	// RecoverOrphanedRuns marks any runs stuck in Running/Queued as Failed.
+	// Called on server startup to clean up runs orphaned by container restarts.
+	RecoverOrphanedRuns(ctx context.Context) (int, error)
 
 	// --- Results ---
 

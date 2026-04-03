@@ -119,7 +119,7 @@ func TestDefaultCPU(t *testing.T) {
 }
 
 func TestDefaultSandboxTimeout(t *testing.T) {
-	assert.Equal(t, 30*time.Minute, adc.DefaultSandboxTimeout)
+	assert.Equal(t, 60*time.Minute, adc.DefaultSandboxTimeout)
 }
 
 // ---------------------------------------------------------------------------

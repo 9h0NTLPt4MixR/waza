@@ -69,6 +69,7 @@ func (m *mockStore) ListResults(_ context.Context, _ int64, _ int) ([]db.ResultS
 }
 func (m *mockStore) GetSetting(_ context.Context, _ string) (string, error) { return "", nil }
 func (m *mockStore) SetSetting(_ context.Context, _, _ string) error        { return nil }
+func (m *mockStore) RecoverOrphanedRuns(_ context.Context) (int, error)     { return 0, nil }
 func (m *mockStore) Close() error                                            { return nil }
 
 // --- tests ---
