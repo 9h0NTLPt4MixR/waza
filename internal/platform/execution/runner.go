@@ -22,7 +22,6 @@ import (
 	adcsdk "github.com/coreai-microsoft/adc-sdk-go"
 	"github.com/microsoft/waza/internal/platform/adc"
 	"github.com/microsoft/waza/internal/platform/db"
-	"golang.org/x/sync/errgroup"
 	"gopkg.in/yaml.v3"
 )
 
@@ -479,31 +478,52 @@ func runViaADCParallel(ctx context.Context, cfg RunConfig) (retErr error) {
 	// Actual worker count may be less than requested if some failed.
 	actualWorkers := len(sandboxes)
 
-	// 3. Clone repo in ALL sandboxes concurrently.
+	// 3. Clone repo in ALL sandboxes concurrently (tolerant of individual failures).
 	cloneCmd := fmt.Sprintf("git clone --depth=1 https://x-access-token:%s@github.com/%s.git /workspace/repo", cfg.GitHubToken, run.Repo)
 
-	g, gCtx := errgroup.WithContext(ctx)
+	cloneOK := make([]bool, len(sandboxes))
+	var wgClone sync.WaitGroup
 	for i, sb := range sandboxes {
-		g.Go(func() error {
-			result, err := sb.ExecuteShellCommand(gCtx, cloneCmd, "", nil, "/workspace")
+		wgClone.Add(1)
+		go func() {
+			defer wgClone.Done()
+			result, err := sb.ExecuteShellCommand(ctx, cloneCmd, "", nil, "/workspace")
 			if err != nil || (result != nil && result.ExitCode != 0) {
 				stderr := ""
 				if result != nil {
 					stderr = result.Stderr
 				}
-				return fmt.Errorf("sandbox %d (%s): git clone failed: %s", i, sb.ID(), sanitizeToken(stderr, cfg.GitHubToken))
+				logger.Warn("clone failed in sandbox, will skip",
+					"worker", i, "sandbox", sb.ID(),
+					"error", sanitizeToken(stderr, cfg.GitHubToken))
+				return
 			}
+			cloneOK[i] = true
 			logger.Debug("repo cloned in sandbox", "sandbox", sb.ID(), "worker", i)
-			return nil
-		})
+		}()
 	}
-	if err := g.Wait(); err != nil {
-		msg := fmt.Sprintf("parallel clone failed: %v", err)
+	wgClone.Wait()
+
+	// Keep only sandboxes that cloned successfully.
+	var healthySandboxes []*adcsdk.Sandbox
+	for i, sb := range sandboxes {
+		if cloneOK[i] {
+			healthySandboxes = append(healthySandboxes, sb)
+		}
+	}
+	if len(healthySandboxes) == 0 {
+		msg := "all sandboxes failed to clone repo"
 		logger.Error(msg)
-		markFailed(cfg.Store, run, truncate(msg, 500))
-		return fmt.Errorf("adc parallel clone: %w", err)
+		markFailed(cfg.Store, run, msg)
+		return fmt.Errorf("adc parallel clone: %s", msg)
 	}
-	logger.Info("repo cloned in all sandboxes")
+	if len(healthySandboxes) < len(sandboxes) {
+		logger.Warn("some sandboxes failed clone, continuing with healthy ones",
+			"healthy", len(healthySandboxes), "total", len(sandboxes))
+	}
+	sandboxes = healthySandboxes
+	actualWorkers = len(sandboxes)
+	logger.Info("repo cloned", "healthySandboxes", actualWorkers)
 
 	// 4. Discover task files from sandbox 0 by reading the eval spec.
 	taskFiles, err := discoverTaskFiles(ctx, sandboxes[0], run.EvalSpec, logger)
