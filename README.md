@@ -118,6 +118,9 @@ waza grade eval.yaml --results results.json
 # Compare results across models
 waza compare results-gpt4.json results-sonnet.json
 
+# Generate eval coverage grid
+waza coverage --format markdown
+
 # Count tokens in skill files
 waza tokens count skills/
 
@@ -346,6 +349,17 @@ Compare results from multiple evaluation runs side by side — per-task score de
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--format <fmt>` | `-f` | Output format: `table` or `json` (default: `table`) |
+
+### `waza coverage [root]`
+
+Generate a skill-to-eval coverage grid showing which skills are fully covered, partially covered, or missing evals.
+
+**Note**: Full coverage requires tasks (via `tasks:` or `tasks_from:`) and 2+ grader types. The coverage percentage reflects only fully covered skills.
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--format <fmt>` | `-f` | Output format: `text`, `markdown`, or `json` (default: `text`) |
+| `--path <dir>` | | Additional directory to scan for skills/evals (repeatable) |
 
 ### `waza cache clear`
 
