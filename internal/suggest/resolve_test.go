@@ -24,7 +24,8 @@ func TestResolveSkillFile_WhitespacePath(t *testing.T) {
 }
 
 func TestResolveSkillFile_NonexistentPath(t *testing.T) {
-	_, err := resolveSkillFile("/nonexistent/path/to/skill")
+	nonexistent := filepath.Join(t.TempDir(), "does-not-exist", "skill")
+	_, err := resolveSkillFile(nonexistent)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "does not exist")
 }

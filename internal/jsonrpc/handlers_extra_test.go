@@ -1,7 +1,7 @@
 package jsonrpc
 
 import (
-	"bytes"
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -450,10 +450,7 @@ func TestTCPListener_ServeAndQuery(t *testing.T) {
 	}()
 	defer listener.Close() //nolint:errcheck
 
-	// Give server time to start
-	time.Sleep(50 * time.Millisecond)
-
-	// Connect and send a request
+	// Connect and send a request — no sleep needed, listener is already active
 	addr := listener.Addr().String()
 	conn, err := dialTCP(addr)
 	require.NoError(t, err)
@@ -463,16 +460,14 @@ func TestTCPListener_ServeAndQuery(t *testing.T) {
 	_, err = conn.Write([]byte(reqLine))
 	require.NoError(t, err)
 
-	// Read response
-	var out bytes.Buffer
-	buf := make([]byte, 4096)
-	conn.SetReadDeadline(time.Now().Add(2 * time.Second)) //nolint:errcheck
-	n, err := conn.Read(buf)
-	require.NoError(t, err)
-	out.Write(buf[:n])
+	// Read response line (newline-delimited JSON)
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	scanner := bufio.NewScanner(conn)
+	require.True(t, scanner.Scan(), "expected response line")
+	require.NoError(t, scanner.Err())
 
 	var resp Response
-	require.NoError(t, json.Unmarshal(out.Bytes(), &resp))
+	require.NoError(t, json.Unmarshal(scanner.Bytes(), &resp))
 	assert.Nil(t, resp.Error)
 	assert.Equal(t, "2.0", resp.JSONRPC)
 }
