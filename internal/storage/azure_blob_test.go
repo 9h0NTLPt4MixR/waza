@@ -76,14 +76,17 @@ func TestIsCI(t *testing.T) {
 	saved := make(map[string]string)
 	for _, v := range ciEnvVars {
 		saved[v] = os.Getenv(v)
-		os.Unsetenv(v)
+		t.Setenv(v, "")
+		if err := os.Unsetenv(v); err != nil {
+			t.Fatalf("Unsetenv(%s): %v", v, err)
+		}
 	}
 	t.Cleanup(func() {
 		for k, v := range saved {
 			if v != "" {
-				os.Setenv(k, v)
+				_ = os.Setenv(k, v)
 			} else {
-				os.Unsetenv(k)
+				_ = os.Unsetenv(k)
 			}
 		}
 	})
@@ -94,11 +97,14 @@ func TestIsCI(t *testing.T) {
 
 	// Setting any single var should return true.
 	for _, v := range ciEnvVars {
-		os.Setenv(v, "1")
+		t.Setenv(v, "1")
 		if !isCI() {
 			t.Errorf("isCI() = false with %s set", v)
 		}
-		os.Unsetenv(v)
+		t.Setenv(v, "")
+		if err := os.Unsetenv(v); err != nil {
+			t.Fatalf("Unsetenv(%s): %v", v, err)
+		}
 	}
 }
 

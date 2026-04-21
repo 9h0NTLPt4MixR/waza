@@ -250,7 +250,7 @@ func TestMatchesFilter_AllMatch(t *testing.T) {
 func TestLocalStore_LoadSkipsNonJSON(t *testing.T) {
 	dir := t.TempDir()
 	// Write a non-JSON file — load should skip it.
-	os.WriteFile(filepath.Join(dir, "readme.txt"), []byte("hello"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "readme.txt"), []byte("hello"), 0o644)
 	ls := NewLocalStore(dir)
 	results, err := ls.List(t.Context(), ListOptions{})
 	if err != nil {
@@ -263,7 +263,7 @@ func TestLocalStore_LoadSkipsNonJSON(t *testing.T) {
 
 func TestLocalStore_LoadSkipsInvalidJSON(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "bad.json"), []byte("{not valid json}"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "bad.json"), []byte("{not valid json}"), 0o644)
 	ls := NewLocalStore(dir)
 	results, err := ls.List(t.Context(), ListOptions{})
 	if err != nil {
@@ -277,7 +277,7 @@ func TestLocalStore_LoadSkipsInvalidJSON(t *testing.T) {
 func TestLocalStore_LoadSkipsNonOutcomeJSON(t *testing.T) {
 	dir := t.TempDir()
 	// Valid JSON but not an EvaluationOutcome (no BenchName, TotalTests==0).
-	os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{"key":"value"}`), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{"key":"value"}`), 0o644)
 	ls := NewLocalStore(dir)
 	results, err := ls.List(t.Context(), ListOptions{})
 	if err != nil {
@@ -295,7 +295,7 @@ func TestLocalStore_LoadGeneratesRunIDFromPath(t *testing.T) {
 		BenchName: "bench",
 		Digest:    models.OutcomeDigest{TotalTests: 1, Succeeded: 1},
 	})
-	os.WriteFile(filepath.Join(dir, "derived-run.json"), data, 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "derived-run.json"), data, 0o644)
 
 	ls := NewLocalStore(dir)
 	results, err := ls.List(t.Context(), ListOptions{})
@@ -317,7 +317,7 @@ func TestLocalStore_ListWithLimit(t *testing.T) {
 		o := makeOutcome(fmt.Sprintf("run-%d", i), "s", "m", i, 10)
 		o.Timestamp = time.Date(2026, time.Month(i), 1, 0, 0, 0, 0, time.UTC)
 		data, _ := json.Marshal(o)
-		os.WriteFile(filepath.Join(dir, fmt.Sprintf("run-%d.json", i)), data, 0o644)
+		_ = os.WriteFile(filepath.Join(dir, fmt.Sprintf("run-%d.json", i)), data, 0o644)
 	}
 
 	ls := NewLocalStore(dir)
@@ -343,7 +343,7 @@ func TestLocalStore_CompareSecondDownloadError(t *testing.T) {
 	dir := t.TempDir()
 	o1 := makeOutcome("exists", "s", "m", 5, 10)
 	data, _ := json.Marshal(o1)
-	os.WriteFile(filepath.Join(dir, "exists.json"), data, 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "exists.json"), data, 0o644)
 
 	ls := NewLocalStore(dir)
 	_, err := ls.Compare(t.Context(), "exists", "nonexistent")
