@@ -1,6 +1,8 @@
 package suggest
 
 import (
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/microsoft/waza/internal/scaffold"
@@ -144,13 +146,13 @@ func TestExtractYAML_SurroundingText(t *testing.T) {
 func TestNormalizeGeneratedPath_ValidRelative(t *testing.T) {
 	path, err := normalizeGeneratedPath("tasks/basic.yaml", "fallback.yaml")
 	assert.NoError(t, err)
-	assert.Equal(t, "tasks/basic.yaml", path)
+	assert.Equal(t, filepath.FromSlash("tasks/basic.yaml"), path)
 }
 
 func TestNormalizeGeneratedPath_EmptyUsesFallback(t *testing.T) {
 	path, err := normalizeGeneratedPath("", "tasks/task-01.yaml")
 	assert.NoError(t, err)
-	assert.Equal(t, "tasks/task-01.yaml", path)
+	assert.Equal(t, filepath.FromSlash("tasks/task-01.yaml"), path)
 }
 
 func TestNormalizeGeneratedPath_WhitespaceUsesFallback(t *testing.T) {
@@ -160,7 +162,11 @@ func TestNormalizeGeneratedPath_WhitespaceUsesFallback(t *testing.T) {
 }
 
 func TestNormalizeGeneratedPath_AbsolutePathRejected(t *testing.T) {
-	_, err := normalizeGeneratedPath("/etc/passwd", "fallback.yaml")
+	absPath := "/etc/passwd"
+	if runtime.GOOS == "windows" {
+		absPath = `C:\etc\passwd`
+	}
+	_, err := normalizeGeneratedPath(absPath, "fallback.yaml")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid generated path")
 }
@@ -174,7 +180,7 @@ func TestNormalizeGeneratedPath_ParentTraversalRejected(t *testing.T) {
 func TestNormalizeGeneratedPath_DotSlash(t *testing.T) {
 	path, err := normalizeGeneratedPath("./tasks/basic.yaml", "fallback.yaml")
 	assert.NoError(t, err)
-	assert.Equal(t, "tasks/basic.yaml", path)
+	assert.Equal(t, filepath.FromSlash("tasks/basic.yaml"), path)
 }
 
 // --- filterValidGraderTypes ---
