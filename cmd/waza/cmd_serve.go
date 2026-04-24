@@ -13,6 +13,7 @@ import (
 	"github.com/microsoft/waza/internal/projectconfig"
 	"github.com/microsoft/waza/internal/webserver"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 func newServeCommand() *cobra.Command {
@@ -69,11 +70,15 @@ JSON-RPC methods (when using --tcp or stdin/stdout):
 				ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 				defer stop()
 
-				// Start MCP server on stdio in the background.
-				go func() {
-					logger.Info("MCP server running on stdio")
-					mcp.ServeStdio(ctx, os.Stdin, os.Stdout, logger)
-				}()
+				// Start MCP server on stdio — only when stdin is a
+				// terminal. When backgrounded or piped, the MCP reader
+				// crashes on EOF and kills the HTTP server.
+				if term.IsTerminal(int(os.Stdin.Fd())) {
+					go func() {
+						logger.Info("MCP server running on stdio")
+						mcp.ServeStdio(ctx, os.Stdin, os.Stdout, logger)
+					}()
+				}
 
 				// Prepare storage config if enabled.
 				var storageCfg *projectconfig.StorageConfig
