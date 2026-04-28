@@ -1,0 +1,27 @@
+name: security-reviewer-eval
+description: Evaluates the security-reviewer custom agent
+
+config:
+  executor: copilot
+  model: claude-sonnet-4
+  trials_per_task: 1
+  timeout_seconds: 120
+  parallel: false
+
+tasks:
+  - tasks/*.yaml
+
+graders:
+  - type: text
+    name: identifies_severity
+    config:
+      regex_match:
+        - "(?i)severity"
+
+  - type: prompt
+    name: review_quality
+    rubric: |
+      Score 1-5 how well the response identified security issues:
+      5 — found all vulnerabilities with accurate severity and clear remediation
+      3 — found most issues but missed some details
+      1 — missed major vulnerabilities or wrong severity

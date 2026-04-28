@@ -220,6 +220,12 @@ func (r *EvalRunner) runNormalBenchmark(ctx context.Context) (*models.Evaluation
 		return nil, err
 	}
 
+	// Auto-inject tool_constraint grader from .agent.md tools if applicable
+	resolvedPaths := utils.ResolvePaths(spec.Config.SkillPaths, r.cfg.SpecDir())
+	if agentPath := resolveAgentPath(resolvedPaths); agentPath != "" {
+		spec.Graders = augmentGradersFromAgent(spec.Graders, agentPath)
+	}
+
 	// Load test cases
 	testCases, err := r.loadTestCases()
 	if err != nil {

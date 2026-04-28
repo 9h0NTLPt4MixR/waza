@@ -1,0 +1,17 @@
+skill: security-reviewer
+
+should_trigger_prompts:
+  - prompt: "Review this code for security issues"
+    reason: Direct security review request
+    confidence: high
+  - prompt: "Are there any vulnerabilities in this file?"
+    reason: Vulnerability check request
+    confidence: high
+
+should_not_trigger_prompts:
+  - prompt: "Make this function faster"
+    reason: Performance request, not security
+    confidence: high
+  - prompt: "Add error handling here"
+    reason: Code quality, not security
+    confidence: medium

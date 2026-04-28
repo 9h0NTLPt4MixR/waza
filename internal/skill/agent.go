@@ -1,6 +1,7 @@
 package skill
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -59,6 +60,16 @@ func ParseAgentFrontmatter(content string) (*AgentFrontmatter, string, error) {
 	}
 
 	return af, body, nil
+}
+
+// LoadAgentDefinition reads an .agent.md file and returns its parsed frontmatter
+// and body. Returns nil if path is not an agent file or doesn't exist.
+func LoadAgentDefinition(path string) (*AgentFrontmatter, string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, "", err
+	}
+	return ParseAgentFrontmatter(string(data))
 }
 
 // IsAgentFile returns true if the filename matches the *.agent.md pattern.
