@@ -484,6 +484,10 @@ At least one constraint must be configured. Each configured rule counts as one c
 
 **Scoring:** `passed_checks / total_checks`
 
+<Aside type="caution" title="Auto-injected for custom agents">
+  When you target a custom agent (`.agent.md`) with a `tools:` field in its frontmatter, waza automatically adds an implicit `tool_constraint` grader to validate only those tools are used. You don't need to declare it in eval.yaml unless you want to override the defaults or add additional constraints. See the [Evaluating Custom Agents](/guides/custom-agents) guide for examples.
+</Aside>
+
 <Aside type="tip" title="tool_constraint vs. behavior">
   Both `behavior` and `tool_constraint` can check tool usage and token limits.
   Use `tool_constraint` when you want to validate specific tool names

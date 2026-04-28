@@ -17,7 +17,7 @@ waza --version
 Run an evaluation benchmark.
 
 ```bash
-waza run [eval.yaml | skill-name]
+waza run [eval.yaml | skill-name | agent-name]
 ```
 
 ### Arguments
@@ -26,7 +26,10 @@ waza run [eval.yaml | skill-name]
 |----------|-------------|
 | `[eval.yaml]` | Path to evaluation spec file |
 | `[skill-name]` | Skill name (auto-detects eval.yaml) |
+| `[agent-name]` | Custom agent name (auto-detects eval.yaml for `.agent.md` files) |
 | *(none)* | Auto-detect using workspace detection |
+
+**Custom agents:** Waza discovers both `SKILL.md` and `.agent.md` files. You can target a custom agent by name just like a skill. See [Evaluating Custom Agents](/guides/custom-agents) for details.
 
 ### Flags
 
@@ -377,7 +380,7 @@ waza compare results-*.json --format json
 
 ## waza coverage
 
-Generate an eval coverage grid for discovered skills.
+Generate an eval coverage grid for discovered skills and custom agents.
 
 ```bash
 waza coverage [root]
@@ -394,15 +397,15 @@ waza coverage [root]
 | Flag | Description |
 |------|-------------|
 | `-f, --format` | Output format: `text` (default), `markdown`, `json` |
-| `--path` | Additional directories to scan for skills/evals (repeatable) |
+| `--path` | Additional directories to scan for skills/agents/evals (repeatable) |
 
 ### Coverage Levels
 
-- **Full**: Skill has an `eval.yaml`/`eval.yml` with tasks (via `tasks:` or `tasks_from:`) and at least 2 distinct grader types.
-- **Partial**: Skill has an `eval.yaml`/`eval.yml` but fewer than 2 grader types or no tasks.
-- **Missing**: No `eval.yaml`/`eval.yml` found for the skill.
+- **Full**: Skill or agent has an `eval.yaml`/`eval.yml` with tasks (via `tasks:` or `tasks_from:`) and at least 2 distinct grader types.
+- **Partial**: Skill or agent has an `eval.yaml`/`eval.yml` but fewer than 2 grader types or no tasks.
+- **Missing**: No `eval.yaml`/`eval.yml` found for the skill or agent.
 
-**Note**: The reported coverage percentage reflects only fully covered skills (`Fully Covered / Total Skills`).
+**Note**: Coverage now reports both `SKILL.md` (skills) and `.agent.md` (custom agents) files. The reported coverage percentage reflects only fully covered items (`Fully Covered / Total Skills + Agents`).
 
 ### Examples
 
@@ -410,7 +413,7 @@ waza coverage [root]
 waza coverage
 waza coverage --format markdown
 waza coverage --format json
-waza coverage --path custom-evals --path plugins
+waza coverage --path custom-evals --path agents
 ```
 
 ## waza suggest

@@ -1,0 +1,375 @@
+---
+title: Evaluating Custom Agents
+description: How to use waza to evaluate VS Code custom agents (.agent.md files) with automatic tool constraint validation
+---
+
+import { Aside, Card, Tabs, TabItem } from '@astrojs/starlight/components';
+
+## What is a custom agent?
+
+VS Code custom agents are specialized AI personas defined in `.agent.md` files. They extend VS Code's Copilot with custom instructions, tool constraints, and behavioral guidelines. Unlike general skills, agents can specify which tools they're allowed to use, define model preferences, and coordinate with other agents through handoffs.
+
+For details on creating custom agents in VS Code, see the [VS Code custom agents documentation](https://code.visualstudio.com/docs/copilot/customization/custom-agents).
+
+## Key differences from SKILL.md
+
+Waza treats `.agent.md` files as first-class evaluation targets, just like `SKILL.md`. The key differences:
+
+| Aspect | SKILL.md | .agent.md |
+|--------|----------|-----------|
+| **Purpose** | Define reusable Copilot skills | Define custom VS Code agent personas |
+| **Frontmatter fields** | name, description, triggers | name, description, tools, model, handoffs, mcp-servers, agents |
+| **Tool usage** | No built-in constraint | Declares allowed tools in `tools:` field |
+| **Auto constraints** | Manual `tool_constraint` grader needed | Implicit `tool_constraint` auto-injected if `tools:` field present |
+| **When both exist** | SKILL.md takes priority in same directory | .agent.md evaluated only if SKILL.md absent |
+
+## Quick start
+
+### 1. Run the example
+
+Waza includes a complete security-reviewer agent example:
+
+```bash
+waza run examples/custom-agent/eval.yaml -v
+```
+
+This evaluates a custom security-reviewer agent with tasks covering code review, vulnerability detection, and compliance checking.
+
+### 2. Point waza at your agent
+
+Create an `eval.yaml`:
+
+```yaml
+name: my-agent-eval
+description: Evaluating my custom agent
+agent: my-agent  # Points to my-agent.agent.md in the same directory
+version: "1.0"
+
+config:
+  model: claude-sonnet-4.6
+  timeout_seconds: 300
+
+graders:
+  - type: text
+    name: identifies_issues
+    config:
+      regex_match:
+        - "(?i)(bug|issue|security|error)"
+
+tasks:
+  - "tasks/*.yaml"
+```
+
+### 3. Run it
+
+```bash
+waza run eval.yaml -v
+```
+
+Waza discovers your `my-agent.agent.md`, parses its frontmatter, and auto-injects a `tool_constraint` grader if your agent declares a `tools:` field.
+
+## Anatomy of a .agent.md file
+
+Here's a complete annotated custom agent:
+
+```markdown
+---
+name: security-reviewer
+description: |
+  A specialized agent that reviews code for security vulnerabilities,
+  compliance issues, and best practices. Flags suspicious patterns
+  and suggests hardening strategies.
+
+model: claude-opus-4.6
+tools:
+  - codeSearch
+  - fileRead
+  - fileWrite
+  - runCommand
+
+mcp-servers:
+  - url: "sse://internal-tools.example.com"
+    name: "compliance-checker"
+
+handoffs:
+  - name: legal-review
+    when: "sensitive compliance issues found"
+  - name: performance-analyst
+    when: "security patch impacts performance"
+
+agents:
+  - name: code-analyzer
+    scope: "async dependency analysis"
+---
+
+# Security Review Agent
+
+You are an expert security reviewer specializing in code analysis, vulnerability detection, and compliance validation.
+
+## Your role
+
+Analyze code submissions for:
+- Common security vulnerabilities (injection, XSS, CSRF, etc.)
+- Cryptographic issues
+- Data handling compliance (PII, sensitive data)
+- Third-party dependency risks
+- Infrastructure-as-code misconfigurations
+
+## Tool usage guidelines
+
+- Use `codeSearch` to identify similar patterns across the codebase
+- Use `fileRead` to examine context and dependencies
+- Use `runCommand` to check for known vulnerability patterns (SAST integration)
+- Use `fileWrite` only to create reports, never modify source directly
+
+## Response format
+
+Provide:
+1. **Risk Level:** Critical / High / Medium / Low
+2. **Issue Description:** What was found and why it matters
+3. **Affected Code:** File path and line numbers
+4. **Remediation:** Concrete fix or best practice
+5. **References:** CWE/CVE links if applicable
+```
+
+### Frontmatter fields explained
+
+| Field | Type | Required | Waza behavior |
+|-------|------|----------|---------------|
+| `name` | string | Yes | Agent identifier; must match filename (security-reviewer for security-reviewer.agent.md) |
+| `description` | string | Yes | Summary of agent purpose; used in discovery and trigger tests |
+| `model` | string | No | Preferred model; waza uses `config.model` from eval.yaml (field is informational) |
+| `tools` | array | No | Allowed tool names; waza auto-injects `tool_constraint` grader to validate only these tools are used |
+| `mcp-servers` | array | No | Model Context Protocol servers; parsed but not yet evaluated (P2 roadmap) |
+| `handoffs` | array | No | Handoff definitions; parsed but not yet evaluated (P2 roadmap) |
+| `agents` | array | No | Coordinating agents; parsed but not yet evaluated (P2 roadmap) |
+
+### Body content
+
+The markdown body becomes the agent's system message. Waza injects it into the execution context to guide the agent's behavior during evaluation tasks.
+
+## How waza evaluates agents
+
+### Discovery
+
+Waza searches for `.agent.md` files in the same locations as `SKILL.md`:
+
+- Current directory
+- `./agents/` subdirectory
+- `./skills/` subdirectory
+- Paths specified in eval.yaml
+
+```bash
+# Discovers any .agent.md or SKILL.md in the current directory
+waza run eval.yaml
+
+# Explicitly target an agent in a subdirectory
+waza run my-evals/eval.yaml --context-dir ./agents
+```
+
+### Auto-injected tool constraint
+
+When your `.agent.md` declares a `tools:` field, waza automatically adds a `tool_constraint` grader to validate that only those tools were called during task execution.
+
+<Aside type="caution" title="Auto-injection is transparent">
+You won't see the auto-injected grader in your eval.yaml, but it appears in the results and can be overridden.
+</Aside>
+
+**Before** (without agent's tools field):
+
+```yaml
+graders:
+  - type: text
+    name: code_quality
+    config:
+      regex_match: ["(?i)(refactored|improved)"]
+```
+
+**After** (if agent has `tools: [codeSearch, fileRead, runCommand]`):
+
+```yaml
+graders:
+  - type: tool_constraint  # 🔄 Auto-injected
+    name: allowed_tools
+    config:
+      allow: [codeSearch, fileRead, runCommand]
+  - type: text
+    name: code_quality
+    config:
+      regex_match: ["(?i)(refactored|improved)"]
+```
+
+### Override auto-injection
+
+To use a different tool constraint or opt out entirely, declare your own in eval.yaml:
+
+```yaml
+graders:
+  - type: tool_constraint
+    name: my_tool_policy
+    config:
+      allow: [codeSearch, fileRead]  # Stricter than agent declares
+      reject: [fileDelete, runCommand]
+
+  - type: text
+    name: code_quality
+    config:
+      regex_match: ["(?i)(refactored|improved)"]
+```
+
+When you declare a `tool_constraint` grader, waza skips auto-injection for that agent.
+
+## Writing your eval.yaml for an agent
+
+Target an agent by name or file path:
+
+```yaml
+name: security-agent-eval
+description: Evaluate the security-reviewer agent
+agent: security-reviewer  # Resolves to security-reviewer.agent.md
+
+version: "1.0"
+
+config:
+  model: claude-sonnet-4.6
+  timeout_seconds: 300
+  trials_per_task: 1
+
+# Graders: define what success looks like
+graders:
+  - type: text
+    name: identifies_vulnerability
+    config:
+      regex_match:
+        - "(?i)(vulnerability|bug|issue)"
+        - "(?i)(risk level|severity)"
+
+  - type: code
+    name: suggests_fix
+    config:
+      assertions:
+        - "output_length > 200"
+
+tasks:
+  - "tasks/*.yaml"
+```
+
+**Key points:**
+
+- Use the `agent:` field instead of `skill:` to target an agent
+- All other eval.yaml structure is identical
+- Discovery and grading work the same way
+- The agent's `tools:` field auto-injects a constraint (unless you override it)
+
+## When SKILL.md and .agent.md both exist
+
+If both files are present in the same directory, **SKILL.md takes priority**. Waza evaluates the skill and ignores the agent.
+
+**Workaround:** If you want to evaluate the agent instead:
+- Rename or move the SKILL.md file temporarily, or
+- Place the .agent.md in a different directory and reference it explicitly in eval.yaml
+
+This behavior ensures backward compatibility—existing SKILL.md-based projects work unchanged.
+
+## Coverage reporting
+
+The `waza coverage` command now reports both SKILL.md and .agent.md files:
+
+```bash
+waza coverage
+
+# Output:
+# Skills found: 3
+#   ✓ code-explainer (SKILL.md)
+#   ✓ documentation-writer (SKILL.md)
+#   ✓ security-reviewer (.agent.md)
+#
+# Evaluations found: 3
+#   ✓ evals/code-explainer.yaml
+#   ✓ evals/documentation-writer.yaml
+#   ✓ evals/security-reviewer.yaml
+```
+
+Each agent is counted alongside skills. Use this to audit your evaluation coverage.
+
+## Example: security-reviewer agent
+
+The `examples/custom-agent/` directory contains a complete, runnable security-reviewer agent with evaluation suite.
+
+### File structure
+
+```
+examples/custom-agent/
+├── security-reviewer.agent.md    # Agent definition with tools
+├── eval.yaml                      # Evaluation spec
+├── tasks/
+│   ├── 01-injection-detection.yaml
+│   ├── 02-crypto-review.yaml
+│   ├── 03-data-handling.yaml
+│   └── 04-infrastructure-scan.yaml
+└── fixtures/
+    ├── vulnerable-sql.py
+    ├── weak-crypto.js
+    └── pii-exposure.tf
+```
+
+### Running the example
+
+```bash
+cd examples/custom-agent
+waza run eval.yaml -v
+
+# Output:
+# Running: security-reviewer eval
+# Task: injection-detection ... ✓ PASS
+# Task: crypto-review ... ✓ PASS
+# Task: data-handling ... ⚠ PARTIAL (4/5 validators)
+# Task: infrastructure-scan ... ✓ PASS
+#
+# Results saved to results.json
+```
+
+### What each task tests
+
+| Task | Purpose | Validates |
+|------|---------|-----------|
+| injection-detection | SQL/command injection vulnerabilities | Tool constraint (codeSearch, fileRead only) |
+| crypto-review | Cryptographic weaknesses | Identifies weak algorithms and recommends alternatives |
+| data-handling | PII and sensitive data exposure | Detects hardcoded secrets, unencrypted fields |
+| infrastructure-scan | Terraform/IaC misconfigurations | Checks for open security groups, missing logging |
+
+The auto-injected `tool_constraint` grader validates that only `[codeSearch, fileRead, runCommand]` are called—the tools declared in the agent's frontmatter.
+
+### Sample task file
+
+```yaml
+name: injection-detection
+description: Agent identifies SQL injection vulnerabilities
+
+triggers:
+  - "Review this Python code for security issues"
+
+fixtures:
+  - vulnerable-sql.py
+
+expected_outcome: |
+  - Identifies the SQL injection vulnerability on line 8
+  - Explains the risk
+  - Suggests parameterized queries as mitigation
+```
+
+## Limitations & roadmap
+
+- **`handoffs` field** — Parsed but not yet evaluated. P2 feature to test agent coordination.
+- **`mcp-servers` field** — Parsed but not yet evaluated. P2 feature to validate MCP server integration.
+- **Multiple .agent.md files** — If a directory contains multiple `.agent.md` files, only the first is discovered. Workaround: use subdirectories or rename to avoid collisions.
+- **No handoff testing** — Coming in a future release to validate agent coordination.
+
+See [GitHub issue #225](https://github.com/microsoft/waza/issues/225) for status.
+
+## See also
+
+- [Writing Eval Specs](/guides/eval-yaml) — Full eval.yaml reference
+- [Validators & Graders](/guides/graders) — All available graders, including `tool_constraint`
+- [CLI Commands](/reference/cli) — waza run, coverage, and check commands
+- [VS Code Custom Agents](https://code.visualstudio.com/docs/copilot/customization/custom-agents) — Creating agents in VS Code
