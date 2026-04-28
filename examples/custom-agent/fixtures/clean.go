@@ -1,3 +1,9 @@
+//go:build ignore
+// +build ignore
+
+// This file is a fixture for the security-reviewer agent eval.
+// It is excluded from the module build via the build tag above.
+
 package main
 
 import (

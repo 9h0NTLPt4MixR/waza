@@ -88,3 +88,42 @@ All code roles now use `claude-opus-4.6`. Docs/Scribe/diversity use `gemini-3-pr
 **Site build verified:** All 14 pages built successfully, ci-cd page included
 
 **Branch:** squad/89-ci-integration-guide → PR to microsoft/waza main
+
+## 📌 Issue #225 Completion (2026-03-XX): Custom Agent Eval Documentation
+
+**Completed:** Comprehensive documentation for new `.agent.md` (custom agent) evaluation support
+
+**What I documented:**
+
+**1. New guide** (`guides/custom-agents.mdx` ~12KB)
+- Explained custom agents as first-class eval targets alongside `SKILL.md`
+- Key differences table: SKILL.md vs .agent.md (tool constraints, frontmatter, priority)
+- Quick start with runnable example
+- Complete annotated `.agent.md` file with all frontmatter fields
+- Discovery mechanism and auto-injected tool_constraint behavior
+- Override patterns for tool constraint validation
+- When SKILL.md and .agent.md collide (SKILL.md wins)
+- Coverage reporting updates
+- Full security-reviewer example walkthrough
+- Limitations and roadmap (P2 features: handoffs, mcp-servers)
+
+**2. Updated existing guides**
+- **eval-yaml.mdx:** Added `agent` field to top-level fields table, new "Targeting Custom Agents" section with examples
+- **graders.mdx:** Added caution callout about auto-injected tool_constraint for agents with `tools:` field
+- **cli.mdx:** Updated waza coverage and waza run command sections to document .agent.md discovery
+
+**3. Updated navigation and README**
+- **astro.config.mjs:** Added "Evaluating Custom Agents" sidebar link after "Writing Eval Specs"
+- **README.md:** Added note that custom agents are supported with link to guide
+
+**Key documentation decisions:**
+- Made auto-injection behavior prominent and easy to understand (callout in graders guide)
+- Used concrete examples throughout (security-reviewer agent as reference)
+- Clearly documented priority/precedence (SKILL.md wins when both present)
+- Cross-linked between guides (eval-yaml → custom-agents, graders → custom-agents)
+- Focused on "what users need to know" rather than implementation details
+
+**Site build verified:** All 18 pages built successfully (new custom-agents page included)
+
+**Branch:** squad/225-custom-agent-eval → PR #226 to microsoft/waza main
+
