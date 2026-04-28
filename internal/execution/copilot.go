@@ -12,6 +12,7 @@ import (
 
 	copilot "github.com/github/copilot-sdk/go"
 	"github.com/microsoft/waza/internal/models"
+	"github.com/microsoft/waza/internal/skill"
 	"github.com/microsoft/waza/internal/utils"
 
 	// auto-loads the embedded copilot CLI, over using the copilot CLI on the machine.
@@ -574,26 +575,45 @@ func buildSkillSystemMessage(skillDirs []string, skillName string) string {
 	return sb.String()
 }
 
-// loadSkillDefinition reads a SKILL.md file from dir and extracts the skill
-// name, description and full content. Returns nil if no SKILL.md exists or
-// parsing fails.
+// loadSkillDefinition reads a SKILL.md or .agent.md file from dir and extracts
+// the skill/agent name, description and full content. SKILL.md takes priority.
+// Returns nil if no definition file exists or parsing fails.
 func loadSkillDefinition(dir string) *skillDefinition {
+	// Try SKILL.md first (existing behavior)
 	skillPath := filepath.Join(dir, "SKILL.md")
-
 	data, err := os.ReadFile(skillPath)
-	if err != nil {
+	if err == nil {
+		content := string(data)
+		name, desc := parseSkillFrontmatter(content)
+		if name == "" {
+			name = filepath.Base(dir)
+		}
+		slog.Debug("Loaded skill definition", "name", name, "dir", dir)
+		return &skillDefinition{Name: name, Description: desc, Content: content, Dir: dir}
+	}
+
+	// Try .agent.md files
+	entries, readErr := os.ReadDir(dir)
+	if readErr != nil {
 		return nil
 	}
-
-	content := string(data)
-	name, desc := parseSkillFrontmatter(content)
-	if name == "" {
-		// Fall back to directory name
-		name = filepath.Base(dir)
+	for _, entry := range entries {
+		if !entry.IsDir() && skill.IsAgentFile(entry.Name()) {
+			agentPath := filepath.Join(dir, entry.Name())
+			agentData, readErr := os.ReadFile(agentPath)
+			if readErr != nil {
+				continue
+			}
+			content := string(agentData)
+			name, desc := parseSkillFrontmatter(content)
+			if name == "" {
+				name = strings.TrimSuffix(entry.Name(), ".agent.md")
+			}
+			slog.Debug("Loaded agent definition", "name", name, "dir", dir)
+			return &skillDefinition{Name: name, Description: desc, Content: content, Dir: dir}
+		}
 	}
-
-	slog.Debug("Loaded skill definition", "name", name, "dir", dir)
-	return &skillDefinition{Name: name, Description: desc, Content: content, Dir: dir}
+	return nil
 }
 
 // parseSkillFrontmatter extracts name and description from SKILL.md YAML

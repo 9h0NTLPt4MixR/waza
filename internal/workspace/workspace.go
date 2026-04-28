@@ -225,24 +225,61 @@ func FindEval(wsCtx *WorkspaceContext, skillName string) (string, error) {
 	return "", nil
 }
 
-// tryParseSkill checks if dir contains SKILL.md and parses it.
+// tryParseSkill checks if dir contains SKILL.md or .agent.md and parses it.
+// SKILL.md takes priority over .agent.md.
 func tryParseSkill(dir string) (SkillInfo, bool) {
+	// Check SKILL.md first
 	skillPath := filepath.Join(dir, "SKILL.md")
-	if !isFile(skillPath) {
+	if isFile(skillPath) {
+		name, err := parseSkillName(skillPath)
+		if err != nil || name == "" {
+			name = filepath.Base(dir)
+		}
+		return SkillInfo{
+			Name:      name,
+			Dir:       dir,
+			SkillPath: skillPath,
+		}, true
+	}
+
+	// Fall back to .agent.md files
+	entries, err := os.ReadDir(dir)
+	if err != nil {
 		return SkillInfo{}, false
 	}
-
-	name, err := parseSkillName(skillPath)
-	if err != nil || name == "" {
-		// Fall back to directory name when frontmatter is missing/invalid
-		name = filepath.Base(dir)
+	for _, entry := range entries {
+		if !entry.IsDir() && skill.IsAgentFile(entry.Name()) {
+			agentPath := filepath.Join(dir, entry.Name())
+			name := parseAgentNameFromFile(agentPath)
+			if name == "" {
+				name = filepath.Base(dir)
+			}
+			return SkillInfo{
+				Name:      name,
+				Dir:       dir,
+				SkillPath: agentPath,
+			}, true
+		}
 	}
 
-	return SkillInfo{
-		Name:      name,
-		Dir:       dir,
-		SkillPath: skillPath,
-	}, true
+	return SkillInfo{}, false
+}
+
+// parseAgentNameFromFile reads an .agent.md file and extracts the agent name.
+func parseAgentNameFromFile(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	fm, _, err := skill.ParseAgentFrontmatter(string(data))
+	if err != nil {
+		return ""
+	}
+	name := strings.TrimSpace(fm.Name)
+	if name == "" {
+		name = strings.TrimSuffix(filepath.Base(path), ".agent.md")
+	}
+	return name
 }
 
 // scanForSkills scans immediate child directories of parentDir for SKILL.md files.

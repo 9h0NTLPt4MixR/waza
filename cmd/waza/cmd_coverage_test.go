@@ -229,3 +229,66 @@ func writeEval(t *testing.T, root, relPath, content string) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(absPath), 0o755))
 	require.NoError(t, os.WriteFile(absPath, []byte(content), 0o644))
 }
+
+func writeAgentFile(t *testing.T, root, relDir, agentName string) {
+	t.Helper()
+	dir := filepath.Join(root, relDir)
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	content := `---
+name: ` + agentName + `
+description: "test agent"
+tools:
+  - search/codebase
+model: claude-sonnet-4
+---
+
+You are a test agent.
+`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, agentName+".agent.md"), []byte(content), 0o644))
+}
+
+func TestBuildCoverageReport_DiscoverAgentFiles(t *testing.T) {
+	root := t.TempDir()
+	writeSkill(t, root, filepath.Join("skills", "alpha"), "alpha")
+	writeAgentFile(t, root, filepath.Join("skills", "my-agent"), "my-agent")
+
+	report, err := buildCoverageReport(root, nil)
+	require.NoError(t, err)
+
+	assert.Equal(t, 2, report.TotalSkills)
+
+	names := make(map[string]bool)
+	for _, row := range report.Skills {
+		names[row.Skill] = true
+	}
+	assert.True(t, names["alpha"], "should find SKILL.md skill")
+	assert.True(t, names["my-agent"], "should find .agent.md agent")
+}
+
+func TestBuildCoverageReport_SkillMDPriorityOverAgentMD(t *testing.T) {
+	root := t.TempDir()
+
+	// Write both SKILL.md and .agent.md in the same directory
+	dir := filepath.Join(root, "skills", "both")
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+
+	skillContent := `---
+name: skill-version
+description: "from SKILL.md"
+---
+`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(skillContent), 0o644))
+
+	agentContent := `---
+name: agent-version
+description: "from agent.md"
+---
+`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "test.agent.md"), []byte(agentContent), 0o644))
+
+	report, err := buildCoverageReport(root, nil)
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, report.TotalSkills)
+	assert.Equal(t, "skill-version", report.Skills[0].Skill)
+}
