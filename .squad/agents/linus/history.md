@@ -100,6 +100,13 @@ All code roles now use `claude-opus-4.6`. Docs/Scribe/diversity use `gemini-3-pr
 - **What:** Completed vocabulary renames across Go codebase. `BenchmarkSpec`→`EvalSpec`, `LoadBenchmarkSpec`→`LoadEvalSpec`, `BenchmarkConfig`→`EvalConfig`, `NewBenchmarkConfig`→`NewEvalConfig`, `TestRunner`→`EvalRunner`, `TestStimulus`→`TaskStimulus`, `TestExpectation`→`TaskExpectation`. Added backward-compat type aliases and wrapper functions for all exported names. YAML/JSON tags unchanged. `TestCase` intentionally kept (Go convention).
 - **Key learning:** Bulk sed renames of `TestRunner` will also catch test function names like `func TestRunnerXxx(t *testing.T)` — these must be restored to `func TestEvalRunnerXxx` to keep the `Test` prefix required by `go test`. Always verify test function names after bulk renames.
 
+### #225 — Custom Agent (.agent.md) File Discovery & Parsing (PR pending)
+- **Date:** 2026-02-23
+- **Branch:** `squad/225-custom-agent-eval`
+- **Files changed:** `internal/skill/agent.go` (new), `internal/skill/agent_test.go` (new), `internal/execution/copilot.go`, `internal/orchestration/skill_discovery.go`, `internal/orchestration/skill_discovery_test.go`, `internal/workspace/workspace.go`, `cmd/waza/cmd_coverage.go`, `cmd/waza/cmd_coverage_test.go`
+- **What:** Added P0 support for `.agent.md` files (custom agent definitions) across 5 packages. New `AgentFrontmatter` type embeds existing `Frontmatter` with agent-specific fields (tools, model, handoffs, mcp-servers, agents). SKILL.md always takes priority when both exist in the same directory. Extended `loadSkillDefinition`, `discoverSkills`, `tryParseSkill`, and `discoverSkillFiles` with .agent.md fallback logic. 12 new test functions.
+- **Key learning:** `filepath.WalkDir` visits files alphabetically, so `.agent.md` (lowercase dot) sorts before `SKILL.md` (uppercase S). When enforcing SKILL.md priority in a WalkDir callback, you must explicitly check for SKILL.md existence before processing .agent.md, rather than relying on visit order.
+
 ## Learnings
 - Windows local test runs can fail in `cmd/waza/tokens/internal/git` when temporary repos inherit strict CRLF behavior; setting `core.autocrlf=false` and `core.safecrlf=false` inside test repo setup makes these tests cross-platform stable.
 - PR conflict resolution for `copilot/migrate-copilot-client-usage` in `internal/execution/copilot_test.go` should keep the `TestCopilotExecute_InitializePropagatesStartError` variant from main to preserve startup error propagation coverage.
