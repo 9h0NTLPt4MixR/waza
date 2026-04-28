@@ -10,30 +10,49 @@ import (
 	"github.com/microsoft/waza/internal/skill"
 )
 
-// discoverSkills scans the provided directories for SKILL.md files
-// and returns a map of skill names to their file paths.
+// discoverSkills scans the provided directories for SKILL.md and .agent.md
+// files and returns a map of skill/agent names to their file paths.
+// SKILL.md takes priority over .agent.md when both exist in the same directory.
 func discoverSkills(directories []string) (map[string]string, error) {
 	discovered := make(map[string]string)
 
 	for _, dir := range directories {
 		// Check if directory exists
 		if _, err := os.Stat(dir); os.IsNotExist(err) {
-			// Directory doesn't exist, skip it
 			continue
 		}
 
-		// Look for SKILL.md in this directory
+		// Look for SKILL.md first (takes priority)
 		skillPath := filepath.Join(dir, "SKILL.md")
 		if _, err := os.Stat(skillPath); err == nil {
-			// SKILL.md exists, parse it
 			skillName, err := parseSkillName(skillPath)
 			if err != nil {
-				// Log warning but continue - we want to discover as many skills as possible
 				fmt.Fprintf(os.Stderr, "warning: failed to parse %s: %v\n", skillPath, err)
 				continue
 			}
 			if skillName != "" {
 				discovered[skillName] = skillPath
+			}
+			continue
+		}
+
+		// Look for .agent.md files
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() && skill.IsAgentFile(entry.Name()) {
+				agentPath := filepath.Join(dir, entry.Name())
+				agentName, err := parseAgentName(agentPath)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "warning: failed to parse %s: %v\n", agentPath, err)
+					continue
+				}
+				if agentName != "" {
+					discovered[agentName] = agentPath
+				}
+				break // only one agent per directory
 			}
 		}
 	}
@@ -54,6 +73,26 @@ func parseSkillName(path string) (string, error) {
 	}
 
 	return strings.TrimSpace(s.Frontmatter.Name), nil
+}
+
+// parseAgentName reads an .agent.md file and extracts the agent name from frontmatter.
+func parseAgentName(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("reading file: %w", err)
+	}
+
+	fm, _, err := skill.ParseAgentFrontmatter(string(data))
+	if err != nil {
+		return "", fmt.Errorf("parsing agent frontmatter: %w", err)
+	}
+
+	name := strings.TrimSpace(fm.Name)
+	if name == "" {
+		base := filepath.Base(path)
+		name = strings.TrimSuffix(base, ".agent.md")
+	}
+	return name, nil
 }
 
 // validateRequiredSkills checks that all required skills are discovered.

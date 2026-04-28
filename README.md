@@ -118,8 +118,9 @@ waza suggest skills/my-skill --dry-run
 waza suggest skills/my-skill --apply
 
 # Note: 'generate' is available as an alias for 'new' (see below for new command)
+# Note: Custom agents (.agent.md) are supported — see https://microsoft.github.io/waza/guides/custom-agents/
 
-# Run evaluations
+# Run evaluations (works with both skills and custom agents)
 waza run examples/code-explainer/eval.yaml --context-dir examples/code-explainer/fixtures -v
 
 # Grade output from a previous `waza run --output results.json ...`

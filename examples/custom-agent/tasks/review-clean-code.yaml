@@ -1,0 +1,3 @@
+name: review-clean-code
+prompt: Review the file fixtures/clean.go for security issues
+expected_behavior: Should report no vulnerabilities — the code uses parameterized queries and proper input handling

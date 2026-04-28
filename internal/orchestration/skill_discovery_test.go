@@ -234,3 +234,108 @@ func TestValidateRequiredSkills(t *testing.T) {
 		assert.True(t, foundDiscoveredSection, "Should have found skills section")
 	})
 }
+
+func TestDiscoverSkills_FindsAgentFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a directory with an .agent.md file
+	agentDir := filepath.Join(tmpDir, "my-agent")
+	require.NoError(t, os.MkdirAll(agentDir, 0755))
+
+	agentContent := `---
+name: security-reviewer
+description: Reviews code for security vulnerabilities
+tools:
+  - search/codebase
+model: claude-sonnet-4
+---
+
+You are a security reviewer.
+`
+	require.NoError(t, os.WriteFile(filepath.Join(agentDir, "security-reviewer.agent.md"), []byte(agentContent), 0644))
+
+	t.Run("discovers agent files", func(t *testing.T) {
+		discovered, err := discoverSkills([]string{agentDir})
+		require.NoError(t, err)
+		assert.Len(t, discovered, 1)
+		assert.Contains(t, discovered, "security-reviewer")
+	})
+
+	t.Run("SKILL.md takes priority over agent.md", func(t *testing.T) {
+		bothDir := filepath.Join(tmpDir, "both")
+		require.NoError(t, os.MkdirAll(bothDir, 0755))
+
+		skillContent := `---
+name: skill-wins
+description: SKILL.md should take priority
+---
+
+Skill body.
+`
+		require.NoError(t, os.WriteFile(filepath.Join(bothDir, "SKILL.md"), []byte(skillContent), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(bothDir, "my.agent.md"), []byte(agentContent), 0644))
+
+		discovered, err := discoverSkills([]string{bothDir})
+		require.NoError(t, err)
+		assert.Len(t, discovered, 1)
+		assert.Contains(t, discovered, "skill-wins")
+	})
+
+	t.Run("agent name falls back to filename", func(t *testing.T) {
+		noNameDir := filepath.Join(tmpDir, "noname")
+		require.NoError(t, os.MkdirAll(noNameDir, 0755))
+
+		noNameContent := `---
+description: Agent with no name field
+---
+
+Body only.
+`
+		require.NoError(t, os.WriteFile(filepath.Join(noNameDir, "fallback.agent.md"), []byte(noNameContent), 0644))
+
+		discovered, err := discoverSkills([]string{noNameDir})
+		require.NoError(t, err)
+		assert.Len(t, discovered, 1)
+		assert.Contains(t, discovered, "fallback")
+	})
+}
+
+func TestParseAgentName(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	t.Run("valid agent file", func(t *testing.T) {
+		agentPath := filepath.Join(tmpDir, "test.agent.md")
+		content := `---
+name: my-agent
+description: Does things
+---
+
+Body.
+`
+		require.NoError(t, os.WriteFile(agentPath, []byte(content), 0644))
+
+		name, err := parseAgentName(agentPath)
+		require.NoError(t, err)
+		assert.Equal(t, "my-agent", name)
+	})
+
+	t.Run("fallback to filename", func(t *testing.T) {
+		agentPath := filepath.Join(tmpDir, "cool-agent.agent.md")
+		content := `---
+description: No name field
+---
+
+Body.
+`
+		require.NoError(t, os.WriteFile(agentPath, []byte(content), 0644))
+
+		name, err := parseAgentName(agentPath)
+		require.NoError(t, err)
+		assert.Equal(t, "cool-agent", name)
+	})
+
+	t.Run("non-existent file", func(t *testing.T) {
+		_, err := parseAgentName(filepath.Join(tmpDir, "nope.agent.md"))
+		require.Error(t, err)
+	})
+}

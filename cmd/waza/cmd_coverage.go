@@ -223,8 +223,15 @@ func discoverSkillFiles(root string, discoverPaths []string) (map[string]string,
 				}
 				return nil
 			}
-			if d.Name() != "SKILL.md" {
+			if d.Name() != "SKILL.md" && !skill.IsAgentFile(d.Name()) {
 				return nil
+			}
+			// SKILL.md takes priority: skip .agent.md if SKILL.md exists in same dir
+			if skill.IsAgentFile(d.Name()) {
+				skillMDPath := filepath.Join(filepath.Dir(path), "SKILL.md")
+				if isFile(skillMDPath) {
+					return nil
+				}
 			}
 			absPath, absErr := filepath.Abs(path)
 			if absErr != nil {
@@ -234,7 +241,12 @@ func discoverSkillFiles(root string, discoverPaths []string) (map[string]string,
 				return nil
 			}
 			seenPaths[absPath] = struct{}{}
-			skillName := parseSkillName(absPath)
+			var skillName string
+			if skill.IsAgentFile(d.Name()) {
+				skillName = parseAgentSkillName(absPath)
+			} else {
+				skillName = parseSkillName(absPath)
+			}
 			if skillName == "" {
 				skillName = filepath.Base(filepath.Dir(absPath))
 			}
@@ -335,6 +347,23 @@ func parseSkillName(path string) string {
 		return ""
 	}
 	return strings.TrimSpace(sk.Frontmatter.Name)
+}
+
+// parseAgentSkillName reads an .agent.md file and extracts the agent name.
+func parseAgentSkillName(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	fm, _, err := skill.ParseAgentFrontmatter(string(data))
+	if err != nil {
+		return ""
+	}
+	name := strings.TrimSpace(fm.Name)
+	if name == "" {
+		name = strings.TrimSuffix(filepath.Base(path), ".agent.md")
+	}
+	return name
 }
 
 func inferSkillNameFromEvalPath(evalPath string) string {

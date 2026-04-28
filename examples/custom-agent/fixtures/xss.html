@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>User Profile</title>
+</head>
+<body>
+    <h1>User Profile</h1>
+
+    <!-- BAD: user_content rendered without escaping — XSS vulnerability -->
+    <div class="bio">
+        {{ user_content }}
+    </div>
+
+    <!-- BAD: building HTML from user input via innerHTML -->
+    <div id="comments"></div>
+    <script>
+        function loadComments(data) {
+            const container = document.getElementById('comments');
+            data.forEach(comment => {
+                // BAD: direct innerHTML assignment from untrusted data
+                container.innerHTML += '<div class="comment">' + comment.body + '</div>';
+            });
+        }
+
+        // Simulated API response with user-controlled data
+        const apiResponse = [
+            { body: "Great post!" },
+            { body: "<img src=x onerror='alert(document.cookie)'>" }
+        ];
+        loadComments(apiResponse);
+    </script>
+</body>
+</html>

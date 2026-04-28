@@ -41,6 +41,7 @@ export default defineConfig({
 					label: 'Guides',
 					items: [
 						{ label: 'Writing Eval Specs', slug: 'guides/eval-yaml' },
+						{ label: 'Evaluating Custom Agents', slug: 'guides/custom-agents' },
 						{ label: 'Validators & Graders', slug: 'guides/graders' },
 						{ label: 'Token Limits', slug: 'guides/token-limits' },
 						{ label: 'Web Dashboard', slug: 'guides/dashboard' },
