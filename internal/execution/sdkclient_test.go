@@ -18,7 +18,7 @@ func (s *stubClient) GetAuthStatus(context.Context) (*copilot.GetAuthStatusRespo
 	return nil, nil
 }
 func (s *stubClient) Start(context.Context) error { return nil }
-func (s *stubClient) Stop() error                  { s.stops++; return nil }
+func (s *stubClient) Stop() error                 { s.stops++; return nil }
 func (s *stubClient) ResumeSessionWithOptions(context.Context, string, *copilot.ResumeSessionConfig) (CopilotSession, error) {
 	return nil, nil
 }

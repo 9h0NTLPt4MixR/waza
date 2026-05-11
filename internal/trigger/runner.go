@@ -77,9 +77,6 @@ func (r *Runner) RunDetailed(ctx context.Context) ([]models.TriggerResult, *mode
 		}
 		workers = orchestration.ResolveWorkers(workers, len(tasks), "trigger tests", out)
 	}
-	if workers <= 0 {
-		workers = 1
-	}
 	outcomes := make([]taskResult, len(tasks))
 	sem := make(chan struct{}, workers)
 	var wg sync.WaitGroup
