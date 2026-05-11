@@ -776,10 +776,7 @@ func (r *TestRunner) runSequential(ctx context.Context, testCases []*models.Test
 func (r *TestRunner) runConcurrent(ctx context.Context, testCases []*models.TestCase) []models.TestOutcome {
 	// Simple concurrent implementation
 	spec := r.cfg.Spec()
-	workers := spec.Config.Workers
-	if workers <= 0 {
-		workers = 4
-	}
+	workers := ResolveWorkersStderr(spec.Config.Workers, len(testCases), "tasks")
 
 	type result struct {
 		index   int
@@ -1300,6 +1297,16 @@ func (r *TestRunner) buildGraderContext(tc *models.TestCase, resp *execution.Exe
 
 	sessionDigest := r.buildSessionDigest(resp)
 
+	// When the engine exposes a shared Copilot SDK client, plumb it through
+	// so graders (e.g. prompt grader) can avoid spawning a fresh client per
+	// call. See docs/design/135-improve-concurrency.md (R2).
+	var sharedClient execution.CopilotClient
+	if cp, ok := r.engine.(interface {
+		CopilotClient() execution.CopilotClient
+	}); ok {
+		sharedClient = cp.CopilotClient()
+	}
+
 	return &graders.Context{
 		TestCase:         tc,
 		Transcript:       transcript,
@@ -1312,6 +1319,7 @@ func (r *TestRunner) buildGraderContext(tc *models.TestCase, resp *execution.Exe
 		SkillInvocations: resp.SkillInvocations,
 		SessionID:        resp.SessionID,
 		Session:          &sessionDigest,
+		CopilotClient:    sharedClient,
 	}
 }
 

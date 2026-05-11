@@ -9,6 +9,7 @@ import (
 
 	copilot "github.com/github/copilot-sdk/go"
 	"github.com/go-viper/mapstructure/v2"
+	"github.com/microsoft/waza/internal/execution"
 	"github.com/microsoft/waza/internal/models"
 	"github.com/microsoft/waza/internal/utils"
 )
@@ -16,6 +17,103 @@ import (
 const AllPromptsPassed = "All prompts passed"
 const wazaPassToolName = "set_waza_grade_pass"
 const wazaFailToolName = "set_waza_grade_fail"
+
+// graderSession captures the subset of session operations the prompt grader
+// needs. Both [*copilot.Session] and [execution.CopilotSession] satisfy it,
+// which lets gradeIndependent / runPairwiseOnce share one code path across
+// the legacy per-call client and the shared client (#135 R2).
+type graderSession interface {
+	On(handler copilot.SessionEventHandler) func()
+	SendAndWait(ctx context.Context, opts copilot.MessageOptions) (*copilot.SessionEvent, error)
+}
+
+// openGradingSession returns a session for the prompt grader to send the
+// judging prompt on, plus a cleanup func that the caller must defer.
+//
+// When gradingContext.CopilotClient is non-nil (production: shared SDK
+// client plumbed by the runner), the cleanup only Disconnects the session.
+// When nil (legacy / standalone test path), a per-call copilot.Client is
+// constructed and Stopped on cleanup, preserving the previous behavior.
+func openGradingSession(
+	ctx context.Context,
+	gradingContext *Context,
+	model string,
+	tools []copilot.Tool,
+	resumeSessionID string, // "" to create a fresh session
+) (graderSession, func(), error) {
+	// Shared-client path (#135 R2): no Start/Stop overhead, just a session.
+	if gradingContext.CopilotClient != nil {
+		client := gradingContext.CopilotClient
+		var (
+			sess execution.CopilotSession
+			err  error
+		)
+		if resumeSessionID != "" {
+			sess, err = client.ResumeSessionWithOptions(ctx, resumeSessionID, &copilot.ResumeSessionConfig{
+				OnPermissionRequest: copilot.PermissionHandler.ApproveAll,
+				Model:               model,
+				Streaming:           true,
+				Tools:               tools,
+			})
+		} else {
+			sess, err = client.CreateSession(ctx, &copilot.SessionConfig{
+				OnPermissionRequest: copilot.PermissionHandler.ApproveAll,
+				Model:               model,
+				Streaming:           true,
+				Tools:               tools,
+				WorkingDirectory:    gradingContext.WorkspaceDir,
+			})
+		}
+		if err != nil {
+			return nil, func() {}, fmt.Errorf("failed to start up copilot session for prompt grading: %w", err)
+		}
+		cleanup := func() {
+			if err := sess.Disconnect(); err != nil {
+				slog.ErrorContext(ctx, "error disconnecting prompt grader session", "error", err)
+			}
+		}
+		return sess, cleanup, nil
+	}
+
+	// Legacy per-call client path. Preserved so direct grader tests
+	// (prompt_grader_test.go) and any out-of-runner usage keep working.
+	client := copilot.NewClient(&copilot.ClientOptions{
+		Cwd:             gradingContext.WorkspaceDir,
+		AutoStart:       utils.Ptr(true),
+		AutoRestart:     utils.Ptr(true),
+		UseLoggedInUser: utils.Ptr(true),
+		LogLevel:        "error",
+	})
+	cleanup := func() {
+		if err := client.Stop(); err != nil {
+			slog.ErrorContext(ctx, "error stopping client for prompt grader", "error", err)
+		}
+	}
+	var (
+		sess *copilot.Session
+		err  error
+	)
+	if resumeSessionID != "" {
+		sess, err = client.ResumeSessionWithOptions(ctx, resumeSessionID, &copilot.ResumeSessionConfig{
+			OnPermissionRequest: copilot.PermissionHandler.ApproveAll,
+			Model:               model,
+			Streaming:           true,
+			Tools:               tools,
+		})
+	} else {
+		sess, err = client.CreateSession(ctx, &copilot.SessionConfig{
+			OnPermissionRequest: copilot.PermissionHandler.ApproveAll,
+			Model:               model,
+			Streaming:           true,
+			Tools:               tools,
+		})
+	}
+	if err != nil {
+		cleanup()
+		return nil, func() {}, fmt.Errorf("failed to start up copilot session for prompt grading: %w", err)
+	}
+	return sess, cleanup, nil
+}
 
 type promptGrader struct {
 	args models.PromptGraderParameters
@@ -59,50 +157,21 @@ func (p *promptGrader) Name() string {
 // gradeIndependent runs the standard single-output prompt grading.
 func (p *promptGrader) gradeIndependent(ctx context.Context, gradingContext *Context) (*models.GraderResults, error) {
 	return measureTime(func() (*models.GraderResults, error) {
-		client := copilot.NewClient(&copilot.ClientOptions{
-			Cwd:             gradingContext.WorkspaceDir,
-			AutoStart:       utils.Ptr(true),
-			AutoRestart:     utils.Ptr(true),
-			UseLoggedInUser: utils.Ptr(true),
-			LogLevel:        "error",
-		})
-
-		defer func() {
-			if err := client.Stop(); err != nil {
-				slog.ErrorContext(ctx, "error stopping client for prompt grader")
-			}
-		}()
-
-		var session *copilot.Session
-		var err error
 		wazaTools := newWazaGraderTools()
 
+		resumeID := ""
 		if p.args.ContinueSession {
 			if gradingContext.SessionID == "" {
 				return nil, errors.New("no session id set, can't continue session in prompt grading")
 			}
-
-			// resume the previous session, but use a different model for the judge.
-			session, err = client.ResumeSessionWithOptions(ctx,
-				gradingContext.SessionID,
-				&copilot.ResumeSessionConfig{
-					OnPermissionRequest: copilot.PermissionHandler.ApproveAll,
-					Model:               p.args.Model,
-					Streaming:           true,
-					Tools:               wazaTools.Tools,
-				})
-		} else {
-			session, err = client.CreateSession(ctx, &copilot.SessionConfig{
-				OnPermissionRequest: copilot.PermissionHandler.ApproveAll,
-				Model:               p.args.Model,
-				Streaming:           true,
-				Tools:               wazaTools.Tools,
-			})
+			resumeID = gradingContext.SessionID
 		}
 
+		session, cleanup, err := openGradingSession(ctx, gradingContext, p.args.Model, wazaTools.Tools, resumeID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to start up copilot session for prompt grading: %w", err)
+			return nil, err
 		}
+		defer cleanup()
 
 		session.On(utils.NewSessionToSlog())
 
@@ -310,20 +379,6 @@ func (p *promptGrader) runPairwiseOnce(
 	outputA, outputB string,
 	labelA, labelB string,
 ) (*pairwiseJudgment, error) {
-	client := copilot.NewClient(&copilot.ClientOptions{
-		Cwd:             gradingContext.WorkspaceDir,
-		AutoStart:       utils.Ptr(true),
-		AutoRestart:     utils.Ptr(true),
-		UseLoggedInUser: utils.Ptr(true),
-		LogLevel:        "error",
-	})
-
-	defer func() {
-		if err := client.Stop(); err != nil {
-			slog.ErrorContext(ctx, "error stopping client for pairwise grader")
-		}
-	}()
-
 	judgment := &pairwiseJudgment{
 		winner:    "tie",
 		magnitude: "equal",
@@ -370,15 +425,11 @@ func (p *promptGrader) runPairwiseOnce(
 		},
 	}
 
-	session, err := client.CreateSession(ctx, &copilot.SessionConfig{
-		OnPermissionRequest: copilot.PermissionHandler.ApproveAll,
-		Model:               p.args.Model,
-		Streaming:           true,
-		Tools:               tools,
-	})
+	session, cleanup, err := openGradingSession(ctx, gradingContext, p.args.Model, tools, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session for pairwise grading: %w", err)
 	}
+	defer cleanup()
 
 	session.On(utils.NewSessionToSlog())
 

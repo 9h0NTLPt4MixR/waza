@@ -196,3 +196,55 @@ For each recommendation we should land:
 2. **R2:** Confirmation from @richardpark-msft that the current Copilot SDK is safe to share a single `Client` across N concurrent `CreateSession` calls without per-call `Start`/`Stop`.
 3. **R3:** Is `min(NumCPU, totalJobs)` an acceptable new default, or do we keep `4`? (Some CI runners report many CPUs but have low memory headroom for parallel sessions.)
 4. **R4:** Worth doing now, or wait until a user hits the limit?
+
+---
+
+## 8. Critique resolutions (Opus 4.6 review)
+
+This section captures the resolutions for the [rubber-duck critique](https://github.com/microsoft/waza/pull/231#issuecomment-4338503201). It supersedes the relevant pieces of §3 / §7 above.
+
+### B1 — Cap auto-sized workers (R3 default)
+
+Adopted: the auto-default is `min(runtime.NumCPU(), totalJobsInPhase, 8)` rather than `min(NumCPU, totalJobs)`. The 8-worker ceiling protects 64-core CI runners with limited memory and bounds Copilot session concurrency until R4 lands. Users who want more can still pass `--workers N` explicitly.
+
+The cap is applied per phase (tasks, then triggers) until R1 unifies the pool; after R1 it applies once across the unified pool with `totalJobs = len(tasks) + len(triggers)`.
+
+### B2 — How graders get the shared client (R2 wiring)
+
+Adopted: extend `graders.Context` with a new field
+
+```go
+// Optional: shared Copilot client to use for graders that need their
+// own session (e.g. prompt graders). When nil, the grader falls back
+// to constructing a per-call client (legacy path; preserves test
+// compatibility for graders constructed outside a TestRunner).
+CopilotClient execution.CopilotClient
+```
+
+`TestRunner.buildGraderContext` populates it from the engine when the engine is a `*CopilotEngine` (cast guarded; no-op for `MockEngine`). `prompt_grader.gradeIndependent` and `runPairwiseOnce` use the injected client when set; otherwise they keep the existing `copilot.NewClient(...)`/`Stop()` path so existing direct-call tests (`prompt_grader_test.go:167`) keep working untouched.
+
+### B3 — Singleton lifecycle vs per-engine `Shutdown`
+
+Adopted: the SDK client is a **process-wide** singleton, not per-engine. Concretely:
+
+- `internal/execution/sdkclient.go` exposes `SharedClient(opts) (CopilotClient, error)` guarded by `sync.Once`. First call constructs the client; subsequent calls return the same instance.
+- `CopilotEngine` consumes the shared client by default. **`CopilotEngine.Shutdown` does not call `client.Stop()`** when the engine was built on top of the shared client — it only deletes that engine's sessions and cleans workspaces.
+- A separate `execution.ShutdownSharedClient(ctx) error` is invoked once from `cmd/waza` (top-level, after the multi-model loop in `runCommandForSpec`) to actually `Stop()` the underlying SDK client.
+- Existing `CopilotEngineBuilderOptions.NewCopilotClient` remains a per-engine override (used by tests) and bypasses the singleton entirely.
+
+This satisfies B3: across multiple `CopilotEngine` lifecycles in a single `waza run` (one per `--model`), the underlying SDK process is started once and stopped once.
+
+### N4 — Use symbol names, not line numbers
+
+Future revisions will reference `runConcurrent` / `RunDetailed` / `gradeIndependent` rather than line numbers. Line numbers in §2 are kept as historical context for the diagnosis but should not be relied on after rebases.
+
+### S3 — Implementation order
+
+Order amended to: **R3 → R2 → R1 → R4** within this PR series:
+
+- R3 first because it is purely a default-value change, ships independently, and is small enough to validate fast.
+- R2 next because it is a contained refactor with clear boundaries (singleton + grader injection) and removes the per-grader Start/Stop overhead immediately.
+- R1 last because it requires both the singleton (to avoid spawning a client per pool worker) and a stable workers default (so the unified pool has a sensible cap).
+- R4 deferred unless data shows the single knob is insufficient.
+
+This PR ships R3 and R2; R1 lands as a follow-up.

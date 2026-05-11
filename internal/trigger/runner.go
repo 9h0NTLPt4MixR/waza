@@ -16,6 +16,7 @@ import (
 	"github.com/microsoft/waza/internal/config"
 	"github.com/microsoft/waza/internal/execution"
 	"github.com/microsoft/waza/internal/models"
+	"github.com/microsoft/waza/internal/orchestration"
 	"github.com/microsoft/waza/internal/transcript"
 	"github.com/microsoft/waza/internal/utils"
 )
@@ -67,8 +68,17 @@ func (r *Runner) RunDetailed(ctx context.Context) ([]models.TriggerResult, *mode
 	}
 
 	workers := r.cfg.Spec().Config.Workers
+	// Auto-size workers (#135 R3): default to min(NumCPU, jobs, cap=8) when
+	// unset, clamp to job count when over-requested, and log if capped.
+	{
+		var out io.Writer
+		if r.cfg.Verbose() {
+			out = r.out
+		}
+		workers = orchestration.ResolveWorkers(workers, len(tasks), "trigger tests", out)
+	}
 	if workers <= 0 {
-		workers = 4
+		workers = 1
 	}
 	outcomes := make([]taskResult, len(tasks))
 	sem := make(chan struct{}, workers)

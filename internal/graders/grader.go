@@ -55,6 +55,17 @@ type Context struct {
 	// BaselineOutput is the agent output from the baseline (no-skill) run.
 	// Populated when running in baseline mode; used by pairwise prompt grading.
 	BaselineOutput string
+
+	// CopilotClient, when non-nil, is a shared Copilot SDK client that
+	// graders may use to construct their own grading sessions without
+	// spawning a fresh CLI process per call. When nil (e.g. tests that
+	// instantiate graders directly), graders fall back to the legacy
+	// per-call copilot.NewClient(...)/Stop() path.
+	//
+	// Callers must NOT call Stop() on this client; its lifetime is owned
+	// by the runner / top-level command. See
+	// docs/design/135-improve-concurrency.md (R2).
+	CopilotClient execution.CopilotClient
 }
 
 // Create creates a validator from the global registry
