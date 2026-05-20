@@ -143,20 +143,17 @@ function TimelineRow({
   const kind = classifyEvent(event);
   const Icon = iconMap[kind];
 
-  // Build description
-  let description = "";
-  if (event.toolName) description = event.toolName;
-  else if (event.content)
-    description =
-      event.content.length > 120
+  const description = event.toolName
+    ? event.toolName
+    : event.content
+      ? event.content.length > 120
         ? event.content.slice(0, 120) + "…"
-        : event.content;
-  else if (event.message)
-    description =
-      event.message.length > 120
-        ? event.message.slice(0, 120) + "…"
-        : event.message;
-  else description = event.type;
+        : event.content
+      : event.message
+        ? event.message.length > 120
+          ? event.message.slice(0, 120) + "…"
+          : event.message
+        : event.type;
 
   // Determine if there is expandable content
   const hasContent =

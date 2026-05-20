@@ -1,6 +1,5 @@
 import { test, expect } from "@playwright/test";
 import { mockAllAPIs, mockEmptyAPIs } from "./helpers/api-mock";
-import { SUMMARY, RUNS } from "./fixtures/mock-data";
 
 test.describe("Dashboard", () => {
   test("page loads and shows waza branding in nav", async ({ page }) => {

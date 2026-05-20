@@ -135,6 +135,7 @@ export default function RunsTable({ data }: { data: RunSummary[] }) {
     [],
   );
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Table's hook intentionally returns callable table helpers.
   const table = useReactTable({
     data,
     columns,
