@@ -13,8 +13,8 @@ Waza evaluates both `SKILL.md`-based skills and `.agent.md` custom agents. This 
 
 ## Prerequisites
 
-- **Go 1.26 or later** (for binary install), or
 - **GitHub Copilot access** (for `copilot login`)
+- **Go 1.26 or later** and **Git LFS** only if installing from source
 
 ## 1. Install
 
@@ -39,8 +39,12 @@ waza --version
 
 <TabItem label="From Source">
 ```bash
-go install github.com/microsoft/waza/cmd/waza@latest
-waza --version
+git clone https://github.com/microsoft/waza.git
+cd waza
+git lfs install
+git lfs pull
+go build -o waza ./cmd/waza
+./waza --version
 ```
 </TabItem>
 

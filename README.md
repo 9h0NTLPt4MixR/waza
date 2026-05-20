@@ -22,7 +22,7 @@ Or download binaries directly from the [latest release](https://github.com/micro
 
 Requires Go 1.26+:
 
-NOTE, due to the use of LFS artifacts you cannot install waza using `go install`. To install waza, outside of a normal release, you'll need to clone the repository:
+Note: due to the use of LFS artifacts you cannot install waza using `go install`. To install waza outside of a normal release, clone the repository:
 
 ```bash
 git clone https://github.com/microsoft/waza.git
@@ -1113,8 +1113,12 @@ curl -fsSL https://raw.githubusercontent.com/microsoft/waza/main/install.sh | ba
 
 **Option 2: Install from source**
 ```bash
-# Requires Go 1.26+
-go install github.com/microsoft/waza/cmd/waza@latest
+# Requires Go 1.26+ and Git LFS
+git clone https://github.com/microsoft/waza.git
+cd waza
+git lfs install
+git lfs pull
+go build -o waza ./cmd/waza
 ```
 
 **Option 3: Use Docker**

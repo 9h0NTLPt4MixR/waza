@@ -49,16 +49,20 @@ export PATH="$HOME/bin:$PATH"
 
 ### 2. Install from Source
 
-Requires **Go 1.26 or later**:
+Requires **Go 1.26 or later** and **Git LFS**:
 
 ```bash
-go install github.com/microsoft/waza/cmd/waza@latest
+git clone https://github.com/microsoft/waza.git
+cd waza
+git lfs install
+git lfs pull
+go build -o waza ./cmd/waza
 ```
 
 Verify installation:
 
 ```bash
-waza --version
+./waza --version
 ```
 
 ### 3. Azure Developer CLI Extension
