@@ -183,8 +183,8 @@ Create a new skill with scaffolded structure and evaluation suite. Detects works
 project/
 ├── skills/{skill-name}/SKILL.md
 └── evals/{skill-name}/
-    ├── eval.yaml
-    ├── tasks/*.yaml
+    ├── eval.yaml                 # or files.evalFile
+    ├── tasks/*.yaml              # or files.taskGlob / files.taskFileSuffix
     └── fixtures/
 ```
 
@@ -193,8 +193,8 @@ project/
 {skill-name}/
 ├── SKILL.md
 ├── evals/
-│   ├── eval.yaml
-│   ├── tasks/*.yaml
+│   ├── eval.yaml                 # or files.evalFile
+│   ├── tasks/*.yaml              # or files.taskGlob / files.taskFileSuffix
 │   └── fixtures/
 ├── .github/workflows/eval.yml
 ├── .gitignore
@@ -215,14 +215,23 @@ waza new skill code-explainer
 Scaffold an eval suite from an existing `SKILL.md` (reads frontmatter trigger hints from `USE FOR` and `DO NOT USE FOR`).
 
 Creates:
-- `evals/<skill-name>/eval.yaml`
-- `evals/<skill-name>/tasks/positive-trigger-1.yaml`
-- `evals/<skill-name>/tasks/positive-trigger-2.yaml`
-- `evals/<skill-name>/tasks/negative-trigger-1.yaml`
+- `evals/<skill-name>/<files.evalFile>`
+- `evals/<skill-name>/tasks/positive-trigger-1<files.taskFileSuffix>`
+- `evals/<skill-name>/tasks/positive-trigger-2<files.taskFileSuffix>`
+- `evals/<skill-name>/tasks/negative-trigger-1<files.taskFileSuffix>`
 
 | Flag | Description |
 |------|-------------|
-| `--output <path>` | Custom path for `eval.yaml` (tasks are generated under sibling `tasks/`) |
+| `--output <path>` | Custom path for the eval file (tasks are generated under sibling `tasks/`) |
+
+Generated eval and task filenames are configurable in `.waza.yaml`:
+
+```yaml
+files:
+  evalFile: waza-eval.yaml
+  taskGlob: tasks/*.waza-task.yaml
+  taskFileSuffix: .waza-task.yaml
+```
 
 **Example:**
 ```bash

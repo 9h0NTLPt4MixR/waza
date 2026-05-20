@@ -230,6 +230,31 @@ func TestDiscoverProjectLayout(t *testing.T) {
 	}
 }
 
+func TestDiscoverProjectLayoutCustomEvalFile(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, ".waza.yaml"), []byte("files:\n  evalFile: waza-eval.yaml\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	setupSkillDir(t, filepath.Join(root, "skills", "my-skill"))
+	setupEvalFile(t, filepath.Join(root, "evals", "my-skill", "waza-eval.yaml"))
+
+	skills, err := Discover(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(skills) != 1 {
+		t.Fatalf("expected 1 skill, got %d", len(skills))
+	}
+	if !skills[0].HasEval() {
+		t.Fatal("my-skill should have eval")
+	}
+	if filepath.Base(skills[0].EvalPath) != "waza-eval.yaml" {
+		t.Errorf("expected waza-eval.yaml filename, got %s", filepath.Base(skills[0].EvalPath))
+	}
+}
+
 func TestDiscoverNonexistentRoot(t *testing.T) {
 	_, err := Discover("/nonexistent/path/that/does/not/exist")
 	if err == nil {

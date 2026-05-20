@@ -3,6 +3,7 @@ package projectconfig
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -13,6 +14,11 @@ func TestNew_ReturnsAllDefaults(t *testing.T) {
 	assertEqual(t, "Paths.Skills", "skills/", cfg.Paths.Skills)
 	assertEqual(t, "Paths.Evals", "evals/", cfg.Paths.Evals)
 	assertEqual(t, "Paths.Results", "results/", cfg.Paths.Results)
+
+	// Files
+	assertEqual(t, "Files.EvalFile", "eval.yaml", cfg.Files.EvalFile)
+	assertEqual(t, "Files.TaskGlob", "tasks/*.yaml", cfg.Files.TaskGlob)
+	assertEqual(t, "Files.TaskFileSuffix", ".yaml", cfg.Files.TaskFileSuffix)
 
 	// Defaults
 	assertEqual(t, "Defaults.Engine", "copilot-sdk", cfg.Defaults.Engine)
@@ -55,6 +61,10 @@ paths:
   skills: "custom-skills/"
   evals: "custom-evals/"
   results: "custom-results/"
+files:
+  evalFile: "waza-eval.yaml"
+  taskGlob: "tasks/*.waza-task.yaml"
+  taskFileSuffix: ".waza-task.yaml"
 defaults:
   engine: mock
   model: gpt-4o
@@ -94,6 +104,9 @@ graders:
 	assertEqual(t, "Paths.Skills", "custom-skills/", cfg.Paths.Skills)
 	assertEqual(t, "Paths.Evals", "custom-evals/", cfg.Paths.Evals)
 	assertEqual(t, "Paths.Results", "custom-results/", cfg.Paths.Results)
+	assertEqual(t, "Files.EvalFile", "waza-eval.yaml", cfg.Files.EvalFile)
+	assertEqual(t, "Files.TaskGlob", "tasks/*.waza-task.yaml", cfg.Files.TaskGlob)
+	assertEqual(t, "Files.TaskFileSuffix", ".waza-task.yaml", cfg.Files.TaskFileSuffix)
 	assertEqual(t, "Defaults.Engine", "mock", cfg.Defaults.Engine)
 	assertEqual(t, "Defaults.Model", "gpt-4o", cfg.Defaults.Model)
 	assertEqual(t, "Defaults.JudgeModel", "claude-sonnet-4.6", cfg.Defaults.JudgeModel)
@@ -142,6 +155,9 @@ defaults:
 
 	// Defaults preserved
 	assertEqual(t, "Paths.Skills", "skills/", cfg.Paths.Skills)
+	assertEqual(t, "Files.EvalFile", "eval.yaml", cfg.Files.EvalFile)
+	assertEqual(t, "Files.TaskGlob", "tasks/*.yaml", cfg.Files.TaskGlob)
+	assertEqual(t, "Files.TaskFileSuffix", ".yaml", cfg.Files.TaskFileSuffix)
 	assertEqualInt(t, "Defaults.Timeout", 300, cfg.Defaults.Timeout)
 	assertBoolPtr(t, "Defaults.Parallel", false, cfg.Defaults.Parallel)
 	assertEqualInt(t, "Server.Port", 3000, cfg.Server.Port)
@@ -188,6 +204,46 @@ defaults:
 	_, err := Load(dir)
 	if err == nil {
 		t.Fatal("Load() should return error for unknown fields")
+	}
+}
+
+func TestLoad_InvalidFilesConfig_ReturnsError(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{
+			name: "eval file path",
+			content: `
+files:
+  evalFile: nested/eval.yaml
+`,
+			want: "files.evalFile",
+		},
+		{
+			name: "task suffix path",
+			content: `
+files:
+  taskFileSuffix: ../task.yaml
+`,
+			want: "files.taskFileSuffix",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeFile(t, dir, ".waza.yaml", tc.content)
+
+			_, err := Load(dir)
+			if err == nil {
+				t.Fatal("Load() should return error")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error %q does not contain %q", err.Error(), tc.want)
+			}
+		})
 	}
 }
 

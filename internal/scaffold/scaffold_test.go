@@ -81,6 +81,12 @@ func TestEvalYAML_CustomEngine(t *testing.T) {
 	assert.Contains(t, content, "model: gpt-4o")
 }
 
+func TestEvalYAMLWithTaskGlob(t *testing.T) {
+	content := EvalYAMLWithTaskGlob("my-skill", "mock", "gpt-4o", "tasks/*.waza-task.yaml")
+
+	assert.Contains(t, content, `"tasks/*.waza-task.yaml"`)
+}
+
 func TestTaskFiles(t *testing.T) {
 	tasks := TaskFiles("my-skill")
 
@@ -92,6 +98,15 @@ func TestTaskFiles(t *testing.T) {
 	assert.Contains(t, tasks["basic-usage.yaml"], "id: basic-usage-001")
 	assert.Contains(t, tasks["edge-case.yaml"], "id: edge-case-001")
 	assert.Contains(t, tasks["should-not-trigger.yaml"], "id: should-not-trigger-001")
+}
+
+func TestTaskFilesWithSuffix(t *testing.T) {
+	tasks := TaskFilesWithSuffix(".waza-task.yaml")
+
+	assert.Contains(t, tasks, "basic-usage.waza-task.yaml")
+	assert.Contains(t, tasks, "edge-case.waza-task.yaml")
+	assert.Contains(t, tasks, "should-not-trigger.waza-task.yaml")
+	assert.Len(t, tasks, 3)
 }
 
 func TestFixture(t *testing.T) {
@@ -125,6 +140,22 @@ func TestReadProjectDefaults_WithConfig(t *testing.T) {
 	engine, model := ReadProjectDefaults()
 	assert.Equal(t, "mock", engine)
 	assert.Equal(t, "gpt-4o", model)
+}
+
+func TestReadProjectFiles_WithConfig(t *testing.T) {
+	dir := t.TempDir()
+	origDir, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(dir))
+	t.Cleanup(func() { os.Chdir(origDir) }) //nolint:errcheck // best-effort cleanup
+
+	wazaConfig := "files:\n  evalFile: waza-eval.yaml\n  taskGlob: tasks/*.waza-task.yaml\n  taskFileSuffix: .waza-task.yaml\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".waza.yaml"), []byte(wazaConfig), 0o644))
+
+	files := ReadProjectFiles()
+	assert.Equal(t, "waza-eval.yaml", files.EvalFile)
+	assert.Equal(t, "tasks/*.waza-task.yaml", files.TaskGlob)
+	assert.Equal(t, ".waza-task.yaml", files.TaskFileSuffix)
 }
 
 func TestEvalYAML_SchemaCompliant(t *testing.T) {

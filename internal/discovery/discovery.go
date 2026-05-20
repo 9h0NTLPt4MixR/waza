@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/microsoft/waza/internal/projectconfig"
 	"github.com/microsoft/waza/internal/utils"
 )
 
@@ -13,7 +14,7 @@ import (
 type DiscoveredSkill struct {
 	Name      string // directory name containing SKILL.md
 	SkillPath string // absolute path to SKILL.md
-	EvalPath  string // absolute path to eval.yaml (empty if not found)
+	EvalPath  string // absolute path to the eval file (empty if not found)
 	Dir       string // absolute path to the skill directory
 }
 
@@ -23,10 +24,10 @@ func (d DiscoveredSkill) HasEval() bool {
 }
 
 // Discover walks the given root directory and finds all skills with eval configs.
-// A skill is a directory containing SKILL.md. An eval config is eval.yaml either
+// A skill is a directory containing SKILL.md. An eval config is an eval file either
 // in the same directory, in an evals/ subdirectory, in a tests/ subdirectory, or
 // in a project-layout evals/{name}/ directory two levels above the skill directory
-// (e.g. project-root/skills/{name}/SKILL.md → project-root/evals/{name}/eval.yaml).
+// (e.g. project-root/skills/{name}/SKILL.md → project-root/evals/{name}/{evalFile}).
 func Discover(root string) ([]DiscoveredSkill, error) {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
@@ -47,6 +48,10 @@ func Discover(root string) ([]DiscoveredSkill, error) {
 	seenNames := make(map[string]struct{})
 	rootGitHubDir := filepath.Join(resolvedRoot, ".github")
 	rootGitHubSkillsDir := filepath.Join(rootGitHubDir, "skills")
+	evalFile := projectconfig.DefaultEvalFile
+	if cfg, cfgErr := projectconfig.Load(resolvedRoot); cfgErr == nil {
+		evalFile = cfg.Files.EvalFile
+	}
 
 	err = filepath.Walk(resolvedRoot, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -81,7 +86,7 @@ func Discover(root string) ([]DiscoveredSkill, error) {
 				return nil
 			}
 
-			evalPath := findEvalConfig(dir, name)
+			evalPath := findEvalConfig(dir, name, evalFile)
 			skills = append(skills, DiscoveredSkill{
 				Name:      name,
 				SkillPath: path,
@@ -100,17 +105,20 @@ func Discover(root string) ([]DiscoveredSkill, error) {
 	return skills, nil
 }
 
-// findEvalConfig looks for eval.yaml in standard locations relative to a skill directory.
-// Priority: tests/eval.yaml > evals/eval.yaml > eval.yaml > ../../evals/{name}/eval.yaml
+// findEvalConfig looks for an eval file in standard locations relative to a skill directory.
+// Priority: tests/{evalFile} > evals/{evalFile} > {evalFile} > ../../evals/{name}/{evalFile}
 // The last candidate handles the project layout produced by `waza new` in project mode,
-// where SKILL.md lives at skills/{name}/SKILL.md and eval.yaml at evals/{name}/eval.yaml.
-func findEvalConfig(skillDir, name string) string {
-	candidates := []string{
-		filepath.Join(skillDir, "tests", "eval.yaml"),
-		filepath.Join(skillDir, "evals", "eval.yaml"),
-		filepath.Join(skillDir, "eval.yaml"),
-		// Project layout: project-root/skills/{name}/SKILL.md → project-root/evals/{name}/eval.yaml
-		filepath.Join(filepath.Dir(filepath.Dir(skillDir)), "evals", name, "eval.yaml"),
+// where SKILL.md lives at skills/{name}/SKILL.md and eval file at evals/{name}/{evalFile}.
+func findEvalConfig(skillDir, name, evalFile string) string {
+	var candidates []string
+	for _, filename := range evalFilenames(evalFile) {
+		candidates = append(candidates,
+			filepath.Join(skillDir, "tests", filename),
+			filepath.Join(skillDir, "evals", filename),
+			filepath.Join(skillDir, filename),
+			// Project layout: project-root/skills/{name}/SKILL.md → project-root/evals/{name}/{evalFile}
+			filepath.Join(filepath.Dir(filepath.Dir(skillDir)), "evals", name, filename),
+		)
 	}
 
 	for _, c := range candidates {
@@ -119,6 +127,13 @@ func findEvalConfig(skillDir, name string) string {
 		}
 	}
 	return ""
+}
+
+func evalFilenames(configured string) []string {
+	if configured == "" || configured == projectconfig.DefaultEvalFile {
+		return []string{projectconfig.DefaultEvalFile}
+	}
+	return []string{configured, projectconfig.DefaultEvalFile}
 }
 
 // FilterWithEval returns only skills that have a discovered eval config.

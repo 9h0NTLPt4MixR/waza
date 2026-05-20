@@ -92,6 +92,7 @@ func ConfigDetectOptions() []workspace.DetectOption {
 	return []workspace.DetectOption{
 		workspace.WithSkillsDir(cfg.Paths.Skills),
 		workspace.WithEvalsDir(cfg.Paths.Evals),
+		workspace.WithEvalFile(cfg.Files.EvalFile),
 	}
 }
 

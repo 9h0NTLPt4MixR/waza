@@ -121,3 +121,17 @@ func TestResolveEvalPath_WithColocatedEval(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(dir, "eval.yaml"), evalPath)
 }
+
+func TestResolveEvalPath_WithConfiguredEvalFile(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".waza.yaml"), []byte("files:\n  evalFile: waza-eval.yaml\n"), 0o644))
+	skillContent := "---\nname: test-skill\ndescription: \"desc\"\n---\n# Body\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(skillContent), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "waza-eval.yaml"), []byte("name: test\n"), 0o644))
+	t.Chdir(dir)
+
+	si := workspace.SkillInfo{Name: "test-skill", Dir: dir, SkillPath: filepath.Join(dir, "SKILL.md")}
+	evalPath, err := resolveEvalPath(&si)
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(dir, "waza-eval.yaml"), evalPath)
+}

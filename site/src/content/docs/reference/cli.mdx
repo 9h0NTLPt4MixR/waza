@@ -223,16 +223,18 @@ waza new eval <skill-name>
 ```
 
 Creates:
-- `evals/<skill-name>/eval.yaml`
-- `evals/<skill-name>/tasks/positive-trigger-1.yaml`
-- `evals/<skill-name>/tasks/positive-trigger-2.yaml`
-- `evals/<skill-name>/tasks/negative-trigger-1.yaml`
+- `evals/<skill-name>/<files.evalFile>`
+- `evals/<skill-name>/tasks/positive-trigger-1<files.taskFileSuffix>`
+- `evals/<skill-name>/tasks/positive-trigger-2<files.taskFileSuffix>`
+- `evals/<skill-name>/tasks/negative-trigger-1<files.taskFileSuffix>`
 
 ### Flags
 
 | Flag | Description |
 |------|-------------|
-| `--output` | Custom path for generated `eval.yaml`; task YAMLs are created in a sibling `tasks/` directory next to this file. |
+| `--output` | Custom path for the generated eval file; task YAMLs are created in a sibling `tasks/` directory next to this file. |
+
+The generated eval filename, task glob, and task filename suffix come from `.waza.yaml` `files` settings when configured.
 
 ### Examples
 
