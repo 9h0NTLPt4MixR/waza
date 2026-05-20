@@ -1416,6 +1416,7 @@ func (r *EvalRunner) buildGraderContext(tc *models.TestCase, resp *execution.Exe
 		SkillInvocations: resp.SkillInvocations,
 		SessionID:        resp.SessionID,
 		Session:          &sessionDigest,
+		Executor:         r.engine,
 	}
 }
 
