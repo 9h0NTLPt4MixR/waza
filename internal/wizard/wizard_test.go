@@ -98,23 +98,23 @@ func TestRunSkillWizard_ValidInput(t *testing.T) {
 }
 
 func TestRunSkillWizard_EmptyInput(t *testing.T) {
-	// EOF with no input should return an error because name is required.
 	in := strings.NewReader("")
 	out := &bytes.Buffer{}
 
-	_, err := RunSkillWizard(in, out, "")
+	spec, err := RunSkillWizard(in, out, "")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "name")
+	assert.Nil(t, spec)
+	assert.ErrorContains(t, err, "invalid skill name")
 }
 
 func TestRunSkillWizard_IncompleteInput(t *testing.T) {
-	// Only name provided; description is missing so an error must be returned.
 	in := pipeInput(t, "my-skill")
 	out := &bytes.Buffer{}
 
-	_, err := RunSkillWizard(in, out, "")
+	spec, err := RunSkillWizard(in, out, "")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "description")
+	assert.Nil(t, spec)
+	assert.ErrorContains(t, err, "description is required")
 }
 
 func TestRunSkillWizard_InitialName(t *testing.T) {

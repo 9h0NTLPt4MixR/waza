@@ -98,16 +98,18 @@ func RunSkillWizard(in io.Reader, out io.Writer, initialName string) (*SkillSpec
 		return nil, fmt.Errorf("wizard failed: %w", err)
 	}
 
-	if strings.TrimSpace(name) == "" {
-		return nil, fmt.Errorf("skill name is required")
+	name = strings.TrimSpace(name)
+	description = strings.TrimSpace(description)
+	if err := scaffold.ValidateName(name); err != nil {
+		return nil, fmt.Errorf("invalid skill name: %w", err)
 	}
-	if strings.TrimSpace(description) == "" {
-		return nil, fmt.Errorf("skill description is required")
+	if description == "" {
+		return nil, fmt.Errorf("description is required")
 	}
 
 	return &SkillSpec{
-		Name:         strings.TrimSpace(name),
-		Description:  strings.TrimSpace(description),
+		Name:         name,
+		Description:  description,
 		Triggers:     splitAndTrim(triggersRaw),
 		AntiTriggers: splitAndTrim(antiTriggersRaw),
 	}, nil
