@@ -7,6 +7,7 @@ import (
 
 	copilot "github.com/github/copilot-sdk/go"
 	"github.com/go-viper/mapstructure/v2"
+	"github.com/microsoft/waza/internal/copilotevents"
 	"github.com/microsoft/waza/internal/models"
 	"github.com/microsoft/waza/internal/utils"
 )
@@ -89,21 +90,22 @@ func CreateTestCaseFromCopilotLog(copilotLog string, options *CreateTestCaseFrom
 		}
 
 		switch e.Type {
-		case copilot.UserMessage:
-			if e.Data.Content != nil {
-				task.Stimulus.Message = *e.Data.Content
+		case copilot.SessionEventTypeUserMessage:
+			if content, ok := copilotevents.Content(e); ok {
+				task.Stimulus.Message = content
 			}
-		case copilot.ToolExecutionStart:
-			if e.Data.ToolCallID == nil {
+		case copilot.SessionEventTypeToolExecutionStart:
+			start, ok := copilotevents.ToolStart(e)
+			if !ok || start.ToolCallID == "" {
 				continue
 			}
 
-			toolsInOrder = append(toolsInOrder, *e.Data.ToolCallID)
+			toolsInOrder = append(toolsInOrder, start.ToolCallID)
 
 			var ta *toolArgs
 
-			if e.Data.Arguments != nil {
-				if err := mapstructure.Decode(e.Data.Arguments, &ta); err != nil {
+			if start.Arguments != nil {
+				if err := mapstructure.Decode(start.Arguments, &ta); err != nil {
 					return nil, err
 				}
 			} else {
@@ -112,18 +114,18 @@ func CreateTestCaseFromCopilotLog(copilotLog string, options *CreateTestCaseFrom
 
 			toolName := "<unknown>"
 
-			if e.Data.ToolName != nil { // have yet to see the tool name NOT be filled in, but being defensive.
-				toolName = *e.Data.ToolName
+			if start.ToolName != "" {
+				toolName = start.ToolName
 			}
 
-			tools[*e.Data.ToolCallID] = &tool{
+			tools[start.ToolCallID] = &tool{
 				Start:     e.Timestamp,
 				Name:      toolName,
 				Arguments: *ta,
 			}
-		case copilot.ToolExecutionComplete:
-			if e.Data.ToolCallID != nil {
-				t, exists := tools[*e.Data.ToolCallID]
+		case copilot.SessionEventTypeToolExecutionComplete:
+			if complete, ok := copilotevents.ToolComplete(e); ok && complete.ToolCallID != "" {
+				t, exists := tools[complete.ToolCallID]
 
 				if !exists { // _shouldn't_ happen, but we'll be defensive
 					continue
@@ -131,34 +133,23 @@ func CreateTestCaseFromCopilotLog(copilotLog string, options *CreateTestCaseFrom
 
 				t.End = e.Timestamp
 
-				if e.Data.Success != nil {
-					t.Success = *e.Data.Success
-				}
+				t.Success = complete.Success
 			}
-		case copilot.AssistantMessage:
-			if e.Data.Content != nil {
-				responses.WriteString(*e.Data.Content)
+		case copilot.SessionEventTypeAssistantMessage:
+			if content, ok := copilotevents.Content(e); ok {
+				responses.WriteString(content)
 			}
-		case copilot.AssistantMessageDelta:
-			if e.Data.DeltaContent != nil {
-				responses.WriteString(*e.Data.DeltaContent)
+		case copilot.SessionEventTypeAssistantMessageDelta:
+			if content, ok := copilotevents.DeltaContent(e); ok {
+				responses.WriteString(content)
 			}
-		case copilot.SkillInvoked:
-			name := e.Data.Name
-
-			if name == nil {
-				name = new("<no skill name>")
+		case copilot.SessionEventTypeSkillInvoked:
+			if invoked, ok := copilotevents.SkillInvoked(e); ok {
+				skills = append(skills, skill{
+					Name: invoked.Name,
+					Path: invoked.Path,
+				})
 			}
-
-			path := e.Data.Path
-			if path == nil {
-				path = new("<no path>")
-			}
-
-			skills = append(skills, skill{
-				Name: *name,
-				Path: *path,
-			})
 		}
 	}
 

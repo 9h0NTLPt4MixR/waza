@@ -9,6 +9,7 @@ import (
 
 	copilot "github.com/github/copilot-sdk/go"
 	"github.com/go-viper/mapstructure/v2"
+	"github.com/microsoft/waza/internal/copilotevents"
 	"github.com/microsoft/waza/internal/models"
 	"github.com/microsoft/waza/internal/utils"
 )
@@ -137,8 +138,10 @@ func (p *promptGrader) gradeIndependent(ctx context.Context, gradingContext *Con
 
 		// resp may be nil when we recovered from a post-grade error above.
 		var respContent *string
-		if resp != nil && resp.Data.Content != nil {
-			respContent = resp.Data.Content
+		if resp != nil {
+			if content, ok := copilotevents.Content(*resp); ok {
+				respContent = &content
+			}
 		}
 		if respContent == nil {
 			respContent = utils.Ptr("<no response content>")

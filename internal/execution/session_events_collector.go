@@ -5,6 +5,7 @@ import (
 	"os"
 
 	copilot "github.com/github/copilot-sdk/go"
+	"github.com/microsoft/waza/internal/copilotevents"
 	"github.com/microsoft/waza/internal/models"
 )
 
@@ -61,19 +62,17 @@ func (coll *SessionEventsCollector) SetOnSkillInvoked(fn func(SkillInvocation)) 
 // events in real-time.
 func (coll *SessionEventsCollector) On(event copilot.SessionEvent) {
 	switch event.Type {
-	case copilot.AssistantMessage, copilot.AssistantMessageDelta:
-		if event.Data.Content != nil {
-			coll.outputParts = append(coll.outputParts, *event.Data.Content)
+	case copilot.SessionEventTypeAssistantMessage:
+		if content, ok := copilotevents.Content(event); ok {
+			coll.outputParts = append(coll.outputParts, content)
 		}
 
-	case copilot.SkillInvoked:
+	case copilot.SessionEventTypeSkillInvoked:
 		si := SkillInvocation{}
 		// these and Content (the text of the relevant SKILL.md) are the only consistently populated fields
-		if event.Data.Name != nil {
-			si.Name = *event.Data.Name
-		}
-		if event.Data.Path != nil {
-			si.Path = *event.Data.Path
+		if data, ok := copilotevents.SkillInvoked(event); ok {
+			si.Name = data.Name
+			si.Path = data.Path
 		}
 		if si.Name != "" || si.Path != "" {
 			coll.SkillInvocations = append(coll.SkillInvocations, si)
@@ -88,33 +87,33 @@ func (coll *SessionEventsCollector) On(event copilot.SessionEvent) {
 			}
 		}
 
-	case copilot.ToolExecutionStart:
-		if event.Data.ToolName != nil && *event.Data.ToolName == "report_intent" {
+	case copilot.SessionEventTypeToolExecutionStart:
+		if data, ok := copilotevents.ToolStart(event); ok && data.ToolName == "report_intent" {
 			// report_intent always seems to be followed by the actual tool invocation,
 			// so I'm just going to skip these to save a little space.
-			if event.Data.ToolCallID != nil {
-				coll.intentToolIDs[*event.Data.ToolCallID] = true
+			if data.ToolCallID != "" {
+				coll.intentToolIDs[data.ToolCallID] = true
 			}
 			return
 		}
-	case copilot.ToolExecutionProgress,
-		copilot.ToolUserRequested:
-		if event.Data.ToolCallID != nil && coll.intentToolIDs[*event.Data.ToolCallID] {
+	case copilot.SessionEventTypeToolExecutionProgress,
+		copilot.SessionEventTypeToolUserRequested:
+		if toolCallID, ok := copilotevents.ToolCallID(event); ok && coll.intentToolIDs[toolCallID] {
 			return
 		}
 
-	case copilot.ToolExecutionComplete, copilot.ToolExecutionPartialResult:
-		if event.Data.ToolCallID != nil && coll.intentToolIDs[*event.Data.ToolCallID] {
-			delete(coll.intentToolIDs, *event.Data.ToolCallID)
+	case copilot.SessionEventTypeToolExecutionComplete, copilot.SessionEventTypeToolExecutionPartialResult:
+		if toolCallID, ok := copilotevents.ToolCallID(event); ok && coll.intentToolIDs[toolCallID] {
+			delete(coll.intentToolIDs, toolCallID)
 			return
 		}
 	// these are both termination events
-	case copilot.SessionIdle, copilot.SessionError:
-		if event.Type == copilot.SessionError {
-			if event.Data.Message == nil || *event.Data.Message == "" {
+	case copilot.SessionEventTypeSessionIdle, copilot.SessionEventTypeSessionError:
+		if event.Type == copilot.SessionEventTypeSessionError {
+			if message, ok := copilotevents.Message(event); !ok || message == "" {
 				coll.errorMsg = sessionFailedUnknown
 			} else {
-				coll.errorMsg = *event.Data.Message
+				coll.errorMsg = message
 			}
 		}
 

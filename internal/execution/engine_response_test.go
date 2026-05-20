@@ -14,10 +14,10 @@ func TestExecutionResponse_ExtractMessages(t *testing.T) {
 
 	resp := &ExecutionResponse{
 		Events: []copilot.SessionEvent{
-			{Type: copilot.AssistantMessage, Data: copilot.Data{Content: &hello}},
-			{Type: copilot.AssistantMessage, Data: copilot.Data{}},
-			{Type: copilot.AssistantMessageDelta, Data: copilot.Data{Content: &ignoredDelta}},
-			{Type: copilot.AssistantMessage, Data: copilot.Data{Content: &world}},
+			{Type: copilot.SessionEventTypeAssistantMessage, Data: &copilot.AssistantMessageData{Content: hello}},
+			{Type: copilot.SessionEventTypeAssistantMessage},
+			{Type: copilot.SessionEventTypeAssistantMessageDelta, Data: &copilot.AssistantMessageDeltaData{DeltaContent: ignoredDelta}},
+			{Type: copilot.SessionEventTypeAssistantMessage, Data: &copilot.AssistantMessageData{Content: world}},
 		},
 	}
 
