@@ -117,6 +117,11 @@ func (m *MockEngine) Execute(ctx context.Context, req *ExecutionRequest) (*Execu
 		sessionID = fmt.Sprintf("mock-session-%d", time.Now().UnixNano())
 	}
 
+	var workspaceFiles map[string][]byte
+	if !req.SkipWorkspaceCapture {
+		workspaceFiles = captureWorkspaceFiles(m.workspace)
+	}
+
 	resp := &ExecutionResponse{
 		FinalOutput:    output,
 		Events:         []copilot.SessionEvent{},
@@ -126,10 +131,7 @@ func (m *MockEngine) Execute(ctx context.Context, req *ExecutionRequest) (*Execu
 		Success:        true,
 		SessionID:      sessionID,
 		WorkspaceDir:   m.workspace,
-		WorkspaceFiles: captureWorkspaceFiles(m.workspace),
-	}
-	if req.SkipWorkspaceCapture {
-		resp.WorkspaceFiles = nil
+		WorkspaceFiles: workspaceFiles,
 	}
 
 	return resp, nil
