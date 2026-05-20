@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -42,7 +43,7 @@ regenerated.
 Two modes of operation:
 
   Inside a project (skills/ directory detected):
-    Creates skills/{name}/SKILL.md and evals/{name}/ with eval.yaml,
+    Creates skills/{name}/SKILL.md and evals/{name}/ with an eval file,
     task files, and fixtures.
 
   Standalone (no skills/ directory):
@@ -249,6 +250,7 @@ func findProjectRoot() (string, bool) {
 // scaffoldInProject creates files within an existing project structure.
 func scaffoldInProject(cmd *cobra.Command, projectRoot, skillName, skillMD string, existing, overwriteSkill bool) error {
 	engine, model := scaffold.ReadProjectDefaults()
+	files := scaffold.ReadProjectFiles()
 	skillDir := filepath.Join(projectRoot, "skills", skillName)
 	evalDir := filepath.Join(projectRoot, "evals", skillName)
 	tasksDir := filepath.Join(evalDir, "tasks")
@@ -270,12 +272,12 @@ func scaffoldInProject(cmd *cobra.Command, projectRoot, skillName, skillMD strin
 
 	entries := []scaffold.FileEntry{
 		{Path: filepath.Join(skillDir, "SKILL.md"), Label: "Skill definition", Content: skillMD},
-		{Path: filepath.Join(evalDir, "eval.yaml"), Label: "Eval configuration", Content: scaffold.EvalYAML(skillName, engine, model)},
+		{Path: filepath.Join(evalDir, files.EvalFile), Label: "Eval configuration", Content: scaffold.EvalYAMLWithTaskGlob(skillName, engine, model, files.TaskGlob)},
 	}
 
 	// Only add default tasks if the tasks directory is empty
 	if !dirHasFiles(tasksDir) {
-		tasks := scaffold.TaskFiles(skillName)
+		tasks := scaffold.TaskFilesWithSuffix(files.TaskFileSuffix)
 		for name, content := range tasks {
 			entries = append(entries, scaffold.FileEntry{Path: filepath.Join(tasksDir, name), Label: taskLabel(name), Content: content})
 		}
@@ -292,6 +294,7 @@ func scaffoldInProject(cmd *cobra.Command, projectRoot, skillName, skillMD strin
 // scaffoldStandalone creates a self-contained skill directory.
 func scaffoldStandalone(cmd *cobra.Command, skillName, skillMD string, existing, overwriteSkill bool) error {
 	engine, model := scaffold.ReadProjectDefaults()
+	files := scaffold.ReadProjectFiles()
 	rootDir := skillName
 	evalsDir := filepath.Join(rootDir, "evals")
 	tasksDir := filepath.Join(evalsDir, "tasks")
@@ -314,12 +317,12 @@ func scaffoldStandalone(cmd *cobra.Command, skillName, skillMD string, existing,
 
 	entries := []scaffold.FileEntry{
 		{Path: filepath.Join(rootDir, "SKILL.md"), Label: "Skill definition", Content: skillMD},
-		{Path: filepath.Join(evalsDir, "eval.yaml"), Label: "Eval configuration", Content: scaffold.EvalYAML(skillName, engine, model)},
+		{Path: filepath.Join(evalsDir, files.EvalFile), Label: "Eval configuration", Content: scaffold.EvalYAMLWithTaskGlob(skillName, engine, model, files.TaskGlob)},
 	}
 
 	// Only add default tasks if the tasks directory is empty
 	if !dirHasFiles(tasksDir) {
-		tasks := scaffold.TaskFiles(skillName)
+		tasks := scaffold.TaskFilesWithSuffix(files.TaskFileSuffix)
 		for name, content := range tasks {
 			entries = append(entries, scaffold.FileEntry{Path: filepath.Join(tasksDir, name), Label: taskLabel(name), Content: content})
 		}
@@ -403,12 +406,12 @@ func printDirSummary(out io.Writer, inv *scaffold.Inventory, dir, baseDir, label
 
 // taskLabel returns a descriptive label for a task file.
 func taskLabel(filename string) string {
-	switch filename {
-	case "basic-usage.yaml":
+	switch {
+	case strings.HasPrefix(filename, "basic-usage"):
 		return "Task: basic usage"
-	case "edge-case.yaml":
+	case strings.HasPrefix(filename, "edge-case"):
 		return "Task: edge case"
-	case "should-not-trigger.yaml":
+	case strings.HasPrefix(filename, "should-not-trigger"):
 		return "Task: negative test"
 	default:
 		return "Task file"

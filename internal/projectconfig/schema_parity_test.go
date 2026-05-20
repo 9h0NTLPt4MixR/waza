@@ -62,6 +62,11 @@ func TestSchemaDefaultsMatchGoDefaults(t *testing.T) {
 	assertStringDefault(t, getDefault("paths", "evals"), cfg.Paths.Evals, "paths.evals")
 	assertStringDefault(t, getDefault("paths", "results"), cfg.Paths.Results, "paths.results")
 
+	// --- files ---
+	assertStringDefault(t, getDefault("files", "evalFile"), cfg.Files.EvalFile, "files.evalFile")
+	assertStringDefault(t, getDefault("files", "taskGlob"), cfg.Files.TaskGlob, "files.taskGlob")
+	assertStringDefault(t, getDefault("files", "taskFileSuffix"), cfg.Files.TaskFileSuffix, "files.taskFileSuffix")
+
 	// --- defaults ---
 	assertStringDefault(t, getDefault("defaults", "engine"), cfg.Defaults.Engine, "defaults.engine")
 	assertStringDefault(t, getDefault("defaults", "model"), cfg.Defaults.Model, "defaults.model")

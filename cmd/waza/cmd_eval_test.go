@@ -135,3 +135,39 @@ description: |
 
 	assert.FileExists(t, filepath.Join(dir, "evals", "deploy-assistant", "eval.yaml"))
 }
+
+func TestEvalNewCommand_RespectsCustomFileNamingFromConfig(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".waza.yaml"), []byte(`
+files:
+  evalFile: waza-eval.yaml
+  taskGlob: tasks/*.waza-task.yaml
+  taskFileSuffix: .waza-task.yaml
+`), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "skills", "deploy-assistant"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "skills", "deploy-assistant", "SKILL.md"), []byte(`---
+name: deploy-assistant
+description: |
+  USE FOR: "deploy web applications"
+  DO NOT USE FOR: "write a poem"
+---
+`), 0o644))
+
+	t.Chdir(dir)
+
+	root := newRootCommand()
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"new", "eval", "deploy-assistant"})
+	require.NoError(t, root.Execute())
+
+	evalPath := filepath.Join(dir, "evals", "deploy-assistant", "waza-eval.yaml")
+	assert.FileExists(t, evalPath)
+	assert.FileExists(t, filepath.Join(dir, "evals", "deploy-assistant", "tasks", "positive-trigger-1.waza-task.yaml"))
+	assert.FileExists(t, filepath.Join(dir, "evals", "deploy-assistant", "tasks", "positive-trigger-2.waza-task.yaml"))
+	assert.FileExists(t, filepath.Join(dir, "evals", "deploy-assistant", "tasks", "negative-trigger-1.waza-task.yaml"))
+
+	evalData, err := os.ReadFile(evalPath)
+	require.NoError(t, err)
+	assert.Contains(t, string(evalData), `"tasks/*.waza-task.yaml"`)
+}

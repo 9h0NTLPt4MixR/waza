@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	copilot "github.com/github/copilot-sdk/go"
+	"github.com/microsoft/waza/internal/copilotevents"
 	"github.com/microsoft/waza/internal/execution"
 	"github.com/microsoft/waza/internal/models"
 	"github.com/microsoft/waza/internal/utils"
@@ -26,6 +27,21 @@ const advancedModel = "claude-sonnet-4.5"
 func skipIfCopilotNotEnabled(t *testing.T) {
 	if !enableCopilotTests {
 		t.Skip("Copilot tests can be enabled by setting ENABLE_COPILOT_TESTS=true")
+	}
+}
+
+func newLivePromptGraderContext(t *testing.T) *Context {
+	t.Helper()
+
+	engine := execution.NewCopilotEngineBuilder("", nil).Build()
+	require.NoError(t, engine.Initialize(context.Background()))
+	t.Cleanup(func() {
+		require.NoError(t, engine.Shutdown(context.Background()))
+	})
+
+	return &Context{
+		WorkspaceDir: "",
+		Executor:     engine,
 	}
 }
 
@@ -164,9 +180,7 @@ func TestPromptGraderLive(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		results, err := promptGrader.Grade(context.Background(), &Context{
-			WorkspaceDir: "",
-		})
+		results, err := promptGrader.Grade(context.Background(), newLivePromptGraderContext(t))
 		require.NoError(t, err)
 
 		require.Equal(t, AllPromptsPassed, results.Feedback)
@@ -180,9 +194,7 @@ func TestPromptGraderLive(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		results, err := promptGrader.Grade(context.Background(), &Context{
-			WorkspaceDir: "",
-		})
+		results, err := promptGrader.Grade(context.Background(), newLivePromptGraderContext(t))
 		require.NoError(t, err)
 
 		require.NotEmpty(t, results.Feedback)
@@ -197,9 +209,7 @@ func TestPromptGraderLive(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		results, err := promptGrader.Grade(context.Background(), &Context{
-			WorkspaceDir: "",
-		})
+		results, err := promptGrader.Grade(context.Background(), newLivePromptGraderContext(t))
 		require.NoError(t, err)
 
 		require.NotEmpty(t, results.Feedback)
@@ -220,9 +230,7 @@ func TestPromptUsingTools(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		results, err := promptGrader.Grade(context.Background(), &Context{
-			WorkspaceDir: "",
-		})
+		results, err := promptGrader.Grade(context.Background(), newLivePromptGraderContext(t))
 		require.NoError(t, err)
 
 		require.Equal(t, AllPromptsPassed, results.Feedback)
@@ -240,9 +248,7 @@ func TestPromptUsingTools(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		results, err := promptGrader.Grade(context.Background(), &Context{
-			WorkspaceDir: "",
-		})
+		results, err := promptGrader.Grade(context.Background(), newLivePromptGraderContext(t))
 		require.NoError(t, err)
 
 		require.NotEqual(t, AllPromptsPassed, results.Feedback)
@@ -284,15 +290,17 @@ func TestUsingPreviousSessionID(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		t.Logf("Content: %s", *resp.Data.Content)
+		if content, ok := copilotevents.Content(*resp); ok {
+			t.Logf("Content: %s", content)
+		}
 
 		resp, err = session.SendAndWait(context.Background(), copilot.MessageOptions{
 			Prompt: "what was the random string?",
 		})
 		require.NoError(t, err)
 
-		if resp.Data.Content != nil {
-			t.Logf("Content: %s", *resp.Data.Content)
+		if content, ok := copilotevents.Content(*resp); ok {
+			t.Logf("Content: %s", content)
 		}
 
 		err = client.Stop()
@@ -308,10 +316,9 @@ func TestUsingPreviousSessionID(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	results, err := promptGrader.Grade(context.Background(), &Context{
-		WorkspaceDir: "",
-		SessionID:    sessionID,
-	})
+	gradingContext := newLivePromptGraderContext(t)
+	gradingContext.SessionID = sessionID
+	results, err := promptGrader.Grade(context.Background(), gradingContext)
 	require.NoError(t, err)
 
 	t.Logf("%#v", results)
@@ -379,6 +386,7 @@ func TestPairwiseMode_FallsBackToIndependent(t *testing.T) {
 	results, err := grader.Grade(context.Background(), &Context{
 		Output:         "hello world",
 		BaselineOutput: "", // empty => falls back to independent
+		Executor:       newLivePromptGraderContext(t).Executor,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, results)
@@ -471,6 +479,7 @@ func TestPairwiseMode_Live(t *testing.T) {
 	results, err := grader.Grade(context.Background(), &Context{
 		Output:         "A goroutine is a lightweight thread of execution managed by the Go runtime. They are multiplexed onto OS threads and are very cheap to create (a few KB of stack).",
 		BaselineOutput: "goroutine is a thing in Go",
+		Executor:       newLivePromptGraderContext(t).Executor,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, results)

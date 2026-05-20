@@ -94,25 +94,24 @@ func TestBuildNoSuggestionsError_IncludesSessionTranscript(t *testing.T) {
 	err := buildNoSuggestionsError(&execution.ExecutionResponse{
 		Events: []copilot.SessionEvent{
 			{
-				Type: copilot.AssistantMessage,
-				Data: copilot.Data{Content: &msg},
+				Type: copilot.SessionEventTypeAssistantMessage,
+				Data: &copilot.AssistantMessageData{Content: msg},
 			},
 			{
-				Type: copilot.ToolExecutionStart,
-				Data: copilot.Data{
-					ToolName:   &toolName,
-					ToolCallID: &toolCallID,
+				Type: copilot.SessionEventTypeToolExecutionStart,
+				Data: &copilot.ToolExecutionStartData{
+					ToolName:   toolName,
+					ToolCallID: toolCallID,
 					Arguments:  map[string]any{"pattern": "foo"},
 				},
 			},
 			{
-				Type: copilot.ToolExecutionComplete,
-				Data: copilot.Data{
-					ToolName:   &toolName,
-					ToolCallID: &toolCallID,
-					Success:    &succeeded,
-					Result: &copilot.Result{
-						Content: &toolResultText,
+				Type: copilot.SessionEventTypeToolExecutionComplete,
+				Data: &copilot.ToolExecutionCompleteData{
+					ToolCallID: toolCallID,
+					Success:    succeeded,
+					Result: &copilot.ToolExecutionCompleteResult{
+						Content: toolResultText,
 					},
 				},
 			},
@@ -129,12 +128,12 @@ func TestBuildNoSuggestionsError_IncludesSessionTranscript(t *testing.T) {
 func TestBuildNoSuggestionsError_FallsBackToEventTypes(t *testing.T) {
 	err := buildNoSuggestionsError(&execution.ExecutionResponse{
 		Events: []copilot.SessionEvent{
-			{Type: copilot.SessionIdle},
+			{Type: copilot.SessionEventTypeSessionIdle},
 		},
 	})
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "event[1]: "+string(copilot.SessionIdle))
+	assert.Contains(t, err.Error(), "event[1]: "+string(copilot.SessionEventTypeSessionIdle))
 }
 
 func TestBuildNoSuggestionsError_WithNoEvents(t *testing.T) {
@@ -190,29 +189,28 @@ func TestBuildRunSuggestionPrompt_IncludesOnlyFailureEvidence(t *testing.T) {
 					Transcript: []models.TranscriptEvent{
 						{
 							SessionEvent: copilot.SessionEvent{
-								Type: copilot.AssistantMessage,
-								Data: copilot.Data{Content: &msg},
+								Type: copilot.SessionEventTypeAssistantMessage,
+								Data: &copilot.AssistantMessageData{Content: msg},
 							},
 						},
 						{
 							SessionEvent: copilot.SessionEvent{
-								Type: copilot.ToolExecutionStart,
-								Data: copilot.Data{
-									ToolName:   &toolName,
-									ToolCallID: &toolCallID,
+								Type: copilot.SessionEventTypeToolExecutionStart,
+								Data: &copilot.ToolExecutionStartData{
+									ToolName:   toolName,
+									ToolCallID: toolCallID,
 									Arguments:  map[string]any{"pattern": "foo"},
 								},
 							},
 						},
 						{
 							SessionEvent: copilot.SessionEvent{
-								Type: copilot.ToolExecutionComplete,
-								Data: copilot.Data{
-									ToolName:   &toolName,
-									ToolCallID: &toolCallID,
-									Success:    &succeeded,
-									Result: &copilot.Result{
-										Content: &toolResultText,
+								Type: copilot.SessionEventTypeToolExecutionComplete,
+								Data: &copilot.ToolExecutionCompleteData{
+									ToolCallID: toolCallID,
+									Success:    succeeded,
+									Result: &copilot.ToolExecutionCompleteResult{
+										Content: toolResultText,
 									},
 								},
 							},
@@ -398,8 +396,8 @@ func TestWriteSuggestionTranscript_WritesFile(t *testing.T) {
 		DurationMs:  1500,
 		Events: []copilot.SessionEvent{
 			{
-				Type: copilot.AssistantMessage,
-				Data: copilot.Data{Content: &msg},
+				Type: copilot.SessionEventTypeAssistantMessage,
+				Data: &copilot.AssistantMessageData{Content: msg},
 			},
 		},
 	}

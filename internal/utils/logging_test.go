@@ -41,18 +41,12 @@ func TestSessionToSlogDebugEnabled(t *testing.T) {
 	slog.SetDefault(logger)
 
 	content := "hello"
-	deltaContent := " world"
-	toolName := "bash"
-	toolCallID := "call-1"
 	reasoningText := "reasoning"
 
 	NewSessionToSlog()(copilot.SessionEvent{
-		Type: copilot.SessionEventType("message"),
-		Data: copilot.Data{
-			Content:       &content,
-			DeltaContent:  &deltaContent,
-			ToolName:      &toolName,
-			ToolCallID:    &toolCallID,
+		Type: copilot.SessionEventTypeAssistantMessage,
+		Data: &copilot.AssistantMessageData{
+			Content:       content,
 			ReasoningText: &reasoningText,
 		},
 	})
@@ -60,11 +54,8 @@ func TestSessionToSlogDebugEnabled(t *testing.T) {
 	var logEntry map[string]any
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &logEntry))
 	assert.Equal(t, "Event received", logEntry["msg"])
-	assert.Equal(t, "message", logEntry["type"])
+	assert.Equal(t, "assistant.message", logEntry["type"])
 	assert.Equal(t, content, logEntry["content"])
-	assert.Equal(t, deltaContent, logEntry["deltaContent"])
-	assert.Equal(t, toolName, logEntry["toolName"])
-	assert.Equal(t, toolCallID, logEntry["toolCallID"])
 	assert.Equal(t, reasoningText, logEntry["reasoningText"])
 }
 

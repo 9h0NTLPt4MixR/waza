@@ -1580,7 +1580,7 @@ func runDiscoverMode(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  ✓ %s (%s)\n", s.Name, relEval)
 	}
 	for _, s := range withoutEval {
-		fmt.Printf("  ✗ %s (no eval.yaml found)\n", s.Name)
+		fmt.Printf("  ✗ %s (no eval file found)\n", s.Name)
 	}
 	fmt.Println()
 
@@ -1590,11 +1590,11 @@ func runDiscoverMode(cmd *cobra.Command, args []string) error {
 		for i, s := range withoutEval {
 			names[i] = s.Name
 		}
-		return fmt.Errorf("--strict: %d skills lack eval.yaml: %s", len(withoutEval), strings.Join(names, ", "))
+		return fmt.Errorf("--strict: %d skills lack eval files: %s", len(withoutEval), strings.Join(names, ", "))
 	}
 
 	if len(withEval) == 0 {
-		return fmt.Errorf("no skills with eval.yaml found in %s", root)
+		return fmt.Errorf("no skills with eval files found in %s", root)
 	}
 
 	var skillDirs []string

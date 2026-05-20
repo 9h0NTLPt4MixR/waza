@@ -176,10 +176,7 @@ func TestFileStoreGetRunSummaryAndReload(t *testing.T) {
 func TestOutcomeToDetailMapsStatsTranscriptAndDigest(t *testing.T) {
 	significant := true
 	success := true
-	content := "assistant output"
-	message := "tool complete"
 	toolCallID := "call-123"
-	toolName := "bash"
 
 	outcome := &models.EvaluationOutcome{
 		RunID:     "detail-run",
@@ -210,15 +207,13 @@ func TestOutcomeToDetailMapsStatsTranscriptAndDigest(t *testing.T) {
 						Transcript: []models.TranscriptEvent{
 							{
 								SessionEvent: copilot.SessionEvent{
-									Type: copilot.ToolExecutionComplete,
-									Data: copilot.Data{
-										Content:    &content,
-										Message:    &message,
-										ToolCallID: &toolCallID,
-										ToolName:   &toolName,
-										Arguments:  map[string]any{"command": "echo hi"},
-										Result:     &copilot.Result{Content: new("hi")},
-										Success:    &success,
+									Type: copilot.SessionEventTypeToolExecutionComplete,
+									Data: &copilot.ToolExecutionCompleteData{
+										ToolCallID: toolCallID,
+										Result: &copilot.ToolExecutionCompleteResult{
+											Content: "hi",
+										},
+										Success: success,
 									},
 								},
 							},

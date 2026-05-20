@@ -548,7 +548,7 @@ func TestCopilotCreateSession_PassesMCPServers(t *testing.T) {
 	sourceDir := t.TempDir()
 
 	mcpServers := map[string]copilot.MCPServerConfig{
-		"test-mcp": {"type": "stdio", "command": "echo", "args": []any{"hello"}},
+		"test-mcp": copilot.MCPStdioServerConfig{Command: "echo", Args: []string{"hello"}},
 	}
 
 	expectedConfig := sessionConfigMatcher{
@@ -604,7 +604,7 @@ func TestCopilotResumeSession_PassesMCPServersAndSystemMessage(t *testing.T) {
 	expectedSystemMsg := buildSkillSystemMessage([]string{sourceDir}, "resume-skill")
 
 	mcpServers := map[string]copilot.MCPServerConfig{
-		"mcp-srv": {"type": "stdio", "command": "test"},
+		"mcp-srv": copilot.MCPStdioServerConfig{Command: "test"},
 	}
 
 	expectedConfig := sessionConfigMatcher{
@@ -681,10 +681,10 @@ func TestCopilotExecute_CancelOnSkillInvocation(t *testing.T) {
 			// Simulate a SkillInvoked event arriving mid-stream.
 			for _, handler := range eventHandlers {
 				handler(copilot.SessionEvent{
-					Type: copilot.SkillInvoked,
-					Data: copilot.Data{
-						Name: &skillName,
-						Path: &skillPath,
+					Type: copilot.SessionEventTypeSkillInvoked,
+					Data: &copilot.SkillInvokedData{
+						Name: skillName,
+						Path: skillPath,
 					},
 				})
 			}

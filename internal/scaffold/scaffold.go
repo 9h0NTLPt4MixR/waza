@@ -48,17 +48,36 @@ func TitleCase(s string) string {
 func ReadProjectDefaults() (engine, model string) {
 	dir, err := os.Getwd()
 	if err != nil {
-		return "copilot-sdk", "claude-sonnet-4.6"
+		cfg := projectconfig.New()
+		return cfg.Defaults.Engine, cfg.Defaults.Model
 	}
 	cfg, err := projectconfig.Load(dir)
 	if err != nil {
-		return "copilot-sdk", "claude-sonnet-4.6"
+		cfg = projectconfig.New()
 	}
 	return cfg.Defaults.Engine, cfg.Defaults.Model
 }
 
+// ReadProjectFiles reads file naming settings from .waza.yaml if it exists.
+func ReadProjectFiles() projectconfig.FilesConfig {
+	dir, err := os.Getwd()
+	if err != nil {
+		return projectconfig.New().Files
+	}
+	cfg, err := projectconfig.Load(dir)
+	if err != nil {
+		return projectconfig.New().Files
+	}
+	return cfg.Files
+}
+
 // EvalYAML returns a default eval.yaml template for the given skill name.
 func EvalYAML(name, engine, model string) string {
+	return EvalYAMLWithTaskGlob(name, engine, model, projectconfig.DefaultTaskGlob)
+}
+
+// EvalYAMLWithTaskGlob returns a default eval template using the given task glob.
+func EvalYAMLWithTaskGlob(name, engine, model, taskGlob string) string {
 	return fmt.Sprintf(`name: %s-eval
 description: Evaluation suite for %s.
 skill: %s
@@ -86,16 +105,21 @@ graders:
       regex_match:
         - "(?i)(explain|describe|analyze|implement)"
 tasks:
-  - "tasks/*.yaml"
-`, name, name, name, engine, model)
+  - %q
+`, name, name, name, engine, model, taskGlob)
 }
 
 // TaskFiles returns a map of task filename to content.
 func TaskFiles(_ string) map[string]string {
+	return TaskFilesWithSuffix(projectconfig.DefaultTaskFileSuffix)
+}
+
+// TaskFilesWithSuffix returns default task files named with the configured suffix.
+func TaskFilesWithSuffix(suffix string) map[string]string {
 	return map[string]string{
-		"basic-usage.yaml":        basicUsageTask(),
-		"edge-case.yaml":          edgeCaseTask(),
-		"should-not-trigger.yaml": shouldNotTriggerTask(),
+		"basic-usage" + suffix:        basicUsageTask(),
+		"edge-case" + suffix:          edgeCaseTask(),
+		"should-not-trigger" + suffix: shouldNotTriggerTask(),
 	}
 }
 

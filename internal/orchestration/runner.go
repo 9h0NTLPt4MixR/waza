@@ -13,6 +13,7 @@ import (
 
 	"github.com/microsoft/waza/internal/cache"
 	"github.com/microsoft/waza/internal/config"
+	"github.com/microsoft/waza/internal/copilotconfig"
 	"github.com/microsoft/waza/internal/dataset"
 	"github.com/microsoft/waza/internal/execution"
 	"github.com/microsoft/waza/internal/graders"
@@ -1388,20 +1389,9 @@ func containsPathTraversal(path string) bool {
 // convertMCPServers converts the eval YAML mcp_servers config (map[string]any)
 // into the copilot SDK's MCPServerConfig type. Returns nil if no servers configured.
 func convertMCPServers(serverConfigs map[string]any) map[string]copilot.MCPServerConfig {
-	if len(serverConfigs) == 0 {
-		return nil
-	}
-
-	result := make(map[string]copilot.MCPServerConfig, len(serverConfigs))
-	for name, cfg := range serverConfigs {
-		cfgMap, ok := cfg.(map[string]any)
-		if !ok {
-			fmt.Fprintf(os.Stderr, "Warning: mcp_server %q config is not a map, skipping\n", name)
-			continue
-		}
-		result[name] = copilot.MCPServerConfig(cfgMap)
-	}
-	return result
+	return copilotconfig.ConvertMCPServers(serverConfigs, func(format string, args ...any) {
+		fmt.Fprintf(os.Stderr, format, args...)
+	})
 }
 
 func (r *EvalRunner) buildGraderContext(tc *models.TestCase, resp *execution.ExecutionResponse) *graders.Context {

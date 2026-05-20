@@ -60,6 +60,39 @@ func TestNewCommand_InProjectMode(t *testing.T) {
 	assert.Contains(t, output, "eval.yaml")
 }
 
+func TestNewCommand_InProjectModeCustomFileNaming(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "skills"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".waza.yaml"), []byte(`
+files:
+  evalFile: waza-eval.yaml
+  taskGlob: tasks/*.waza-task.yaml
+  taskFileSuffix: .waza-task.yaml
+`), 0o644))
+
+	origDir, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(dir))
+	t.Cleanup(func() { _ = os.Chdir(origDir) }) //nolint:errcheck // best-effort cleanup
+
+	var buf bytes.Buffer
+	cmd := newNewSkillCommand()
+	cmd.SetOut(&buf)
+	cmd.SetArgs([]string{"my-skill"})
+	require.NoError(t, cmd.Execute())
+
+	evalPath := filepath.Join(dir, "evals", "my-skill", "waza-eval.yaml")
+	assert.FileExists(t, evalPath)
+	assert.FileExists(t, filepath.Join(dir, "evals", "my-skill", "tasks", "basic-usage.waza-task.yaml"))
+	assert.FileExists(t, filepath.Join(dir, "evals", "my-skill", "tasks", "edge-case.waza-task.yaml"))
+	assert.FileExists(t, filepath.Join(dir, "evals", "my-skill", "tasks", "should-not-trigger.waza-task.yaml"))
+	assert.NoFileExists(t, filepath.Join(dir, "evals", "my-skill", "eval.yaml"))
+
+	data, err := os.ReadFile(evalPath)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), `"tasks/*.waza-task.yaml"`)
+}
+
 // ── Standalone Mode Tests ──────────────────────────────────────────────────────
 
 func TestNewCommand_StandaloneMode(t *testing.T) {

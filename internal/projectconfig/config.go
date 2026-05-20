@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -23,6 +24,10 @@ const (
 	DefaultSkillsDir  = "skills/"
 	DefaultEvalsDir   = "evals/"
 	DefaultResultsDir = "results/"
+
+	DefaultEvalFile       = "eval.yaml"
+	DefaultTaskGlob       = "tasks/*.yaml"
+	DefaultTaskFileSuffix = ".yaml"
 
 	DefaultEngine  = "copilot-sdk"
 	DefaultModel   = "claude-sonnet-4.6"
@@ -52,6 +57,13 @@ type PathsConfig struct {
 	Skills  string `yaml:"skills,omitempty"`
 	Evals   string `yaml:"evals,omitempty"`
 	Results string `yaml:"results,omitempty"`
+}
+
+// FilesConfig holds naming conventions for generated and discovered eval files.
+type FilesConfig struct {
+	EvalFile       string `yaml:"evalFile,omitempty"`
+	TaskGlob       string `yaml:"taskGlob,omitempty"`
+	TaskFileSuffix string `yaml:"taskFileSuffix,omitempty"`
 }
 
 // DefaultsConfig holds default execution parameters.
@@ -127,6 +139,7 @@ type ProjectConfig struct {
 	Dir string `yaml:"-"`
 
 	Paths PathsConfig `yaml:"paths,omitempty"`
+	Files FilesConfig `yaml:"files,omitempty"`
 
 	Defaults DefaultsConfig `yaml:"defaults,omitempty"`
 	Cache    CacheConfig    `yaml:"cache,omitempty"`
@@ -144,6 +157,11 @@ func New() *ProjectConfig {
 			Skills:  DefaultSkillsDir,
 			Evals:   DefaultEvalsDir,
 			Results: DefaultResultsDir,
+		},
+		Files: FilesConfig{
+			EvalFile:       DefaultEvalFile,
+			TaskGlob:       DefaultTaskGlob,
+			TaskFileSuffix: DefaultTaskFileSuffix,
 		},
 		Defaults: DefaultsConfig{
 			Engine:     DefaultEngine,
@@ -209,6 +227,9 @@ func Load(startDir string) (*ProjectConfig, error) {
 
 	// Merge file values onto defaults.
 	mergeConfig(cfg, &fileCfg)
+	if err := validateConfig(cfg); err != nil {
+		return nil, err
+	}
 
 	return cfg, nil
 }
@@ -253,6 +274,17 @@ func mergeConfig(dst, src *ProjectConfig) {
 	}
 	if src.Paths.Results != "" {
 		dst.Paths.Results = src.Paths.Results
+	}
+
+	// Files
+	if src.Files.EvalFile != "" {
+		dst.Files.EvalFile = src.Files.EvalFile
+	}
+	if src.Files.TaskGlob != "" {
+		dst.Files.TaskGlob = src.Files.TaskGlob
+	}
+	if src.Files.TaskFileSuffix != "" {
+		dst.Files.TaskFileSuffix = src.Files.TaskFileSuffix
 	}
 
 	// Defaults
@@ -335,6 +367,39 @@ func mergeConfig(dst, src *ProjectConfig) {
 		dst.Storage.ContainerName = src.Storage.ContainerName
 	}
 	dst.Storage.Enabled = src.Storage.Enabled
+}
+
+func validateConfig(cfg *ProjectConfig) error {
+	if err := validateFileName("files.evalFile", cfg.Files.EvalFile); err != nil {
+		return err
+	}
+	if strings.TrimSpace(cfg.Files.TaskGlob) == "" {
+		return errors.New("files.taskGlob must not be empty")
+	}
+	if err := validateFileSuffix("files.taskFileSuffix", cfg.Files.TaskFileSuffix); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateFileName(field, value string) error {
+	if strings.TrimSpace(value) == "" {
+		return fmt.Errorf("%s must not be empty", field)
+	}
+	if filepath.Base(value) != value || strings.ContainsAny(value, `/\`) || value == "." || value == ".." {
+		return fmt.Errorf("%s must be a filename, got %q", field, value)
+	}
+	return nil
+}
+
+func validateFileSuffix(field, value string) error {
+	if strings.TrimSpace(value) == "" {
+		return fmt.Errorf("%s must not be empty", field)
+	}
+	if strings.ContainsAny(value, `/\`) || strings.Contains(value, "..") {
+		return fmt.Errorf("%s must be a filename suffix, got %q", field, value)
+	}
+	return nil
 }
 
 func boolPtr(b bool) *bool {

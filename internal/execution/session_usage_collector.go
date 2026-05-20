@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	copilot "github.com/github/copilot-sdk/go"
+	"github.com/microsoft/waza/internal/copilotevents"
 	"github.com/microsoft/waza/internal/models"
 )
 
@@ -40,11 +41,11 @@ func (s *SessionUsageCollector) On(event copilot.SessionEvent) {
 	defer s.mut.Unlock()
 
 	switch event.Type {
-	case copilot.AssistantTurnStart:
+	case copilot.SessionEventTypeAssistantTurnStart:
 		s.turns++
-	case copilot.AssistantUsage:
+	case copilot.SessionEventTypeAssistantUsage:
 		s.extractTurnUsage(event)
-	case copilot.SessionIdle, copilot.SessionShutdown, copilot.SessionError, copilot.SessionUsageInfo:
+	case copilot.SessionEventTypeSessionShutdown:
 		s.extractSessionUsage(event)
 	}
 }
@@ -82,21 +83,22 @@ func (s *SessionUsageCollector) UsageStats() *models.UsageStats {
 // be okay because the data is cumulative; later events will have the same or higher
 // totals than earlier events.
 func (s *SessionUsageCollector) extractSessionUsage(event copilot.SessionEvent) {
-	if event.Data.TotalPremiumRequests != nil {
-		if s.sessionUsage == nil {
-			s.sessionUsage = &models.UsageStats{}
-		}
-		s.sessionUsage.PremiumRequests = *event.Data.TotalPremiumRequests
+	shutdown, ok := copilotevents.Shutdown(event)
+	if !ok {
+		return
 	}
 
-	if len(event.Data.ModelMetrics) > 0 {
-		if s.sessionUsage == nil {
-			s.sessionUsage = &models.UsageStats{}
-		}
-		s.sessionUsage.ModelMetrics = make(map[string]models.ModelUsage, len(event.Data.ModelMetrics))
+	if s.sessionUsage == nil {
+		s.sessionUsage = &models.UsageStats{}
+	}
+
+	s.sessionUsage.PremiumRequests = shutdown.TotalPremiumRequests
+
+	if len(shutdown.ModelMetrics) > 0 {
+		s.sessionUsage.ModelMetrics = make(map[string]models.ModelUsage, len(shutdown.ModelMetrics))
 
 		totalIn, totalOut, totalCacheRead, totalCacheWrite := 0, 0, 0, 0
-		for name, mm := range event.Data.ModelMetrics {
+		for name, mm := range shutdown.ModelMetrics {
 			mu := models.ModelUsage{
 				InputTokens:      int(mm.Usage.InputTokens),
 				OutputTokens:     int(mm.Usage.OutputTokens),
@@ -123,27 +125,31 @@ func (s *SessionUsageCollector) extractSessionUsage(event copilot.SessionEvent) 
 // This data is only used when session-level data (ModelMetrics/TotalPremiumRequests)
 // is not available.
 func (s *SessionUsageCollector) extractTurnUsage(event copilot.SessionEvent) {
-	if event.Data.InputTokens == nil && event.Data.OutputTokens == nil &&
-		event.Data.CacheReadTokens == nil && event.Data.CacheWriteTokens == nil &&
-		event.Data.Cost == nil {
+	usage, ok := copilotevents.AssistantUsage(event)
+	if !ok {
+		return
+	}
+	if usage.InputTokens == nil && usage.OutputTokens == nil &&
+		usage.CacheReadTokens == nil && usage.CacheWriteTokens == nil &&
+		usage.Cost == nil {
 		return
 	}
 	if s.turnUsage == nil {
 		s.turnUsage = &models.UsageStats{}
 	}
-	if event.Data.InputTokens != nil {
-		s.turnUsage.InputTokens += int(*event.Data.InputTokens)
+	if usage.InputTokens != nil {
+		s.turnUsage.InputTokens += int(*usage.InputTokens)
 	}
-	if event.Data.OutputTokens != nil {
-		s.turnUsage.OutputTokens += int(*event.Data.OutputTokens)
+	if usage.OutputTokens != nil {
+		s.turnUsage.OutputTokens += int(*usage.OutputTokens)
 	}
-	if event.Data.CacheReadTokens != nil {
-		s.turnUsage.CacheReadTokens += int(*event.Data.CacheReadTokens)
+	if usage.CacheReadTokens != nil {
+		s.turnUsage.CacheReadTokens += int(*usage.CacheReadTokens)
 	}
-	if event.Data.CacheWriteTokens != nil {
-		s.turnUsage.CacheWriteTokens += int(*event.Data.CacheWriteTokens)
+	if usage.CacheWriteTokens != nil {
+		s.turnUsage.CacheWriteTokens += int(*usage.CacheWriteTokens)
 	}
-	if event.Data.Cost != nil {
-		s.turnUsage.PremiumRequests += *event.Data.Cost
+	if usage.Cost != nil {
+		s.turnUsage.PremiumRequests += *usage.Cost
 	}
 }

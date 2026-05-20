@@ -24,17 +24,17 @@ func newEvalNewCommand() *cobra.Command {
 		Long: `Generate an eval scaffold using a skill's SKILL.md frontmatter.
 
 Creates:
-  - evals/<skill-name>/eval.yaml
-  - evals/<skill-name>/tasks/positive-trigger-1.yaml
-  - evals/<skill-name>/tasks/positive-trigger-2.yaml
-  - evals/<skill-name>/tasks/negative-trigger-1.yaml`,
+  - evals/<skill-name>/<configured eval filename>
+  - evals/<skill-name>/tasks/positive-trigger-1<configured task suffix>
+  - evals/<skill-name>/tasks/positive-trigger-2<configured task suffix>
+  - evals/<skill-name>/tasks/negative-trigger-1<configured task suffix>`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return evalNewCommandE(cmd, args[0], output)
 		},
 	}
 
-	cmd.Flags().StringVar(&output, "output", "", "Path for eval.yaml (default: evals/<skill-name>/eval.yaml)")
+	cmd.Flags().StringVar(&output, "output", "", "Path for eval file (default: evals/<skill-name>/<configured eval filename>)")
 	return cmd
 }
 
@@ -58,8 +58,9 @@ func evalNewCommandE(cmd *cobra.Command, skillName, outputPath string) error {
 	positivePrompts := positivePromptsFor(useFor, skillName)
 	negativePrompt := negativePromptFor(doNotUseFor)
 
+	fileConfig := scaffold.ReadProjectFiles()
 	if outputPath == "" {
-		outputPath = filepath.Join("evals", skillName, "eval.yaml")
+		outputPath = filepath.Join("evals", skillName, fileConfig.EvalFile)
 	}
 	tasksDir := filepath.Join(filepath.Dir(outputPath), "tasks")
 
@@ -68,34 +69,34 @@ func evalNewCommandE(cmd *cobra.Command, skillName, outputPath string) error {
 	}
 
 	engine, model := scaffold.ReadProjectDefaults()
-	evalContent := evalScaffoldYAML(skillName, engine, model)
-	files := []struct {
+	evalContent := evalScaffoldYAML(skillName, engine, model, fileConfig.TaskGlob)
+	generatedFiles := []struct {
 		path    string
 		content string
 	}{
 		{path: outputPath, content: evalContent},
 		{
-			path:    filepath.Join(tasksDir, "positive-trigger-1.yaml"),
+			path:    filepath.Join(tasksDir, "positive-trigger-1"+fileConfig.TaskFileSuffix),
 			content: triggerTaskYAML("positive-trigger-001", "Positive Trigger 1", positivePrompts[0], true, keywords),
 		},
 		{
-			path:    filepath.Join(tasksDir, "positive-trigger-2.yaml"),
+			path:    filepath.Join(tasksDir, "positive-trigger-2"+fileConfig.TaskFileSuffix),
 			content: triggerTaskYAML("positive-trigger-002", "Positive Trigger 2", positivePrompts[1], true, keywords),
 		},
 		{
-			path:    filepath.Join(tasksDir, "negative-trigger-1.yaml"),
+			path:    filepath.Join(tasksDir, "negative-trigger-1"+fileConfig.TaskFileSuffix),
 			content: triggerTaskYAML("negative-trigger-001", "Negative Trigger 1", negativePrompt, false, keywords),
 		},
 	}
 
-	for _, file := range files {
+	for _, file := range generatedFiles {
 		if _, statErr := os.Stat(file.path); statErr == nil {
 			return fmt.Errorf("refusing to overwrite existing file: %s", file.path)
 		}
 	}
 
-	createdFiles := make([]string, 0, len(files))
-	for _, file := range files {
+	createdFiles := make([]string, 0, len(generatedFiles))
+	for _, file := range generatedFiles {
 		if err := os.WriteFile(file.path, []byte(file.content), 0o644); err != nil {
 			for _, createdPath := range createdFiles {
 				_ = os.Remove(createdPath)
@@ -107,9 +108,9 @@ func evalNewCommandE(cmd *cobra.Command, skillName, outputPath string) error {
 
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "✅ Eval scaffold created for %s\n", skillName)
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  - %s\n", outputPath)
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  - %s\n", filepath.Join(tasksDir, "positive-trigger-1.yaml"))
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  - %s\n", filepath.Join(tasksDir, "positive-trigger-2.yaml"))
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  - %s\n", filepath.Join(tasksDir, "negative-trigger-1.yaml"))
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  - %s\n", filepath.Join(tasksDir, "positive-trigger-1"+fileConfig.TaskFileSuffix))
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  - %s\n", filepath.Join(tasksDir, "positive-trigger-2"+fileConfig.TaskFileSuffix))
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  - %s\n", filepath.Join(tasksDir, "negative-trigger-1"+fileConfig.TaskFileSuffix))
 
 	return nil
 }
@@ -140,7 +141,7 @@ func resolveSkillMDPath(skillName string) (string, error) {
 	return "", fmt.Errorf("SKILL.md not found for %q (looked in skills/%s/SKILL.md and %s/SKILL.md)", skillName, skillName, skillName)
 }
 
-func evalScaffoldYAML(skillName, engine, model string) string {
+func evalScaffoldYAML(skillName, engine, model, taskGlob string) string {
 	return fmt.Sprintf(`name: %s-eval
 description: Auto-generated eval for %s.
 skill: %s
@@ -166,8 +167,8 @@ graders:
     config:
       max_tokens: 1200
 tasks:
-  - "tasks/*.yaml"
-`, skillName, skillName, skillName, engine, model)
+  - %q
+`, skillName, skillName, skillName, engine, model, taskGlob)
 }
 
 func triggerTaskYAML(id, name, prompt string, shouldTrigger bool, keywords []string) string {
