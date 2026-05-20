@@ -452,7 +452,6 @@ func dirFileCount(dir string) int {
 func defaultSkillMD(name string) string {
 	return fmt.Sprintf(`---
 name: %s
-type: utility
 description: |
   USE FOR: %s tasks, ...
   DO NOT USE FOR: unrelated tasks, ...

@@ -12,27 +12,16 @@ import (
 	"golang.org/x/term"
 )
 
-// SkillType represents the category of a skill.
-type SkillType string
-
-const (
-	SkillTypeWorkflow SkillType = "workflow"
-	SkillTypeUtility  SkillType = "utility"
-	SkillTypeAnalysis SkillType = "analysis"
-)
-
 // SkillSpec holds all fields collected during the interactive wizard.
 type SkillSpec struct {
 	Name         string
 	Description  string
 	Triggers     []string
 	AntiTriggers []string
-	Type         SkillType
 }
 
 const skillMDTemplate = `---
 name: {{ .Name }}
-type: {{ .Type }}
 description: >
   {{ .Description }}
 ---
@@ -62,7 +51,6 @@ func RunSkillWizard(in io.Reader, out io.Writer, initialName string) (*SkillSpec
 		description     string
 		triggersRaw     string
 		antiTriggersRaw string
-		skillType       string
 	)
 
 	form := huh.NewForm(
@@ -96,14 +84,6 @@ func RunSkillWizard(in io.Reader, out io.Writer, initialName string) (*SkillSpec
 				Description("Comma-separated phrases that should NOT activate this skill").
 				Placeholder("unrelated task, wrong domain").
 				Value(&antiTriggersRaw),
-			huh.NewSelect[string]().
-				Title("Skill type").
-				Options(
-					huh.NewOption("workflow", "workflow"),
-					huh.NewOption("utility", "utility"),
-					huh.NewOption("analysis", "analysis"),
-				).
-				Value(&skillType),
 		),
 	).
 		WithInput(in).
@@ -123,7 +103,6 @@ func RunSkillWizard(in io.Reader, out io.Writer, initialName string) (*SkillSpec
 		Description:  strings.TrimSpace(description),
 		Triggers:     splitAndTrim(triggersRaw),
 		AntiTriggers: splitAndTrim(antiTriggersRaw),
-		Type:         SkillType(skillType),
 	}, nil
 }
 

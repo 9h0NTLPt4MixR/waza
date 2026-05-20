@@ -170,7 +170,7 @@ waza init my-project --no-skill
 
 ### `waza new skill <skill-name>`
 
-Create a new skill with scaffolded structure and evaluation suite. Detects workspace context and adapts output.
+Create a new skill with scaffolded structure and evaluation suite. Detects workspace context and adapts output. In interactive mode, the wizard collects spec-aligned metadata: name, description, trigger phrases, and anti-trigger phrases.
 
 | Flag | Short | Description |
 |------|-------|-------------|

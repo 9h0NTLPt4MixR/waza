@@ -85,7 +85,6 @@ Edit `skills/code-explainer/SKILL.md`:
 ```yaml
 ---
 name: code-explainer
-type: utility
 description: |
   USE FOR: Explaining code, analyzing code patterns, refactoring suggestions
   DO NOT USE FOR: Running code, generating boilerplate

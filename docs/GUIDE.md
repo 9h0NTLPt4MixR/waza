@@ -252,7 +252,7 @@ waza init my-skills --no-skill
 
 ### `waza new skill [skill-name]`
 
-Create a new skill with its evaluation suite.
+Create a new skill with its evaluation suite. In interactive mode, the wizard collects spec-aligned metadata: name, description, trigger phrases, and anti-trigger phrases.
 
 **Flags:**
 - `--template, -t` — Template pack (coming soon)
