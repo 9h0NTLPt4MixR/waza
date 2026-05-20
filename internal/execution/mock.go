@@ -128,6 +128,9 @@ func (m *MockEngine) Execute(ctx context.Context, req *ExecutionRequest) (*Execu
 		WorkspaceDir:   m.workspace,
 		WorkspaceFiles: captureWorkspaceFiles(m.workspace),
 	}
+	if req.SkipWorkspaceCapture {
+		resp.WorkspaceFiles = nil
+	}
 
 	return resp, nil
 }

@@ -200,12 +200,14 @@ func (e *CopilotEngine) Execute(ctx context.Context, req *ExecutionRequest) (*Ex
 		// Create session with updated API
 		session, err = e.client.CreateSession(ctx, &copilot.SessionConfig{
 			Model: modelID,
+			Tools: req.Tools,
 
 			OnPermissionRequest: permRequestCallback,
 
 			SkillDirectories: skillDirs,
 			WorkingDirectory: workspaceDir,
 			SystemMessage:    systemMessage,
+			Streaming:        req.Streaming,
 			MCPServers:       req.MCPServers,
 		})
 
@@ -215,6 +217,7 @@ func (e *CopilotEngine) Execute(ctx context.Context, req *ExecutionRequest) (*Ex
 	} else {
 		session, err = e.client.ResumeSessionWithOptions(ctx, req.SessionID, &copilot.ResumeSessionConfig{
 			Model: modelID,
+			Tools: req.Tools,
 
 			OnPermissionRequest: permRequestCallback,
 
@@ -222,6 +225,7 @@ func (e *CopilotEngine) Execute(ctx context.Context, req *ExecutionRequest) (*Ex
 			SkillDirectories: skillDirs,
 			WorkingDirectory: workspaceDir,
 			SystemMessage:    systemMessage,
+			Streaming:        req.Streaming,
 			MCPServers:       req.MCPServers,
 		})
 
@@ -237,6 +241,13 @@ func (e *CopilotEngine) Execute(ctx context.Context, req *ExecutionRequest) (*Ex
 		// calling Execute again with [ExecutionRequest.SessionID] set
 		if err := session.Disconnect(); err != nil {
 			slog.Info("failed to destroy session", "sessionID", sessionID, "error", err)
+		}
+		if req.EphemeralSession && req.SessionID == "" {
+			deleteCtx, cancelDelete := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancelDelete()
+			if err := e.client.DeleteSession(deleteCtx, sessionID); err != nil {
+				slog.Debug("failed to delete ephemeral session", "sessionID", sessionID, "error", err)
+			}
 		}
 	}()
 
@@ -264,19 +275,21 @@ func (e *CopilotEngine) Execute(ctx context.Context, req *ExecutionRequest) (*Ex
 	session.On(eventsCollector.On)
 	session.On(usageCollector.On)
 
-	e.sessionsMu.Lock()
-	if e.sessions == nil {
-		e.sessions = make(map[string]CopilotSession)
-	}
-	e.sessions[sessionID] = session
-	e.sessionsMu.Unlock()
+	if !req.EphemeralSession {
+		e.sessionsMu.Lock()
+		if e.sessions == nil {
+			e.sessions = make(map[string]CopilotSession)
+		}
+		e.sessions[sessionID] = session
+		e.sessionsMu.Unlock()
 
-	e.usageCollectorsMu.Lock()
-	if e.usageCollectors == nil {
-		e.usageCollectors = make(map[string]*SessionUsageCollector)
+		e.usageCollectorsMu.Lock()
+		if e.usageCollectors == nil {
+			e.usageCollectors = make(map[string]*SessionUsageCollector)
+		}
+		e.usageCollectors[sessionID] = usageCollector
+		e.usageCollectorsMu.Unlock()
 	}
-	e.usageCollectors[sessionID] = usageCollector
-	e.usageCollectorsMu.Unlock()
 
 	unsubscribe := session.On(utils.NewSessionToSlog())
 	defer unsubscribe()
@@ -284,6 +297,7 @@ func (e *CopilotEngine) Execute(ctx context.Context, req *ExecutionRequest) (*Ex
 	// Send prompt with updated API
 	_, err = session.SendAndWait(ctx, copilot.MessageOptions{
 		Prompt: req.Message,
+		Mode:   string(req.MessageMode),
 	})
 
 	var errMsg string
@@ -307,7 +321,10 @@ func (e *CopilotEngine) Execute(ctx context.Context, req *ExecutionRequest) (*Ex
 	// Capture workspace files while they are still in post-execution state.
 	// The deferred session.Disconnect() may modify or restore workspace files,
 	// so we snapshot them now to guarantee graders see the agent's changes.
-	workspaceFiles := captureWorkspaceFiles(workspaceDir)
+	var workspaceFiles map[string][]byte
+	if !req.SkipWorkspaceCapture {
+		workspaceFiles = captureWorkspaceFiles(workspaceDir)
+	}
 
 	// Build response
 	resp := &ExecutionResponse{

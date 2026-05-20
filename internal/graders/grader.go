@@ -22,6 +22,11 @@ type Grader interface {
 	Grade(ctx context.Context, gradingContext *Context) (*models.GraderResults, error)
 }
 
+// Executor is the narrow execution surface prompt graders need for judge turns.
+type Executor interface {
+	Execute(ctx context.Context, req *execution.ExecutionRequest) (*execution.ExecutionResponse, error)
+}
+
 // Context provides context for validation
 type Context struct {
 	TestCase   *models.TestCase
@@ -55,6 +60,10 @@ type Context struct {
 	// BaselineOutput is the agent output from the baseline (no-skill) run.
 	// Populated when running in baseline mode; used by pairwise prompt grading.
 	BaselineOutput string
+
+	// Executor runs model-backed grader prompts through the same execution layer
+	// as task prompts. Only prompt graders require it.
+	Executor Executor
 }
 
 // Create creates a validator from the global registry

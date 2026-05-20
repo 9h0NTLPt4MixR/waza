@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	copilot "github.com/github/copilot-sdk/go"
+	"github.com/microsoft/waza/internal/execution"
 	"github.com/microsoft/waza/internal/models"
 	"github.com/microsoft/waza/internal/utils"
 	"github.com/stretchr/testify/require"
@@ -52,6 +53,100 @@ func TestPromptGraderNoContinueWithoutIDFails(t *testing.T) {
 	})
 	require.ErrorContains(t, err, "no session id set, can't continue session in prompt grading")
 	require.Empty(t, results)
+}
+
+func TestPromptGraderRequiresExecutor(t *testing.T) {
+	promptGrader, err := NewPromptGrader("my-prompt-grader", models.PromptGraderParameters{
+		Prompt: "grade this",
+	})
+	require.NoError(t, err)
+
+	results, err := promptGrader.Grade(context.Background(), &Context{})
+	require.ErrorContains(t, err, "prompt grader requires an execution engine")
+	require.Nil(t, results)
+}
+
+func TestPromptGraderUsesExecutorTools(t *testing.T) {
+	executor := &fakePromptExecutor{
+		execute: func(req *execution.ExecutionRequest) (*execution.ExecutionResponse, error) {
+			require.Equal(t, "judge-model", req.ModelID)
+			require.Equal(t, "grade this", req.Message)
+			require.Equal(t, execution.MessageModeEnqueue, req.MessageMode)
+			require.True(t, req.Streaming)
+			require.True(t, req.EphemeralSession)
+			require.True(t, req.SkipWorkspaceCapture)
+			require.True(t, req.NoSkills)
+			require.Len(t, req.Tools, 2)
+			_, err := req.Tools[0].Handler(copilot.ToolInvocation{
+				Arguments: map[string]any{"description": "criterion", "reason": "ok"},
+			})
+			require.NoError(t, err)
+			return &execution.ExecutionResponse{FinalOutput: "judge response", Success: true}, nil
+		},
+	}
+
+	promptGrader, err := NewPromptGrader("my-prompt-grader", models.PromptGraderParameters{
+		Prompt: "grade this",
+		Model:  "judge-model",
+	})
+	require.NoError(t, err)
+
+	results, err := promptGrader.Grade(context.Background(), &Context{
+		WorkspaceDir: "/tmp/workspace",
+		Executor:     executor,
+	})
+	require.NoError(t, err)
+	require.True(t, results.Passed)
+	require.Equal(t, 1.0, results.Score)
+	require.Equal(t, "judge response", results.Details["response"])
+	require.Equal(t, 1, executor.calls)
+}
+
+func TestPromptGraderKeepsGradesWhenExecutorReportsPostGradeError(t *testing.T) {
+	executor := &fakePromptExecutor{
+		execute: func(req *execution.ExecutionRequest) (*execution.ExecutionResponse, error) {
+			_, err := req.Tools[0].Handler(copilot.ToolInvocation{
+				Arguments: map[string]any{"description": "criterion", "reason": "ok"},
+			})
+			require.NoError(t, err)
+			return &execution.ExecutionResponse{Success: false, ErrorMsg: "follow-up failed"}, nil
+		},
+	}
+
+	promptGrader, err := NewPromptGrader("my-prompt-grader", models.PromptGraderParameters{
+		Prompt: "grade this",
+	})
+	require.NoError(t, err)
+
+	results, err := promptGrader.Grade(context.Background(), &Context{Executor: executor})
+	require.NoError(t, err)
+	require.True(t, results.Passed)
+	require.Equal(t, 1.0, results.Score)
+}
+
+func TestPromptGraderContinueSessionPassesSessionID(t *testing.T) {
+	executor := &fakePromptExecutor{
+		execute: func(req *execution.ExecutionRequest) (*execution.ExecutionResponse, error) {
+			require.Equal(t, "session-123", req.SessionID)
+			_, err := req.Tools[0].Handler(copilot.ToolInvocation{
+				Arguments: map[string]any{"description": "criterion", "reason": "ok"},
+			})
+			require.NoError(t, err)
+			return &execution.ExecutionResponse{Success: true}, nil
+		},
+	}
+
+	promptGrader, err := NewPromptGrader("my-prompt-grader", models.PromptGraderParameters{
+		Prompt:          "grade this",
+		ContinueSession: true,
+	})
+	require.NoError(t, err)
+
+	_, err = promptGrader.Grade(context.Background(), &Context{
+		SessionID: "session-123",
+		Executor:  executor,
+	})
+	require.NoError(t, err)
 }
 
 func TestPromptGraderLive(t *testing.T) {
@@ -301,6 +396,45 @@ func TestPairwiseBuildPrompt(t *testing.T) {
 	require.Contains(t, prompt, "set_pairwise_winner")
 }
 
+func TestPairwiseMode_UsesExecutorTool(t *testing.T) {
+	executor := &fakePromptExecutor{}
+	executor.execute = func(req *execution.ExecutionRequest) (*execution.ExecutionResponse, error) {
+		winner := "B"
+		if executor.calls == 2 {
+			winner = "A"
+		}
+		require.Equal(t, execution.MessageModeEnqueue, req.MessageMode)
+		require.True(t, req.Streaming)
+		require.True(t, req.EphemeralSession)
+		require.Len(t, req.Tools, 1)
+		_, err := req.Tools[0].Handler(copilot.ToolInvocation{
+			Arguments: map[string]any{
+				"winner":    winner,
+				"magnitude": "much-better",
+				"reasoning": "more complete",
+			},
+		})
+		require.NoError(t, err)
+		return &execution.ExecutionResponse{Success: true}, nil
+	}
+
+	grader, err := NewPromptGrader("pairwise-grader", models.PromptGraderParameters{
+		Prompt: "pick the better output",
+		Mode:   models.PromptGraderModePairwise,
+	})
+	require.NoError(t, err)
+
+	results, err := grader.Grade(context.Background(), &Context{
+		Output:         "better output",
+		BaselineOutput: "worse output",
+		Executor:       executor,
+	})
+	require.NoError(t, err)
+	require.True(t, results.Passed)
+	require.Equal(t, 1.0, results.Score)
+	require.Equal(t, "skill", results.Details["pairwise"].(*models.PairwiseResult).Winner)
+}
+
 func TestNormalizePairwiseWinner(t *testing.T) {
 	tests := []struct {
 		winner   string
@@ -345,4 +479,14 @@ func TestPairwiseMode_Live(t *testing.T) {
 	pairwise, ok := results.Details["pairwise"].(*models.PairwiseResult)
 	require.True(t, ok, "pairwise detail should be *models.PairwiseResult")
 	require.Contains(t, []string{"skill", "baseline", "tie"}, pairwise.Winner)
+}
+
+type fakePromptExecutor struct {
+	calls   int
+	execute func(req *execution.ExecutionRequest) (*execution.ExecutionResponse, error)
+}
+
+func (f *fakePromptExecutor) Execute(ctx context.Context, req *execution.ExecutionRequest) (*execution.ExecutionResponse, error) {
+	f.calls++
+	return f.execute(req)
 }

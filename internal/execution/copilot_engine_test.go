@@ -136,6 +136,100 @@ func TestCopilotEngine_Execute_SendError(t *testing.T) {
 	require.Equal(t, "send failed", resp.ErrorMsg)
 }
 
+func TestCopilotEngine_Execute_PassesGraderRequestOptionsAndDeletesEphemeralSession(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	clientMock := newClientMock(ctrl)
+	sessionMock := NewMockCopilotSession(ctrl)
+
+	tool := copilot.Tool{Name: "set_waza_grade_pass"}
+
+	clientMock.EXPECT().CreateSession(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, cfg *copilot.SessionConfig) (CopilotSession, error) {
+			require.Equal(t, "judge-model", cfg.Model)
+			require.True(t, cfg.Streaming)
+			require.Empty(t, cfg.SkillDirectories)
+			require.Equal(t, "set_waza_grade_pass", cfg.Tools[0].Name)
+			require.NotEmpty(t, cfg.WorkingDirectory)
+			return sessionMock, nil
+		})
+	sessionMock.EXPECT().On(gomock.Any()).Times(3).Return(func() {})
+	sessionMock.EXPECT().SessionID().Return("grader-session")
+	sessionMock.EXPECT().SendAndWait(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, opts copilot.MessageOptions) (*copilot.SessionEvent, error) {
+			require.Equal(t, "grade this", opts.Prompt)
+			require.Equal(t, string(MessageModeEnqueue), opts.Mode)
+			return &copilot.SessionEvent{}, nil
+		})
+	sessionMock.EXPECT().Disconnect()
+	clientMock.EXPECT().DeleteSession(gomock.Any(), "grader-session").Times(1)
+
+	engine := NewCopilotEngineBuilder("test-model", &CopilotEngineBuilderOptions{
+		NewCopilotClient: func(clientOptions *copilot.ClientOptions) CopilotClient {
+			return clientMock
+		},
+	}).Build()
+	require.NoError(t, engine.Initialize(context.Background()))
+	t.Cleanup(func() {
+		require.NoError(t, engine.Shutdown(context.Background()))
+	})
+
+	resp, err := engine.Execute(context.Background(), &ExecutionRequest{
+		ModelID:              "judge-model",
+		Message:              "grade this",
+		Tools:                []copilot.Tool{tool},
+		MessageMode:          MessageModeEnqueue,
+		Streaming:            true,
+		NoSkills:             true,
+		Timeout:              time.Second,
+		EphemeralSession:     true,
+		SkipWorkspaceCapture: true,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "grader-session", resp.SessionID)
+	require.Nil(t, resp.WorkspaceFiles)
+}
+
+func TestCopilotEngine_Execute_ResumedEphemeralSessionIsNotDeletedOrTracked(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	clientMock := newClientMock(ctrl)
+	sessionMock := NewMockCopilotSession(ctrl)
+
+	clientMock.EXPECT().ResumeSessionWithOptions(gomock.Any(), "existing-session", gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ string, cfg *copilot.ResumeSessionConfig) (CopilotSession, error) {
+			require.True(t, cfg.Streaming)
+			require.Empty(t, cfg.SkillDirectories)
+			require.Equal(t, "judge-tool", cfg.Tools[0].Name)
+			return sessionMock, nil
+		})
+	sessionMock.EXPECT().On(gomock.Any()).Times(3).Return(func() {})
+	sessionMock.EXPECT().SessionID().Return("existing-session")
+	sessionMock.EXPECT().SendAndWait(gomock.Any(), gomock.Any()).Return(&copilot.SessionEvent{}, nil)
+	sessionMock.EXPECT().Disconnect()
+
+	engine := NewCopilotEngineBuilder("test-model", &CopilotEngineBuilderOptions{
+		NewCopilotClient: func(clientOptions *copilot.ClientOptions) CopilotClient {
+			return clientMock
+		},
+	}).Build()
+	require.NoError(t, engine.Initialize(context.Background()))
+	t.Cleanup(func() {
+		require.NoError(t, engine.Shutdown(context.Background()))
+	})
+
+	resp, err := engine.Execute(context.Background(), &ExecutionRequest{
+		Message:              "grade existing session",
+		SessionID:            "existing-session",
+		Tools:                []copilot.Tool{{Name: "judge-tool"}},
+		Streaming:            true,
+		NoSkills:             true,
+		Timeout:              time.Second,
+		EphemeralSession:     true,
+		SkipWorkspaceCapture: true,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "existing-session", resp.SessionID)
+}
+
 func TestCopilotEngine_Shutdown_StopsClientAndCleansWorkspaces(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	clientMock := NewMockCopilotClient(ctrl)

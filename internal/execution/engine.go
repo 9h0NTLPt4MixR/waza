@@ -34,6 +34,14 @@ type WorkspaceKeeper interface {
 	SetKeepWorkspace(keep bool)
 }
 
+// MessageMode controls how a prompt is submitted to an existing session.
+type MessageMode string
+
+const (
+	// MessageModeEnqueue sends the prompt using the Copilot SDK's enqueue mode.
+	MessageModeEnqueue MessageMode = "enqueue"
+)
+
 // ExecutionRequest represents a test execution request
 type ExecutionRequest struct {
 	ModelID      string
@@ -41,6 +49,20 @@ type ExecutionRequest struct {
 	Context      map[string]any
 	Resources    []ResourceFile
 	Instructions []InstructionFile
+	Tools        []copilot.Tool
+
+	MessageMode MessageMode
+	Streaming   bool
+
+	// EphemeralSession keeps one-off sessions out of engine shutdown tracking.
+	// New ephemeral sessions are deleted at the end of Execute. Resumed
+	// ephemeral sessions are only disconnected because the caller does not own
+	// the original session data.
+	EphemeralSession bool
+
+	// SkipWorkspaceCapture avoids post-run workspace snapshots for callers that
+	// only need model/tool output, such as prompt graders.
+	SkipWorkspaceCapture bool
 
 	SessionID    string
 	WorkspaceDir string // Reuse an existing workspace directory (for follow-up prompts)
