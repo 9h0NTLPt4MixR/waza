@@ -1,6 +1,5 @@
 import { test, expect } from "@playwright/test";
 import { mockAllAPIs } from "./helpers/api-mock";
-import { RUN_DETAIL } from "./fixtures/mock-data";
 
 test.describe("Run Detail", () => {
   test("clicking a table row navigates to /runs/:id", async ({ page }) => {

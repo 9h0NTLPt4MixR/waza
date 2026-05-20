@@ -1,5 +1,3 @@
-import type { Page } from "@playwright/test";
-
 /**
  * Mock API responses that match the Go server's JSON shape.
  * Keeping this in one place so every spec file shares the same data.

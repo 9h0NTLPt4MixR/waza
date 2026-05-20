@@ -25,7 +25,7 @@ function jsonEqual(a: unknown, b: unknown): boolean {
  * Align tool calls from two transcripts using LCS on tool names.
  * Produces a correct diff even when the same tool is called multiple times.
  */
-export function alignToolCalls(
+function alignToolCalls(
   transcriptA: TranscriptEvent[],
   transcriptB: TranscriptEvent[],
 ): DiffEntry[] {

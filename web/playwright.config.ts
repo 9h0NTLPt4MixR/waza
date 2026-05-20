@@ -1,5 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
+const port = Number(process.env.PLAYWRIGHT_PORT ?? 4173);
+
 export default defineConfig({
   testDir: "./e2e",
   timeout: 30_000,
@@ -8,15 +10,15 @@ export default defineConfig({
   reporter: process.env.CI ? "github" : "list",
 
   use: {
-    baseURL: "http://localhost:4173",
+    baseURL: `http://localhost:${port}`,
     screenshot: "only-on-failure",
     video: "retain-on-failure",
     trace: "retain-on-failure",
   },
 
   webServer: {
-    command: "npm run preview -- --port 4173",
-    port: 4173,
+    command: `npm run preview -- --port ${port}`,
+    port,
     reuseExistingServer: !process.env.CI,
   },
 

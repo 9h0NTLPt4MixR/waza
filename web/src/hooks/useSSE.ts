@@ -51,13 +51,28 @@ export function useSSE(): UseSSEReturn {
   const [events, setEvents] = useState<SSEEvent[]>([]);
   const retryCount = useRef(0);
   const esRef = useRef<EventSource | null>(null);
+  const currentRunRef = useRef<LiveRun | null>(null);
+
+  const updateCurrentRun = useCallback(
+    (updater: (prev: LiveRun | null) => LiveRun | null) => {
+      setCurrentRun((prev) => {
+        const next = updater(prev);
+        currentRunRef.current = next;
+        return next;
+      });
+    },
+    [],
+  );
 
   const processEvent = useCallback((event: SSEEvent) => {
     setEvents((prev) => [event, ...prev].slice(0, MAX_EVENTS));
 
     switch (event.type) {
       case "task_start":
-        setCurrentRun((prev) => {
+        if (!currentRunRef.current || currentRunRef.current.done) {
+          setCompletedTasks([]);
+        }
+        updateCurrentRun((prev) => {
           // Reset state if previous run finished or no run exists
           const base =
             !prev || prev.done
@@ -75,14 +90,10 @@ export function useSSE(): UseSSEReturn {
               : prev;
           return { ...base, currentTask: event.data.taskName ?? null };
         });
-        // Clear completed tasks list when a new run starts
-        setCompletedTasks((prev) =>
-          currentRun?.done ? [] : prev,
-        );
         break;
 
       case "task_complete":
-        setCurrentRun((prev) => {
+        updateCurrentRun((prev) => {
           if (!prev) return prev;
           const passed = event.data.outcome === "pass";
           return {
@@ -103,7 +114,7 @@ export function useSSE(): UseSSEReturn {
         break;
 
       case "run_complete":
-        setCurrentRun((prev) => {
+        updateCurrentRun((prev) => {
           if (!prev) return prev;
           return {
             ...prev,
@@ -117,7 +128,7 @@ export function useSSE(): UseSSEReturn {
         });
         break;
     }
-  }, []);
+  }, [updateCurrentRun]);
 
   useEffect(() => {
     let cancelled = false;
