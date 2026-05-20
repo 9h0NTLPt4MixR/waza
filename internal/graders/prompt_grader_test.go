@@ -91,6 +91,7 @@ func TestPromptGraderUsesExecutorTools(t *testing.T) {
 			require.True(t, req.Streaming)
 			require.True(t, req.EphemeralSession)
 			require.True(t, req.SkipWorkspaceCapture)
+			require.Empty(t, req.SessionID)
 			require.True(t, req.NoSkills)
 			require.Len(t, req.Tools, 2)
 			_, err := req.Tools[0].Handler(copilot.ToolInvocation{
@@ -109,6 +110,7 @@ func TestPromptGraderUsesExecutorTools(t *testing.T) {
 
 	results, err := promptGrader.Grade(context.Background(), &Context{
 		WorkspaceDir: "/tmp/workspace",
+		SessionID:    "task-session",
 		Executor:     executor,
 	})
 	require.NoError(t, err)

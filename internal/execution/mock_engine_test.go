@@ -138,3 +138,19 @@ func TestMockEngine_Execute_TruncatesLargeContent(t *testing.T) {
 
 	require.NoError(t, engine.Shutdown(context.Background()))
 }
+
+func TestMockEngine_Execute_SkipWorkspaceCapture(t *testing.T) {
+	engine := NewMockEngine("test-model")
+	require.NoError(t, engine.Initialize(context.Background()))
+
+	resp, err := engine.Execute(context.Background(), &ExecutionRequest{
+		Message:              "hello",
+		Resources:            []ResourceFile{{Path: "input.txt", Content: []byte("content")}},
+		SkipWorkspaceCapture: true,
+	})
+	require.NoError(t, err)
+	require.Nil(t, resp.WorkspaceFiles)
+	require.FileExists(t, filepath.Join(resp.WorkspaceDir, "input.txt"))
+
+	require.NoError(t, engine.Shutdown(context.Background()))
+}
