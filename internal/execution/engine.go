@@ -6,6 +6,7 @@ import (
 	"time"
 
 	copilot "github.com/github/copilot-sdk/go"
+	"github.com/microsoft/waza/internal/copilotevents"
 	"github.com/microsoft/waza/internal/models"
 )
 
@@ -112,9 +113,9 @@ type ExecutionResponse struct {
 func (r *ExecutionResponse) ExtractMessages() []string {
 	var messages []string
 	for _, evt := range r.Events {
-		if evt.Type == copilot.AssistantMessage {
-			if evt.Data.Content != nil {
-				messages = append(messages, *evt.Data.Content)
+		if evt.Type == copilot.SessionEventTypeAssistantMessage {
+			if content, ok := copilotevents.Content(evt); ok {
+				messages = append(messages, content)
 			}
 		}
 	}

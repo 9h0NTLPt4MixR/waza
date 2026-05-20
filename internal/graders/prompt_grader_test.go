@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	copilot "github.com/github/copilot-sdk/go"
+	"github.com/microsoft/waza/internal/copilotevents"
 	"github.com/microsoft/waza/internal/models"
 	"github.com/microsoft/waza/internal/utils"
 	"github.com/stretchr/testify/require"
@@ -189,15 +190,17 @@ func TestUsingPreviousSessionID(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		t.Logf("Content: %s", *resp.Data.Content)
+		if content, ok := copilotevents.Content(*resp); ok {
+			t.Logf("Content: %s", content)
+		}
 
 		resp, err = session.SendAndWait(context.Background(), copilot.MessageOptions{
 			Prompt: "what was the random string?",
 		})
 		require.NoError(t, err)
 
-		if resp.Data.Content != nil {
-			t.Logf("Content: %s", *resp.Data.Content)
+		if content, ok := copilotevents.Content(*resp); ok {
+			t.Logf("Content: %s", content)
 		}
 
 		err = client.Stop()

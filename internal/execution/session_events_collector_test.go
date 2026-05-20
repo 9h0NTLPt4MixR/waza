@@ -54,8 +54,8 @@ func TestNewSessionEventsCollector(t *testing.T) {
 				Skill: "example",
 			},
 			Success: true,
-			Result: &copilot.Result{
-				Content:         new("Skill \"example\" loaded successfully. Follow the instructions in the skill context."),
+			Result: &copilot.ToolExecutionCompleteResult{
+				Content:         "Skill \"example\" loaded successfully. Follow the instructions in the skill context.",
 				DetailedContent: utils.Ptr("Skill loaded successfully ✅\n\n---\nname: example\ndescription: \"Checks to see if skills are enabled - if you use this skill it prints out yes\"\n---\n"),
 			},
 		},
@@ -85,10 +85,8 @@ func TestNewSessionEventsCollector_Error(t *testing.T) {
 		// we should set the 'ErrorMsg' field.
 
 		coll.On(copilot.SessionEvent{
-			Type: copilot.SessionError,
-			Data: copilot.Data{
-				Message: tc.Message,
-			},
+			Type: copilot.SessionEventTypeSessionError,
+			Data: &copilot.SessionErrorData{Message: derefTestString(tc.Message)},
 		})
 
 		require.Equal(t, tc.Expected, coll.ErrorMessage())
@@ -107,10 +105,10 @@ func TestSessionEventsCollector_OnSkillInvokedCallback(t *testing.T) {
 		})
 
 		coll.On(copilot.SessionEvent{
-			Type: copilot.SkillInvoked,
-			Data: copilot.Data{
-				Name: &skillName,
-				Path: &skillPath,
+			Type: copilot.SessionEventTypeSkillInvoked,
+			Data: &copilot.SkillInvokedData{
+				Name: skillName,
+				Path: skillPath,
 			},
 		})
 
@@ -123,10 +121,10 @@ func TestSessionEventsCollector_OnSkillInvokedCallback(t *testing.T) {
 
 		require.NotPanics(t, func() {
 			coll.On(copilot.SessionEvent{
-				Type: copilot.SkillInvoked,
-				Data: copilot.Data{
-					Name: &skillName,
-					Path: &skillPath,
+				Type: copilot.SessionEventTypeSkillInvoked,
+				Data: &copilot.SkillInvokedData{
+					Name: skillName,
+					Path: skillPath,
 				},
 			})
 		})
@@ -144,12 +142,19 @@ func TestSessionEventsCollector_OnSkillInvokedCallback(t *testing.T) {
 		for i := 0; i < 3; i++ {
 			name := fmt.Sprintf("skill-%d", i)
 			coll.On(copilot.SessionEvent{
-				Type: copilot.SkillInvoked,
-				Data: copilot.Data{Name: &name},
+				Type: copilot.SessionEventTypeSkillInvoked,
+				Data: &copilot.SkillInvokedData{Name: name},
 			})
 		}
 
 		require.Equal(t, 3, count)
 		require.Len(t, coll.SkillInvocations, 3)
 	})
+}
+
+func derefTestString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }

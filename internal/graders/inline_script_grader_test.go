@@ -14,7 +14,6 @@ import (
 	copilot "github.com/github/copilot-sdk/go"
 	"github.com/microsoft/waza/internal/execution"
 	"github.com/microsoft/waza/internal/models"
-	"github.com/microsoft/waza/internal/utils"
 	"github.com/stretchr/testify/require"
 )
 
@@ -240,11 +239,9 @@ func TestWithError(t *testing.T) {
 	collector := execution.NewSessionEventsCollector()
 
 	collector.On(copilot.SessionEvent{
-		Data: copilot.Data{
-			Content: utils.Ptr("oh no there was a fake error"),
-		},
+		Data: &copilot.AssistantMessageData{Content: "oh no there was a fake error"},
 		ID:   "2450ebe2-8dea-4cf8-9c3b-191027e4002e",
-		Type: copilot.AssistantMessage,
+		Type: copilot.SessionEventTypeAssistantMessage,
 	})
 
 	transcript := convertToTranscriptEvents(collector.SessionEvents())

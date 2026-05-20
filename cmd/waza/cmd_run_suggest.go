@@ -15,6 +15,7 @@ import (
 
 	copilot "github.com/github/copilot-sdk/go"
 	waza "github.com/microsoft/waza"
+	"github.com/microsoft/waza/internal/copilotevents"
 	"github.com/microsoft/waza/internal/dataset"
 	"github.com/microsoft/waza/internal/execution"
 	"github.com/microsoft/waza/internal/models"
@@ -623,59 +624,80 @@ func extractCopilotTrace(transcript []models.TranscriptEvent) []string {
 	}
 
 	lines := make([]string, 0, len(transcript))
+	toolNames := map[string]string{}
 	for _, evt := range transcript {
 		switch evt.Type {
-		case copilot.AssistantMessage:
-			if evt.Data.Content == nil {
+		case copilot.SessionEventTypeAssistantMessage:
+			content, ok := copilotevents.Content(evt.SessionEvent)
+			if !ok {
 				continue
 			}
-			msg := compactWhitespace(*evt.Data.Content)
+			msg := compactWhitespace(content)
 			if msg == "" {
 				continue
 			}
 			lines = append(lines, "agent: "+truncateForPrompt(msg, maxSuggestionTraceEntryLen))
-		case copilot.SkillInvoked:
-			if evt.Data.Message != nil {
-				msg := compactWhitespace(*evt.Data.Message)
+		case copilot.SessionEventTypeSkillInvoked:
+			if skill, ok := copilotevents.SkillInvoked(evt.SessionEvent); ok {
+				msg := compactWhitespace(skill.Name)
+				if msg == "" {
+					msg = compactWhitespace(skill.Path)
+				}
 				if msg != "" {
 					lines = append(lines, "skill invoked: "+truncateForPrompt(msg, maxSuggestionTraceEntryLen))
 				}
 			}
-		case copilot.ToolExecutionStart:
-			name := derefOr(evt.Data.ToolName, "<unknown>")
-			args := marshalForPrompt(evt.Data.Arguments, maxSuggestionToolSummaryLen)
+		case copilot.SessionEventTypeToolExecutionStart:
+			start, ok := copilotevents.ToolStart(evt.SessionEvent)
+			if !ok {
+				continue
+			}
+			name := start.ToolName
+			if name == "" {
+				name = "<unknown>"
+			}
+			if start.ToolCallID != "" {
+				toolNames[start.ToolCallID] = name
+			}
+			args := marshalForPrompt(start.Arguments, maxSuggestionToolSummaryLen)
 			if args == "" {
 				lines = append(lines, fmt.Sprintf("tool start: %s", name))
 				continue
 			}
 			lines = append(lines, fmt.Sprintf("tool start: %s args=%s", name, args))
-		case copilot.ToolExecutionComplete, copilot.ToolExecutionPartialResult:
+		case copilot.SessionEventTypeToolExecutionComplete:
+			complete, ok := copilotevents.ToolComplete(evt.SessionEvent)
+			if !ok {
+				continue
+			}
 			parts := []string{"tool result:"}
-			if evt.Data.ToolName != nil {
-				parts = append(parts, "tool="+*evt.Data.ToolName)
+			if name := toolNames[complete.ToolCallID]; name != "" {
+				parts = append(parts, "tool="+name)
 			}
-			if evt.Data.Success != nil {
-				parts = append(parts, fmt.Sprintf("success=%t", *evt.Data.Success))
-			}
-			if evt.Data.Message != nil {
-				msg := compactWhitespace(*evt.Data.Message)
-				if msg != "" {
-					parts = append(parts, "message="+truncateForPrompt(msg, maxSuggestionToolSummaryLen))
-				}
-			}
-			if result := marshalForPrompt(evt.Data.Result, maxSuggestionToolSummaryLen); result != "" {
+			parts = append(parts, fmt.Sprintf("success=%t", complete.Success))
+			if result := marshalForPrompt(complete.Result, maxSuggestionToolSummaryLen); result != "" {
 				parts = append(parts, "result="+result)
 			}
 			lines = append(lines, strings.Join(parts, " "))
-		case copilot.ToolUserRequested:
-			if evt.Data.Message == nil {
+		case copilot.SessionEventTypeToolExecutionPartialResult:
+			partial, ok := copilotevents.ToolPartial(evt.SessionEvent)
+			if !ok {
 				continue
 			}
-			msg := compactWhitespace(*evt.Data.Message)
-			if msg == "" {
+			output := compactWhitespace(partial.PartialOutput)
+			if output == "" {
 				continue
 			}
-			lines = append(lines, "tool user request: "+truncateForPrompt(msg, maxSuggestionTraceEntryLen))
+			lines = append(lines, "tool partial result: "+truncateForPrompt(output, maxSuggestionTraceEntryLen))
+		case copilot.SessionEventTypeToolUserRequested:
+			request, ok := copilotevents.ToolUserRequested(evt.SessionEvent)
+			if !ok {
+				continue
+			}
+			msg := compactWhitespace(request.ToolName)
+			if msg != "" {
+				lines = append(lines, "tool user request: "+truncateForPrompt(msg, maxSuggestionTraceEntryLen))
+			}
 		}
 	}
 
@@ -734,13 +756,6 @@ func truncateForPrompt(s string, maxLen int) string {
 		return s
 	}
 	return string(runes[:maxLen]) + "..."
-}
-
-func derefOr(value *string, fallback string) string {
-	if value == nil || strings.TrimSpace(*value) == "" {
-		return fallback
-	}
-	return *value
 }
 
 func displaySuggestionReport(w io.Writer, modelID, report string) {
