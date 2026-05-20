@@ -440,7 +440,9 @@ func TestPairwiseMode_UsesExecutorTool(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, results.Passed)
 	require.Equal(t, 1.0, results.Score)
-	require.Equal(t, "skill", results.Details["pairwise"].(*models.PairwiseResult).Winner)
+	pairwise, ok := results.Details["pairwise"].(*models.PairwiseResult)
+	require.True(t, ok)
+	require.Equal(t, "skill", pairwise.Winner)
 }
 
 func TestNormalizePairwiseWinner(t *testing.T) {
