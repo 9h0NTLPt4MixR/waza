@@ -98,6 +98,13 @@ func RunSkillWizard(in io.Reader, out io.Writer, initialName string) (*SkillSpec
 		return nil, fmt.Errorf("wizard failed: %w", err)
 	}
 
+	if strings.TrimSpace(name) == "" {
+		return nil, fmt.Errorf("skill name is required")
+	}
+	if strings.TrimSpace(description) == "" {
+		return nil, fmt.Errorf("skill description is required")
+	}
+
 	return &SkillSpec{
 		Name:         strings.TrimSpace(name),
 		Description:  strings.TrimSpace(description),
