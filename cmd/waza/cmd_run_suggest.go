@@ -758,13 +758,6 @@ func truncateForPrompt(s string, maxLen int) string {
 	return string(runes[:maxLen]) + "..."
 }
 
-func derefOr(value *string, fallback string) string {
-	if value == nil || strings.TrimSpace(*value) == "" {
-		return fallback
-	}
-	return *value
-}
-
 func displaySuggestionReport(w io.Writer, modelID, report string) {
 	//nolint:errcheck
 	_, _ = fmt.Fprintln(w)
