@@ -254,8 +254,10 @@ func TestNewCommand_EmptySkillMD_NonTTY_OverwritesWithDefaults(t *testing.T) {
 	// SKILL.md should be overwritten with default content (not empty anymore)
 	data, err := os.ReadFile(filepath.Join(skillDir, "SKILL.md"))
 	require.NoError(t, err)
-	assert.NotEmpty(t, string(data), "empty SKILL.md should be overwritten with defaults")
-	assert.Contains(t, string(data), "name: my-skill", "overwritten SKILL.md should have valid frontmatter")
+	content := string(data)
+	assert.NotEmpty(t, content, "empty SKILL.md should be overwritten with defaults")
+	assert.Contains(t, content, "name: my-skill", "overwritten SKILL.md should have valid frontmatter")
+	assert.NotContains(t, content, "type:", "new SKILL.md frontmatter should not include nonstandard type metadata")
 
 	// Warning should appear in output
 	output := buf.String()
@@ -289,7 +291,9 @@ func TestNewCommand_MalformedSkillMD_NonTTY_OverwritesWithDefaults(t *testing.T)
 	// SKILL.md should be overwritten
 	data, err := os.ReadFile(filepath.Join(skillDir, "SKILL.md"))
 	require.NoError(t, err)
-	assert.Contains(t, string(data), "name: my-skill", "malformed SKILL.md should be overwritten")
+	content := string(data)
+	assert.Contains(t, content, "name: my-skill", "malformed SKILL.md should be overwritten")
+	assert.NotContains(t, content, "type:", "new SKILL.md frontmatter should not include nonstandard type metadata")
 
 	// Warning should appear
 	assert.Contains(t, buf.String(), "empty or malformed")
@@ -348,7 +352,9 @@ func TestNewCommand_NoSkillMD_NonTTY_CreatesEverything(t *testing.T) {
 	// SKILL.md should be created with default content
 	data, err := os.ReadFile(filepath.Join(dir, "skills", "my-skill", "SKILL.md"))
 	require.NoError(t, err)
-	assert.Contains(t, string(data), "name: my-skill")
+	content := string(data)
+	assert.Contains(t, content, "name: my-skill")
+	assert.NotContains(t, content, "type:", "new SKILL.md frontmatter should not include nonstandard type metadata")
 
 	// Output should show "Scaffolding" header
 	output := buf.String()
