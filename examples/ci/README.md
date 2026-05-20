@@ -9,7 +9,7 @@ If you're contributing a skill to [microsoft/skills](https://github.com/microsof
 **📖 [microsoft/skills CI Integration Guide](../../docs/SKILLS_CI_INTEGRATION.md)**
 
 The guide covers:
-- Installation methods (go install, Docker)
+- Installation methods (binary installer, Docker)
 - Skill repository structure
 - Creating evaluation suites
 - CI/CD workflow setup

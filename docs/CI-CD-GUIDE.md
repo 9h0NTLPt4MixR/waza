@@ -14,7 +14,7 @@ Running waza evaluations in CI/CD allows you to:
 
 ## Prerequisites
 
-- Go 1.26+ or waza binary in your PATH
+- waza binary in your PATH (install with the script below)
 - A skill repository with an `eval.yaml` file
 - Credentials for LLM APIs (Copilot SDK, OpenAI, etc.) — usually stored as GitHub Actions secrets
 
@@ -24,20 +24,13 @@ Running waza evaluations in CI/CD allows you to:
 
 ```yaml
 - name: Install waza
-  run: go install github.com/microsoft/waza/cmd/waza@latest
-```
-
-Or use the official installer:
-
-```yaml
-- name: Install waza
   run: curl -fsSL https://raw.githubusercontent.com/microsoft/waza/main/install.sh | bash
 ```
 
 ### Azure DevOps Pipelines
 
 ```yaml
-- script: go install github.com/microsoft/waza/cmd/waza@latest
+- script: curl -fsSL https://raw.githubusercontent.com/microsoft/waza/main/install.sh | bash
   displayName: Install waza
 ```
 
@@ -63,13 +56,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.26'
-
       - name: Install waza
-        run: go install github.com/microsoft/waza/cmd/waza@latest
+        run: curl -fsSL https://raw.githubusercontent.com/microsoft/waza/main/install.sh | bash
 
       - name: Run evaluation
         run: waza run evals/my-skill/eval.yaml \
@@ -118,13 +106,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.26'
-
       - name: Install waza
-        run: go install github.com/microsoft/waza/cmd/waza@latest
+        run: curl -fsSL https://raw.githubusercontent.com/microsoft/waza/main/install.sh | bash
 
       - name: Run evaluation with ${{ matrix.model }}
         run: waza run evals/my-skill/eval.yaml \
@@ -160,13 +143,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.26'
-
       - name: Install waza
-        run: go install github.com/microsoft/waza/cmd/waza@latest
+        run: curl -fsSL https://raw.githubusercontent.com/microsoft/waza/main/install.sh | bash
 
       - name: Run evaluation (current)
         run: waza run evals/my-skill/eval.yaml \
@@ -215,12 +193,7 @@ pool:
   vmImage: 'ubuntu-latest'
 
 steps:
-  - task: GoTool@0
-    inputs:
-      version: '1.26'
-    displayName: Set up Go
-
-  - script: go install github.com/microsoft/waza/cmd/waza@latest
+  - script: curl -fsSL https://raw.githubusercontent.com/microsoft/waza/main/install.sh | bash
     displayName: Install waza
 
   - script: |
@@ -272,11 +245,7 @@ pool:
   vmImage: 'ubuntu-latest'
 
 steps:
-  - task: GoTool@0
-    inputs:
-      version: '1.26'
-
-  - script: go install github.com/microsoft/waza/cmd/waza@latest
+  - script: curl -fsSL https://raw.githubusercontent.com/microsoft/waza/main/install.sh | bash
     displayName: Install waza
 
   - script: |
@@ -422,12 +391,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.26'
       - name: Install waza
-        run: go install github.com/microsoft/waza/cmd/waza@latest
+        run: curl -fsSL https://raw.githubusercontent.com/microsoft/waza/main/install.sh | bash
       - name: Run smoke tests
         run: waza run evals/my-skill/eval.yaml \
           --context-dir evals/my-skill/fixtures \
@@ -439,12 +404,8 @@ jobs:
     if: github.event_name == 'push' || github.event.pull_request.draft == false
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.26'
       - name: Install waza
-        run: go install github.com/microsoft/waza/cmd/waza@latest
+        run: curl -fsSL https://raw.githubusercontent.com/microsoft/waza/main/install.sh | bash
       - name: Run full test suite
         run: waza run evals/my-skill/eval.yaml \
           --context-dir evals/my-skill/fixtures \

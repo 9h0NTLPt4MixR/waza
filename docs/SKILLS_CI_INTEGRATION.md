@@ -8,19 +8,19 @@ Waza is a Go CLI tool for running evaluations on AI agent skills. It's designed 
 
 ## Prerequisites
 
-- **Go 1.26+**: Required for building/installing waza
+- **Go 1.26+**: Required only if building waza from source
 - **Git**: For cloning repositories
 - **GitHub Actions** (for CI): Standard ubuntu-latest runner
 
 ## Installation Methods
 
-### Option 1: Install from Source (Recommended for CI)
+### Option 1: Binary Install (Recommended for CI)
 
 This is the recommended approach for CI/CD pipelines:
 
 ```bash
 # Install latest version
-go install github.com/microsoft/waza/cmd/waza@latest
+curl -fsSL https://raw.githubusercontent.com/microsoft/waza/main/install.sh | bash
 
 # Verify installation
 waza --version
@@ -28,8 +28,8 @@ waza --version
 
 Benefits:
 - No Docker required
-- Fast installation (~30 seconds)
-- Always gets the latest version
+- No Go toolchain required on the runner
+- Downloads the latest release binary
 - Works on all platforms
 
 ### Option 2: Docker
@@ -216,13 +216,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.26'
-      
       - name: Install Waza
-        run: go install github.com/microsoft/waza/cmd/waza@latest
+        run: curl -fsSL https://raw.githubusercontent.com/microsoft/waza/main/install.sh | bash
       
       - name: Run Evaluation
         run: waza run eval/eval.yaml --verbose --output results.json
@@ -452,15 +447,9 @@ Check:
 - Task descriptions are clear
 - Fixtures contain necessary context
 
-### "Go version too old"
+### "Install script failed"
 
-Waza requires Go 1.26+:
-
-```yaml
-- uses: actions/setup-go@v5
-  with:
-    go-version: '1.26'  # Not 1.22 or earlier
-```
+Check that the runner can reach GitHub releases and that `curl`, `bash`, and `tar` are available. If you choose to build from source instead, install Go 1.26+ and Git LFS before running `go build`.
 
 ## Example Workflows
 
@@ -477,10 +466,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.26'
-      - run: go install github.com/microsoft/waza/cmd/waza@latest
+      - run: curl -fsSL https://raw.githubusercontent.com/microsoft/waza/main/install.sh | bash
       - run: waza run eval/eval.yaml --verbose
 ```
 
@@ -495,10 +481,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.26'
-      - run: go install github.com/microsoft/waza/cmd/waza@latest
+      - run: curl -fsSL https://raw.githubusercontent.com/microsoft/waza/main/install.sh | bash
       - run: |
           sed -i "s/model: .*/model: ${{ matrix.model }}/" eval/eval.yaml
           waza run eval/eval.yaml --output results-${{ matrix.model }}.json
@@ -516,10 +499,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.26'
-      - run: go install github.com/microsoft/waza/cmd/waza@latest
+      - run: curl -fsSL https://raw.githubusercontent.com/microsoft/waza/main/install.sh | bash
       - run: waza run eval/eval.yaml --verbose --output nightly-results.json
       - uses: actions/upload-artifact@v4
         with:
