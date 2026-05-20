@@ -23,6 +23,7 @@ func configDetectOptions() []workspace.DetectOption {
 
 	skillsDir := cfg.Paths.Skills
 	evalsDir := cfg.Paths.Evals
+	evalFile := cfg.Files.EvalFile
 
 	if cfg.Dir != "" {
 		skillsDir = filepath.Join(cfg.Dir, skillsDir)
@@ -32,6 +33,7 @@ func configDetectOptions() []workspace.DetectOption {
 	return []workspace.DetectOption{
 		workspace.WithSkillsDir(skillsDir),
 		workspace.WithEvalsDir(evalsDir),
+		workspace.WithEvalFile(evalFile),
 	}
 }
 
@@ -104,7 +106,7 @@ func resolveEvalPath(si *workspace.SkillInfo) (string, error) {
 		return "", err
 	}
 	if evalPath == "" {
-		return "", fmt.Errorf("no eval.yaml found for skill %q", si.Name)
+		return "", fmt.Errorf("no eval file found for skill %q", si.Name)
 	}
 	return evalPath, nil
 }

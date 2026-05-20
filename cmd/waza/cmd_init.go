@@ -230,6 +230,7 @@ func initCommandE(cmd *cobra.Command, args []string, noSkill bool, flagSkillsDir
 	// --- Phase 1: Configuration (if .waza.yaml missing) ---
 	var engine, model string
 	var skillsPath, evalsPath, resultsPath string
+	files := projectconfig.New().Files
 	var createSkill, scaffoldMissing bool
 	engine = projectconfig.DefaultEngine
 	model = projectconfig.DefaultModel
@@ -246,6 +247,7 @@ func initCommandE(cmd *cobra.Command, args []string, noSkill bool, flagSkillsDir
 			skillsPath = cfg.Paths.Skills
 			evalsPath = cfg.Paths.Evals
 			resultsPath = cfg.Paths.Results
+			files = cfg.Files
 		}
 	}
 
@@ -394,7 +396,8 @@ func initCommandE(cmd *cobra.Command, args []string, noSkill bool, flagSkillsDir
 		// --- Phase 2: Discover & Display Inventory (using configured paths) ---
 		inventory = displayInventory(out, absDir,
 			workspace.WithSkillsDir(skillsPath),
-			workspace.WithEvalsDir(evalsPath))
+			workspace.WithEvalsDir(evalsPath),
+			workspace.WithEvalFile(files.EvalFile))
 
 		for _, inv := range inventory {
 			if !inv.HasEval {
@@ -420,11 +423,12 @@ func initCommandE(cmd *cobra.Command, args []string, noSkill bool, flagSkillsDir
 			}
 
 			if scaffoldMissing {
-				scaffoldMissingEvals(absDir, evalsPath, inventory, engine, model)
+				scaffoldMissingEvals(absDir, evalsPath, inventory, engine, model, files)
 				// Re-display inventory showing updated state
 				inventory = displayInventory(out, absDir,
 					workspace.WithSkillsDir(skillsPath),
-					workspace.WithEvalsDir(evalsPath))
+					workspace.WithEvalsDir(evalsPath),
+					workspace.WithEvalFile(files.EvalFile))
 				skillsMissingEvals = 0
 				for _, inv := range inventory {
 					if !inv.HasEval {
@@ -462,7 +466,8 @@ func initCommandE(cmd *cobra.Command, args []string, noSkill bool, flagSkillsDir
 		// Discover inventory using configured paths
 		inventory = displayInventory(out, absDir,
 			workspace.WithSkillsDir(skillsPath),
-			workspace.WithEvalsDir(evalsPath))
+			workspace.WithEvalsDir(evalsPath),
+			workspace.WithEvalFile(files.EvalFile))
 
 		for _, inv := range inventory {
 			if !inv.HasEval {
@@ -472,11 +477,12 @@ func initCommandE(cmd *cobra.Command, args []string, noSkill bool, flagSkillsDir
 		scaffoldMissing = skillsMissingEvals > 0
 
 		if scaffoldMissing {
-			scaffoldMissingEvals(absDir, evalsPath, inventory, engine, model)
+			scaffoldMissingEvals(absDir, evalsPath, inventory, engine, model, files)
 			// Re-display inventory after scaffolding
 			inventory = displayInventory(out, absDir,
 				workspace.WithSkillsDir(skillsPath),
-				workspace.WithEvalsDir(evalsPath))
+				workspace.WithEvalsDir(evalsPath),
+				workspace.WithEvalFile(files.EvalFile))
 			skillsMissingEvals = 0
 			for _, inv := range inventory {
 				if !inv.HasEval {
@@ -543,7 +549,8 @@ func initCommandE(cmd *cobra.Command, args []string, noSkill bool, flagSkillsDir
 		// Re-display final inventory after skill creation
 		displayInventory(out, absDir,
 			workspace.WithSkillsDir(skillsPath),
-			workspace.WithEvalsDir(evalsPath))
+			workspace.WithEvalsDir(evalsPath),
+			workspace.WithEvalFile(files.EvalFile))
 	}
 
 	// --- Phase 6: Next steps (first run only, TTY only) ---
@@ -555,7 +562,7 @@ func initCommandE(cmd *cobra.Command, args []string, noSkill bool, flagSkillsDir
 }
 
 // scaffoldMissingEvals creates eval suites for skills that lack them.
-func scaffoldMissingEvals(absDir, evalsDir string, inventory []skillEntry, engine, model string) {
+func scaffoldMissingEvals(absDir, evalsDir string, inventory []skillEntry, engine, model string, files projectconfig.FilesConfig) {
 	for _, inv := range inventory {
 		if inv.HasEval {
 			continue
@@ -567,8 +574,8 @@ func scaffoldMissingEvals(absDir, evalsDir string, inventory []skillEntry, engin
 		for _, d := range []string{tasksDir, fixturesDir} {
 			os.MkdirAll(d, 0o755) //nolint:errcheck
 		}
-		os.WriteFile(filepath.Join(evalDir, "eval.yaml"), []byte(scaffold.EvalYAML(inv.Name, engine, model)), 0o644) //nolint:errcheck
-		for name, content := range scaffold.TaskFiles(inv.Name) {
+		os.WriteFile(filepath.Join(evalDir, files.EvalFile), []byte(scaffold.EvalYAMLWithTaskGlob(inv.Name, engine, model, files.TaskGlob)), 0o644) //nolint:errcheck
+		for name, content := range scaffold.TaskFilesWithSuffix(files.TaskFileSuffix) {
 			os.WriteFile(filepath.Join(tasksDir, name), []byte(content), 0o644) //nolint:errcheck
 		}
 		os.WriteFile(filepath.Join(fixturesDir, "sample.py"), []byte(scaffold.Fixture()), 0o644) //nolint:errcheck

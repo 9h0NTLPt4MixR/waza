@@ -455,6 +455,49 @@ func TestFindEval_WithCustomEvalsDir(t *testing.T) {
 	}
 }
 
+func TestFindEval_WithCustomEvalFile(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "skills", "my-skill", "SKILL.md"), skillMD("my-skill"))
+	writeFile(t, filepath.Join(root, "evals", "my-skill", "waza-eval.yaml"), "name: test\n")
+
+	ctx, err := DetectContext(root, WithEvalFile("waza-eval.yaml"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ctx.EvalFile != "waza-eval.yaml" {
+		t.Fatalf("expected EvalFile 'waza-eval.yaml', got %q", ctx.EvalFile)
+	}
+
+	evalPath, err := FindEval(ctx, "my-skill")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expected := filepath.Join(root, "evals", "my-skill", "waza-eval.yaml")
+	if evalPath != expected {
+		t.Errorf("expected %q, got %q", expected, evalPath)
+	}
+}
+
+func TestFindEval_CustomEvalFileFallsBackToLegacy(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "skills", "my-skill", "SKILL.md"), skillMD("my-skill"))
+	writeFile(t, filepath.Join(root, "evals", "my-skill", "eval.yaml"), "name: test\n")
+
+	ctx, err := DetectContext(root, WithEvalFile("waza-eval.yaml"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	evalPath, err := FindEval(ctx, "my-skill")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expected := filepath.Join(root, "evals", "my-skill", "eval.yaml")
+	if evalPath != expected {
+		t.Errorf("expected legacy fallback %q, got %q", expected, evalPath)
+	}
+}
+
 func TestDetectContext_GitHubSkillsDir(t *testing.T) {
 	// Skills in .github/skills/ are auto-discovered
 	root := t.TempDir()

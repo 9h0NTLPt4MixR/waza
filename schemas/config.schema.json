@@ -16,13 +16,38 @@
         },
         "evals": {
           "type": "string",
-          "description": "Directory containing eval.yaml files.",
+          "description": "Directory containing eval suites.",
           "default": "evals/"
         },
         "results": {
           "type": "string",
           "description": "Directory where evaluation result JSON files are written.",
           "default": "results/"
+        }
+      },
+      "additionalProperties": false
+    },
+    "files": {
+      "type": "object",
+      "description": "Filename and glob conventions for generated and discovered eval suites.",
+      "properties": {
+        "evalFile": {
+          "type": "string",
+          "description": "Filename for generated eval specs and preferred workspace discovery.",
+          "default": "eval.yaml",
+          "pattern": "^[^/\\\\]+$"
+        },
+        "taskGlob": {
+          "type": "string",
+          "description": "Glob written into generated eval specs to find task files, relative to the eval directory.",
+          "default": "tasks/*.yaml",
+          "minLength": 1
+        },
+        "taskFileSuffix": {
+          "type": "string",
+          "description": "Suffix appended to generated task file basenames.",
+          "default": ".yaml",
+          "pattern": "^[^/\\\\]+$"
         }
       },
       "additionalProperties": false

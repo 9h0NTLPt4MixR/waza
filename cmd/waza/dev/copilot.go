@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/microsoft/waza/internal/execution"
+	"github.com/microsoft/waza/internal/projectconfig"
 	"github.com/microsoft/waza/internal/skill"
 	"github.com/microsoft/waza/internal/spinner"
 	"github.com/microsoft/waza/internal/trigger"
@@ -123,7 +124,11 @@ func resolveWorkspaceEvalDir(skillName string) string {
 	if err != nil {
 		return ""
 	}
-	ctx, err := workspace.DetectContext(wd)
+	cfg, err := projectconfig.Load(wd)
+	if err != nil {
+		cfg = projectconfig.New()
+	}
+	ctx, err := workspace.DetectContext(wd, workspace.WithSkillsDir(cfg.Paths.Skills), workspace.WithEvalsDir(cfg.Paths.Evals), workspace.WithEvalFile(cfg.Files.EvalFile))
 	if err != nil || ctx.Type == workspace.ContextNone {
 		return ""
 	}

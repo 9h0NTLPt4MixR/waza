@@ -1,6 +1,6 @@
 // Package workspace provides unified skill workspace detection for waza commands.
 // It analyzes directory structures to identify single-skill or multi-skill workspaces
-// and locates eval.yaml files using a priority-based search.
+// and locates eval files using a priority-based search.
 package workspace
 
 import (
@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/microsoft/waza/internal/projectconfig"
 	"github.com/microsoft/waza/internal/skill"
 	"github.com/microsoft/waza/internal/utils"
 )
@@ -32,10 +33,15 @@ type DetectOption func(*detectOptions)
 type detectOptions struct {
 	skillsDir string // subdirectory name for skills (default "skills")
 	evalsDir  string // subdirectory name for evals (default "evals")
+	evalFile  string // eval filename (default "eval.yaml")
 }
 
 func defaultDetectOptions() detectOptions {
-	return detectOptions{skillsDir: "skills", evalsDir: "evals"}
+	return detectOptions{
+		skillsDir: projectconfig.DefaultSkillsDir,
+		evalsDir:  projectconfig.DefaultEvalsDir,
+		evalFile:  projectconfig.DefaultEvalFile,
+	}
 }
 
 // WithSkillsDir overrides the skills subdirectory name used during detection.
@@ -56,12 +62,21 @@ func WithEvalsDir(dir string) DetectOption {
 	}
 }
 
+// WithEvalFile overrides the eval filename used during discovery.
+func WithEvalFile(filename string) DetectOption {
+	return func(o *detectOptions) {
+		if filename != "" {
+			o.evalFile = filename
+		}
+	}
+}
+
 // SkillInfo holds information about a discovered skill.
 type SkillInfo struct {
 	Name      string // skill name from SKILL.md frontmatter
 	Dir       string // absolute path to the skill directory (containing SKILL.md)
 	SkillPath string // absolute path to SKILL.md
-	EvalPath  string // absolute path to eval.yaml (empty if not found)
+	EvalPath  string // absolute path to the eval file (empty if not found)
 }
 
 // WorkspaceContext represents the detected workspace.
@@ -70,6 +85,7 @@ type WorkspaceContext struct {
 	Root     string      // workspace root directory
 	Skills   []SkillInfo // discovered skills
 	EvalsDir string      // configured evals subdirectory name (default "evals")
+	EvalFile string      // configured eval filename (default "eval.yaml")
 }
 
 // DetectContext analyzes the given directory to determine workspace type.
@@ -96,6 +112,7 @@ func DetectContext(dir string, opts ...DetectOption) (*WorkspaceContext, error) 
 			Root:     absDir,
 			Skills:   []SkillInfo{info},
 			EvalsDir: o.evalsDir,
+			EvalFile: o.evalFile,
 		}, nil
 	}
 
@@ -114,6 +131,7 @@ func DetectContext(dir string, opts ...DetectOption) (*WorkspaceContext, error) 
 				Root:     current,
 				Skills:   []SkillInfo{info},
 				EvalsDir: o.evalsDir,
+				EvalFile: o.evalFile,
 			}, nil
 		}
 	}
@@ -153,6 +171,7 @@ func DetectContext(dir string, opts ...DetectOption) (*WorkspaceContext, error) 
 			Root:     absDir,
 			Skills:   skills,
 			EvalsDir: o.evalsDir,
+			EvalFile: o.evalFile,
 		}, nil
 	}
 
@@ -167,6 +186,7 @@ func DetectContext(dir string, opts ...DetectOption) (*WorkspaceContext, error) 
 			Root:     absDir,
 			Skills:   skills,
 			EvalsDir: o.evalsDir,
+			EvalFile: o.evalFile,
 		}, nil
 	}
 
@@ -176,6 +196,7 @@ func DetectContext(dir string, opts ...DetectOption) (*WorkspaceContext, error) 
 		Root:     absDir,
 		Skills:   nil,
 		EvalsDir: o.evalsDir,
+		EvalFile: o.evalFile,
 	}, nil
 }
 
@@ -189,10 +210,10 @@ func FindSkill(ctx *WorkspaceContext, name string) (*SkillInfo, error) {
 	return nil, fmt.Errorf("skill %q not found in workspace", name)
 }
 
-// FindEval finds eval.yaml for a skill using priority order:
-// 1. {root}/evals/{skill-name}/eval.yaml  (separated convention)
-// 2. {skill-dir}/evals/eval.yaml          (nested subdir)
-// 3. {skill-dir}/eval.yaml                (co-located/legacy)
+// FindEval finds an eval file for a skill using priority order:
+// 1. {root}/evals/{skill-name}/{eval-file}  (separated convention)
+// 2. {skill-dir}/evals/{eval-file}          (nested subdir)
+// 3. {skill-dir}/{eval-file}                (co-located/legacy)
 // Returns empty string if none found (not an error).
 func FindEval(wsCtx *WorkspaceContext, skillName string) (string, error) {
 	si, err := FindSkill(wsCtx, skillName)
@@ -202,37 +223,54 @@ func FindEval(wsCtx *WorkspaceContext, skillName string) (string, error) {
 
 	evalsDir := wsCtx.EvalsDir
 	if evalsDir == "" {
-		evalsDir = "evals"
+		evalsDir = projectconfig.DefaultEvalsDir
 	}
+	evalFiles := evalFilenames(wsCtx.EvalFile)
 
 	// Priority 1: separated convention
-	var separated string
+	for _, evalFile := range evalFiles {
+		var separated string
 
-	// in some situations we have an absolute path to the evalsDir (for instance, from .waza.yaml)
-	// and it'd be incorrect to use a relative path.
-	if !filepath.IsAbs(evalsDir) {
-		separated = filepath.Join(wsCtx.Root, evalsDir, skillName, "eval.yaml")
-	} else {
-		separated = filepath.Join(evalsDir, skillName, "eval.yaml")
-	}
+		// in some situations we have an absolute path to the evalsDir (for instance, from .waza.yaml)
+		// and it'd be incorrect to use a relative path.
+		if !filepath.IsAbs(evalsDir) {
+			separated = filepath.Join(wsCtx.Root, evalsDir, skillName, evalFile)
+		} else {
+			separated = filepath.Join(evalsDir, skillName, evalFile)
+		}
 
-	if isFile(separated) {
-		return separated, nil
+		if isFile(separated) {
+			return separated, nil
+		}
 	}
 
 	// Priority 2: nested subdir inside skill directory
-	nested := filepath.Join(si.Dir, "evals", "eval.yaml")
-	if isFile(nested) {
-		return nested, nil
+	for _, evalFile := range evalFiles {
+		nested := filepath.Join(si.Dir, "evals", evalFile)
+		if isFile(nested) {
+			return nested, nil
+		}
 	}
 
 	// Priority 3: co-located / legacy
-	colocated := filepath.Join(si.Dir, "eval.yaml")
-	if isFile(colocated) {
-		return colocated, nil
+	for _, evalFile := range evalFiles {
+		colocated := filepath.Join(si.Dir, evalFile)
+		if isFile(colocated) {
+			return colocated, nil
+		}
 	}
 
 	return "", nil
+}
+
+func evalFilenames(configured string) []string {
+	if configured == "" {
+		configured = projectconfig.DefaultEvalFile
+	}
+	if configured == projectconfig.DefaultEvalFile {
+		return []string{projectconfig.DefaultEvalFile}
+	}
+	return []string{configured, projectconfig.DefaultEvalFile}
 }
 
 // tryParseSkill checks if dir contains SKILL.md or .agent.md and parses it.
