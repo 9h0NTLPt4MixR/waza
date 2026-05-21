@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.33.0] - 2026-05-21
 
+Note: This release includes the changes previously prepared under 0.32.0, which was not published.
+
 ### Added
 
 - **Configurable eval file naming** — `.waza.yaml` can now configure `files.evalFile`, `files.taskGlob`, and `files.taskFileSuffix`, with the new naming carried through scaffolding, workspace discovery, discovery mode, schemas, and docs while preserving the existing `eval.yaml` and `tasks/*.yaml` defaults (#254, closes #232)
@@ -450,8 +452,8 @@ pip install waza
 - YAML escaping for regex patterns with backslashes
 - Progress bar now shows 100% on completion
 
-[Unreleased]: https://github.com/microsoft/waza/compare/azd-ext-microsoft-azd-waza_0.33.0...HEAD
-[0.33.0]: https://github.com/microsoft/waza/compare/azd-ext-microsoft-azd-waza_0.31.0...azd-ext-microsoft-azd-waza_0.33.0
+[Unreleased]: https://github.com/microsoft/waza/compare/v0.33.0...HEAD
+[0.33.0]: https://github.com/microsoft/waza/compare/v0.31.0...v0.33.0
 [0.31.0]: https://github.com/microsoft/waza/compare/v0.30.1...v0.31.0
 [0.30.1]: https://github.com/microsoft/waza/compare/v0.30.0...v0.30.1
 [0.30.0]: https://github.com/microsoft/waza/compare/v0.29.0...v0.30.0

@@ -7,8 +7,8 @@ This document describes how the Waza release process works. All releases are han
 Create and push a semver tag:
 
 ```bash
-git tag v0.33.0
-git push origin v0.33.0
+git tag vX.Y.Z
+git push origin vX.Y.Z
 ```
 
 This triggers the full pipeline: CLI build → extension build → GitHub Release → extension publish → version sync.
