@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -33,6 +34,9 @@ func (r *blockingBenchmarkRunner) RunBenchmark(ctx context.Context) (*models.Eva
 }
 
 func TestRunCommand_CancelsOnInterrupt(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping on Windows: Process.Signal(SIGTERM) is not supported")
+	}
 	resetRunGlobals()
 
 	dir := t.TempDir()

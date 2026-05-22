@@ -741,7 +741,13 @@ func runSingleModel(cmd *cobra.Command, spec *models.EvalSpec, specPath string, 
 	}
 
 	// Run benchmark with signal cancellation so Ctrl+C stops the long-running work.
-	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+	var ctx context.Context
+	var stop context.CancelFunc
+	if cmd != nil {
+		ctx, stop = signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+	} else {
+		ctx, stop = signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	}
 	defer stop()
 
 	fmt.Printf("Running benchmark: %s\n", spec.Name)
