@@ -31,7 +31,10 @@ type graderSession interface {
 // judging prompt on, plus a cleanup func that the caller must defer.
 //
 // When gradingContext.CopilotClient is non-nil (production: shared SDK
-// client plumbed by the runner), the cleanup only Disconnects the session.
+// client plumbed by the runner), the cleanup Disconnects the session and,
+// for sessions that openGradingSession itself created (resumeSessionID == ""),
+// also calls DeleteSession so we don't leak server-side sessions across long
+// eval runs. Resumed sessions are left intact for the task runner to manage.
 // When nil (legacy / standalone test path), a per-call copilot.Client is
 // constructed and Stopped on cleanup, preserving the previous behavior.
 func openGradingSession(
@@ -48,7 +51,8 @@ func openGradingSession(
 			sess execution.CopilotSession
 			err  error
 		)
-		if resumeSessionID != "" {
+		freshSession := resumeSessionID == ""
+		if !freshSession {
 			sess, err = client.ResumeSessionWithOptions(ctx, resumeSessionID, &copilot.ResumeSessionConfig{
 				OnPermissionRequest: copilot.PermissionHandler.ApproveAll,
 				Model:               model,
@@ -68,8 +72,16 @@ func openGradingSession(
 			return nil, func() {}, fmt.Errorf("failed to start up copilot session for prompt grading: %w", err)
 		}
 		cleanup := func() {
+			sessionID := sess.SessionID()
 			if err := sess.Disconnect(); err != nil {
 				slog.ErrorContext(ctx, "error disconnecting prompt grader session", "error", err)
+			}
+			// Only delete sessions we created ourselves; resumed sessions
+			// belong to the task runner and must outlive the grader.
+			if freshSession && sessionID != "" {
+				if err := client.DeleteSession(ctx, sessionID); err != nil {
+					slog.ErrorContext(ctx, "error deleting prompt grader session", "sessionID", sessionID, "error", err)
+				}
 			}
 		}
 		return sess, cleanup, nil

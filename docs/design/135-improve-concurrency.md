@@ -227,9 +227,9 @@ CopilotClient execution.CopilotClient
 
 Adopted: the SDK client is a **process-wide** singleton, not per-engine. Concretely:
 
-- `internal/execution/sdkclient.go` exposes `SharedClient(opts) (CopilotClient, error)` guarded by `sync.Once`. First call constructs the client; subsequent calls return the same instance.
+- `internal/execution/sdkclient.go` exposes `SharedClient(opts) CopilotClient` guarded by `sync.Once`. First call constructs the client; subsequent calls return the same instance.
 - `CopilotEngine` consumes the shared client by default. **`CopilotEngine.Shutdown` does not call `client.Stop()`** when the engine was built on top of the shared client — it only deletes that engine's sessions and cleans workspaces.
-- A separate `execution.ShutdownSharedClient(ctx) error` is invoked once from `cmd/waza` (top-level, after the multi-model loop in `runCommandForSpec`) to actually `Stop()` the underlying SDK client.
+- A separate `execution.ShutdownSharedClient(ctx) error` is invoked once from `cmd/waza` (deferred at the top of `runCommandE`, after the multi-model loop completes) to actually `Stop()` the underlying SDK client.
 - Existing `CopilotEngineBuilderOptions.NewCopilotClient` remains a per-engine override (used by tests) and bypasses the singleton entirely.
 
 This satisfies B3: across multiple `CopilotEngine` lifecycles in a single `waza run` (one per `--model`), the underlying SDK process is started once and stopped once.
