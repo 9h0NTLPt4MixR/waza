@@ -27,6 +27,13 @@ const (
 	httpTimeout  = 5 * time.Second
 )
 
+const (
+	// InstallScriptURL is the official installer used by update notices and the update command.
+	InstallScriptURL = "https://raw.githubusercontent.com/microsoft/waza/main/install.sh"
+	// DefaultUpdateCommand is the recommended command for upgrading waza.
+	DefaultUpdateCommand = "waza update"
+)
+
 type releaseInfo struct {
 	TagName string `json:"tag_name"`
 }
@@ -254,7 +261,7 @@ func PrintNotice(result *CheckResult, installCmd string) bool {
 		return false
 	}
 	if installCmd == "" {
-		installCmd = "curl -fsSL https://raw.githubusercontent.com/microsoft/waza/main/install.sh | bash"
+		installCmd = DefaultUpdateCommand
 	}
 	fmt.Fprintf(os.Stderr, "\nA newer version of waza is available: v%s \u2192 v%s. Run: %s\n",
 		result.CurrentVersion, result.LatestVersion, installCmd)

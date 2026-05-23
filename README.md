@@ -63,10 +63,10 @@ azd waza run examples/code-explainer/eval.yaml -v
 Waza automatically checks for new versions in the background. If an update is available, a notice appears after command output:
 
 ```
-A newer version of waza is available: v0.24.0 → v0.28.0. Run: curl -fsSL ... | bash
+A newer version of waza is available: v0.24.0 → v0.28.0. Run: waza update
 ```
 
-The check is non-blocking (never slows commands), cached for 24 hours, and can be disabled with `--no-update-check` or `WAZA_NO_UPDATE_CHECK=1`.
+Run `waza update` to download and execute the official installer after an explicit confirmation prompt. Use `waza update --yes` to skip the prompt in scripted environments. The check is non-blocking (never slows commands), cached for 24 hours, and can be disabled with `--no-update-check` or `WAZA_NO_UPDATE_CHECK=1`.
 
 ## Quick Start
 
@@ -100,6 +100,9 @@ make build
 
 # Initialize a project workspace
 waza init [directory]
+
+# Update waza to the latest release
+waza update
 
 # Create a new skill
 waza new skill skill-name
@@ -143,6 +146,20 @@ waza tokens suggest skills/
 ```
 
 ## Commands
+
+### `waza update`
+
+Update waza to the latest release by running the official installer after confirmation.
+
+| Flag | Description |
+|------|-------------|
+| `--yes`, `-y` | Skip the confirmation prompt |
+
+**Example:**
+```bash
+waza update
+waza update --yes
+```
 
 ### `waza init [directory]`
 

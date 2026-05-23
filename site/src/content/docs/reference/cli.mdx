@@ -15,6 +15,22 @@ waza --version
 
 For native Windows PowerShell, download the Windows binary from the [latest release](https://github.com/microsoft/waza/releases/latest), rename it to `waza.exe`, and place it in a directory on your `PATH`.
 
+## waza update
+
+Update waza to the latest release.
+
+```bash
+waza update
+```
+
+The command prompts for confirmation, then downloads and runs the official installer for the current shell environment. Use `--yes` to skip the prompt in scripted environments:
+
+```bash
+waza update --yes
+```
+
+The installer requires Bash and auto-detects macOS, Linux, or Windows Bash environments such as Git Bash, MSYS2, and Cygwin. For native Windows PowerShell, download the Windows binary from the [latest release](https://github.com/microsoft/waza/releases/latest), rename it to `waza.exe`, and place it in a directory on your `PATH`.
+
 ## waza run
 
 Run an evaluation benchmark.
