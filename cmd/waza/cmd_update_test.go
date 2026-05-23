@@ -18,18 +18,20 @@ func TestUpdateCommand_ConfirmedRunsInstaller(t *testing.T) {
 	var ran bool
 
 	cmd := newUpdateCommandWithOptions(&updateCommandOptions{
-		InstallerURL: "https://example.com/install.sh",
+		BashInstallerURL: "https://example.com/install.sh",
+		GOOS:             "linux",
 		LookPath: func(name string) (string, error) {
 			require.Equal(t, "bash", name)
 			return "/usr/bin/bash", nil
 		},
-		RunCommand: func(ctx context.Context, name string, args []string, stdin io.Reader, out, errOut io.Writer) error {
+		RunCommand: func(ctx context.Context, name string, args []string, env []string, stdin io.Reader, out, errOut io.Writer) error {
 			ran = true
 			assert.Equal(t, "/usr/bin/bash", name)
 			require.Len(t, args, 4)
 			assert.Equal(t, "-c", args[0])
 			assert.Contains(t, args[1], "curl -fsSL")
 			assert.Equal(t, "https://example.com/install.sh", args[3])
+			assert.Empty(t, env)
 			return nil
 		},
 	})
@@ -41,7 +43,7 @@ func TestUpdateCommand_ConfirmedRunsInstaller(t *testing.T) {
 	require.NoError(t, cmd.Execute())
 	assert.True(t, ran)
 	assert.Contains(t, stdout.String(), "Continue? [y/N]:")
-	assert.Contains(t, stdout.String(), "Updating waza")
+	assert.Contains(t, stdout.String(), "Bash installer")
 	assert.Contains(t, stdout.String(), "Update complete")
 }
 
@@ -49,7 +51,8 @@ func TestUpdateCommand_DeclinedDoesNotRunInstaller(t *testing.T) {
 	var stdout bytes.Buffer
 
 	cmd := newUpdateCommandWithOptions(&updateCommandOptions{
-		RunCommand: func(context.Context, string, []string, io.Reader, io.Writer, io.Writer) error {
+		GOOS: "linux",
+		RunCommand: func(context.Context, string, []string, []string, io.Reader, io.Writer, io.Writer) error {
 			t.Fatal("installer should not run when update is declined")
 			return nil
 		},
@@ -68,10 +71,11 @@ func TestUpdateCommand_YesFlagSkipsConfirmation(t *testing.T) {
 	var ran bool
 
 	cmd := newUpdateCommandWithOptions(&updateCommandOptions{
+		GOOS: "linux",
 		LookPath: func(name string) (string, error) {
 			return "/usr/bin/bash", nil
 		},
-		RunCommand: func(context.Context, string, []string, io.Reader, io.Writer, io.Writer) error {
+		RunCommand: func(context.Context, string, []string, []string, io.Reader, io.Writer, io.Writer) error {
 			ran = true
 			return nil
 		},
@@ -88,10 +92,11 @@ func TestUpdateCommand_YesFlagSkipsConfirmation(t *testing.T) {
 
 func TestUpdateCommand_MissingBashReturnsGuidance(t *testing.T) {
 	cmd := newUpdateCommandWithOptions(&updateCommandOptions{
+		GOOS: "linux",
 		LookPath: func(name string) (string, error) {
 			return "", errors.New("not found")
 		},
-		RunCommand: func(context.Context, string, []string, io.Reader, io.Writer, io.Writer) error {
+		RunCommand: func(context.Context, string, []string, []string, io.Reader, io.Writer, io.Writer) error {
 			t.Fatal("installer should not run when bash is missing")
 			return nil
 		},
@@ -106,10 +111,11 @@ func TestUpdateCommand_MissingBashReturnsGuidance(t *testing.T) {
 
 func TestUpdateCommand_RunFailureIncludesContext(t *testing.T) {
 	cmd := newUpdateCommandWithOptions(&updateCommandOptions{
+		GOOS: "linux",
 		LookPath: func(name string) (string, error) {
 			return "/usr/bin/bash", nil
 		},
-		RunCommand: func(context.Context, string, []string, io.Reader, io.Writer, io.Writer) error {
+		RunCommand: func(context.Context, string, []string, []string, io.Reader, io.Writer, io.Writer) error {
 			return errors.New("boom")
 		},
 	})
@@ -119,6 +125,99 @@ func TestUpdateCommand_RunFailureIncludesContext(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "running waza installer")
 	assert.Contains(t, err.Error(), "boom")
+}
+
+func TestUpdateCommand_DarwinUsesBashInstaller(t *testing.T) {
+	var ran bool
+	cmd := newUpdateCommandWithOptions(&updateCommandOptions{
+		BashInstallerURL: "https://example.com/install.sh",
+		GOOS:             "darwin",
+		LookPath: func(name string) (string, error) {
+			assert.Equal(t, "bash", name)
+			return "/bin/bash", nil
+		},
+		RunCommand: func(ctx context.Context, name string, args []string, env []string, stdin io.Reader, out, errOut io.Writer) error {
+			ran = true
+			assert.Equal(t, "/bin/bash", name)
+			assert.Equal(t, "https://example.com/install.sh", args[3])
+			assert.Empty(t, env)
+			return nil
+		},
+	})
+	cmd.SetArgs([]string{"--yes"})
+
+	require.NoError(t, cmd.Execute())
+	assert.True(t, ran)
+}
+
+func TestUpdateCommand_WindowsUsesPowerShellInstaller(t *testing.T) {
+	var stdout bytes.Buffer
+	var lookups []string
+	var ran bool
+	cmd := newUpdateCommandWithOptions(&updateCommandOptions{
+		PowerShellInstallerURL: "https://example.com/install.ps1",
+		GOOS:                   "windows",
+		ExecutablePath:         "C:/tools/waza.exe",
+		LookPath: func(name string) (string, error) {
+			lookups = append(lookups, name)
+			if name == "pwsh" {
+				return "", errors.New("not found")
+			}
+			return `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`, nil
+		},
+		RunCommand: func(ctx context.Context, name string, args []string, env []string, stdin io.Reader, out, errOut io.Writer) error {
+			ran = true
+			assert.Contains(t, name, "powershell.exe")
+			require.Len(t, args, 6)
+			assert.Equal(t, "-NoProfile", args[0])
+			assert.Equal(t, "-ExecutionPolicy", args[1])
+			assert.Equal(t, "Bypass", args[2])
+			assert.Equal(t, "-Command", args[3])
+			assert.Contains(t, args[4], "Invoke-RestMethod")
+			assert.Equal(t, "https://example.com/install.ps1", args[5])
+			require.Len(t, env, 2)
+			assert.Contains(t, env[0], "WAZA_UPDATE_PARENT_PID=")
+			assert.Equal(t, "WAZA_INSTALL_DIR=C:/tools", env[1])
+			return nil
+		},
+	})
+	cmd.SetArgs([]string{"--yes"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stdout)
+
+	require.NoError(t, cmd.Execute())
+	assert.True(t, ran)
+	assert.Equal(t, []string{"pwsh", "powershell"}, lookups)
+	assert.Contains(t, stdout.String(), "PowerShell installer")
+	assert.Contains(t, stdout.String(), "Update started")
+}
+
+func TestUpdateCommand_MissingPowerShellReturnsGuidance(t *testing.T) {
+	cmd := newUpdateCommandWithOptions(&updateCommandOptions{
+		GOOS: "windows",
+		LookPath: func(name string) (string, error) {
+			return "", errors.New("not found")
+		},
+		RunCommand: func(context.Context, string, []string, []string, io.Reader, io.Writer, io.Writer) error {
+			t.Fatal("installer should not run when PowerShell is missing")
+			return nil
+		},
+	})
+	cmd.SetArgs([]string{"--yes"})
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "PowerShell is required")
+	assert.Contains(t, err.Error(), latestReleaseURL)
+}
+
+func TestUpdateCommand_UnsupportedOS(t *testing.T) {
+	cmd := newUpdateCommandWithOptions(&updateCommandOptions{GOOS: "freebsd"})
+	cmd.SetArgs([]string{"--yes"})
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported OS")
 }
 
 func TestRootCommand_RegistersUpdateCommand(t *testing.T) {

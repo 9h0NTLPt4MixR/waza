@@ -28,8 +28,12 @@ const (
 )
 
 const (
-	// InstallScriptURL is the official installer used by update notices and the update command.
-	InstallScriptURL = "https://raw.githubusercontent.com/microsoft/waza/main/install.sh"
+	// BashInstallScriptURL is the official Bash installer for macOS, Linux, and Windows Bash environments.
+	BashInstallScriptURL = "https://raw.githubusercontent.com/microsoft/waza/main/install.sh"
+	// PowerShellInstallScriptURL is the official PowerShell installer for native Windows environments.
+	PowerShellInstallScriptURL = "https://raw.githubusercontent.com/microsoft/waza/main/install.ps1"
+	// InstallScriptURL is the default Unix-like installer URL retained for existing callers.
+	InstallScriptURL = BashInstallScriptURL
 	// DefaultUpdateCommand is the recommended command for upgrading waza.
 	DefaultUpdateCommand = "waza update"
 )

@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -17,9 +19,21 @@ import (
 const latestReleaseURL = "https://github.com/microsoft/waza/releases/latest"
 
 type updateCommandOptions struct {
-	InstallerURL string
-	LookPath     func(string) (string, error)
-	RunCommand   func(context.Context, string, []string, io.Reader, io.Writer, io.Writer) error
+	BashInstallerURL       string
+	PowerShellInstallerURL string
+	GOOS                   string
+	ExecutablePath         string
+	LookPath               func(string) (string, error)
+	RunCommand             func(context.Context, string, []string, []string, io.Reader, io.Writer, io.Writer) error
+}
+
+type updateInstaller struct {
+	Name       string
+	ScriptURL  string
+	Candidates []string
+	Args       []string
+	Env        []string
+	Async      bool
 }
 
 func newUpdateCommand() *cobra.Command {
@@ -33,14 +47,15 @@ func newUpdateCommandWithOptions(options *updateCommandOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "Update waza to the latest release",
-		Long: fmt.Sprintf(`Update waza to the latest release.
+		Long: `Update waza to the latest release.
 
-This command downloads and runs the official installer:
-  %s
+This command downloads and runs the official installer for your OS:
+  macOS/Linux: Bash installer
+  Windows: PowerShell installer
 
-The installer detects the OS and architecture for the current shell environment,
-downloads the matching release asset, verifies its checksum, and replaces the
-waza binary.`, opts.InstallerURL),
+The selected installer detects the architecture for the current environment,
+downloads the matching release asset, verifies its checksum, and updates the
+waza binary.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runUpdateCommand(cmd, opts, yes)
@@ -54,10 +69,15 @@ waza binary.`, opts.InstallerURL),
 
 func normalizeUpdateCommandOptions(options *updateCommandOptions) updateCommandOptions {
 	opts := updateCommandOptions{
-		InstallerURL: versionpkg.InstallScriptURL,
-		LookPath:     exec.LookPath,
-		RunCommand: func(ctx context.Context, name string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+		BashInstallerURL:       versionpkg.BashInstallScriptURL,
+		PowerShellInstallerURL: versionpkg.PowerShellInstallScriptURL,
+		GOOS:                   runtime.GOOS,
+		LookPath:               exec.LookPath,
+		RunCommand: func(ctx context.Context, name string, args []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error {
 			cmd := exec.CommandContext(ctx, name, args...)
+			if len(env) > 0 {
+				cmd.Env = append(os.Environ(), env...)
+			}
 			cmd.Stdin = stdin
 			cmd.Stdout = stdout
 			cmd.Stderr = stderr
@@ -65,10 +85,24 @@ func normalizeUpdateCommandOptions(options *updateCommandOptions) updateCommandO
 		},
 	}
 	if options == nil {
+		if executablePath, err := os.Executable(); err == nil {
+			opts.ExecutablePath = executablePath
+		}
 		return opts
 	}
-	if options.InstallerURL != "" {
-		opts.InstallerURL = options.InstallerURL
+	if options.BashInstallerURL != "" {
+		opts.BashInstallerURL = options.BashInstallerURL
+	}
+	if options.PowerShellInstallerURL != "" {
+		opts.PowerShellInstallerURL = options.PowerShellInstallerURL
+	}
+	if options.GOOS != "" {
+		opts.GOOS = options.GOOS
+	}
+	if options.ExecutablePath != "" {
+		opts.ExecutablePath = options.ExecutablePath
+	} else if executablePath, err := os.Executable(); err == nil {
+		opts.ExecutablePath = executablePath
 	}
 	if options.LookPath != nil {
 		opts.LookPath = options.LookPath
@@ -82,9 +116,13 @@ func normalizeUpdateCommandOptions(options *updateCommandOptions) updateCommandO
 func runUpdateCommand(cmd *cobra.Command, opts updateCommandOptions, yes bool) error {
 	out := cmd.OutOrStdout()
 	errOut := cmd.ErrOrStderr()
+	installer, err := installerForOS(opts.GOOS, opts)
+	if err != nil {
+		return err
+	}
 
 	if !yes {
-		ok, err := confirmUpdate(cmd.InOrStdin(), out, opts.InstallerURL)
+		ok, err := confirmUpdate(cmd.InOrStdin(), out, installer)
 		if err != nil {
 			return err
 		}
@@ -94,23 +132,66 @@ func runUpdateCommand(cmd *cobra.Command, opts updateCommandOptions, yes bool) e
 		}
 	}
 
-	bashPath, err := opts.LookPath("bash")
+	commandPath, err := lookPathAny(opts.LookPath, installer.Candidates)
 	if err != nil {
-		return missingBashError()
+		return missingInstallerError(installer)
 	}
 
-	fmt.Fprintln(out, "Updating waza...")
-	args := []string{"-c", `set -euo pipefail; curl -fsSL "$1" | bash`, "waza-installer", opts.InstallerURL}
-	if err := opts.RunCommand(cmd.Context(), bashPath, args, cmd.InOrStdin(), out, errOut); err != nil {
+	fmt.Fprintf(out, "Updating waza with the %s installer...\n", installer.Name)
+	if err := opts.RunCommand(cmd.Context(), commandPath, installer.Args, installer.Env, cmd.InOrStdin(), out, errOut); err != nil {
 		return fmt.Errorf("running waza installer: %w", err)
 	}
 
-	fmt.Fprintln(out, "Update complete.")
+	if installer.Async {
+		fmt.Fprintln(out, "Update started. The installer will finish after this waza process exits.")
+	} else {
+		fmt.Fprintln(out, "Update complete.")
+	}
 	return nil
 }
 
-func confirmUpdate(in io.Reader, out io.Writer, installerURL string) (bool, error) {
-	fmt.Fprintf(out, "waza update will download and run the official installer:\n  %s\n\nContinue? [y/N]: ", installerURL)
+func installerForOS(goos string, opts updateCommandOptions) (updateInstaller, error) {
+	switch goos {
+	case "darwin", "linux":
+		return updateInstaller{
+			Name:       "Bash",
+			ScriptURL:  opts.BashInstallerURL,
+			Candidates: []string{"bash"},
+			Args:       []string{"-c", `set -euo pipefail; curl -fsSL "$1" | bash`, "waza-installer", opts.BashInstallerURL},
+		}, nil
+	case "windows":
+		script := `$ErrorActionPreference = 'Stop'; Invoke-Expression (Invoke-RestMethod -Uri $args[0])`
+		env := []string{fmt.Sprintf("WAZA_UPDATE_PARENT_PID=%d", os.Getpid())}
+		if opts.ExecutablePath != "" {
+			env = append(env, fmt.Sprintf("WAZA_INSTALL_DIR=%s", filepath.Dir(opts.ExecutablePath)))
+		}
+		return updateInstaller{
+			Name:       "PowerShell",
+			ScriptURL:  opts.PowerShellInstallerURL,
+			Candidates: []string{"pwsh", "powershell"},
+			Args:       []string{"-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script, opts.PowerShellInstallerURL},
+			Env:        env,
+			Async:      true,
+		}, nil
+	default:
+		return updateInstaller{}, fmt.Errorf("unsupported OS for waza update: %s", goos)
+	}
+}
+
+func lookPathAny(lookPath func(string) (string, error), names []string) (string, error) {
+	var errs []error
+	for _, name := range names {
+		path, err := lookPath(name)
+		if err == nil {
+			return path, nil
+		}
+		errs = append(errs, fmt.Errorf("%s: %w", name, err))
+	}
+	return "", errors.Join(errs...)
+}
+
+func confirmUpdate(in io.Reader, out io.Writer, installer updateInstaller) (bool, error) {
+	fmt.Fprintf(out, "waza update will download and run the official %s installer:\n  %s\n\nContinue? [y/N]: ", installer.Name, installer.ScriptURL)
 	answer, err := bufio.NewReader(in).ReadString('\n')
 	if err != nil && !errors.Is(err, io.EOF) {
 		return false, fmt.Errorf("reading confirmation: %w", err)
@@ -124,9 +205,9 @@ func confirmUpdate(in io.Reader, out io.Writer, installerURL string) (bool, erro
 	}
 }
 
-func missingBashError() error {
-	if runtime.GOOS == "windows" {
-		return fmt.Errorf("bash is required to run the waza installer; install Git Bash, MSYS2, or Cygwin, or download the native Windows binary from %s", latestReleaseURL)
+func missingInstallerError(installer updateInstaller) error {
+	if installer.Name == "PowerShell" {
+		return fmt.Errorf("PowerShell is required to run the native Windows waza installer; install PowerShell or download the native Windows binary from %s", latestReleaseURL)
 	}
 	return fmt.Errorf("bash is required to run the waza installer; install bash or download a release binary from %s", latestReleaseURL)
 }
