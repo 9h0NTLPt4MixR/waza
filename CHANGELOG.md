@@ -478,8 +478,8 @@ pip install waza
 - YAML escaping for regex patterns with backslashes
 - Progress bar now shows 100% on completion
 
-[Unreleased]: https://github.com/microsoft/waza/compare/azd-ext-microsoft-azd-waza_0.34.0...HEAD
-[0.34.0]: https://github.com/microsoft/waza/compare/azd-ext-microsoft-azd-waza_0.33.0...azd-ext-microsoft-azd-waza_0.34.0
+[Unreleased]: https://github.com/microsoft/waza/compare/v0.34.0...HEAD
+[0.34.0]: https://github.com/microsoft/waza/compare/v0.33.0...v0.34.0
 [0.33.0]: https://github.com/microsoft/waza/compare/v0.31.0...v0.33.0
 [0.31.0]: https://github.com/microsoft/waza/compare/v0.30.1...v0.31.0
 [0.30.1]: https://github.com/microsoft/waza/compare/v0.30.0...v0.30.1

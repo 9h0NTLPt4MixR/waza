@@ -5,7 +5,7 @@
 BINARY_NAME=waza
 BUILD_DIR=.
 GO_FILES=$(shell find . -name '*.go' -not -path './vendor/*' -not -path './*/node_modules/*')
-GO_PACKAGES=$(shell go list ./... | grep -v '/node_modules/')
+GO_PACKAGES=$(shell go list ./... | grep -v '/node_modules')
 VERSION?=0.1.0
 LDFLAGS=-ldflags "-X main.version=$(VERSION)"
 
