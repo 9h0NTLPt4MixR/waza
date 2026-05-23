@@ -57,7 +57,7 @@
 
 - [ ] `go test ./...`
 - [ ] `make lint` or `golangci-lint run`
-- [ ] Docs site checked, if docs change
+- [ ] Docs site checked, if docs changed
 - [ ] Web/dashboard checks run, if `web/` changes
 - [ ] Other:
 
