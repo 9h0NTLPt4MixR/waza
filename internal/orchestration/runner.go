@@ -1039,8 +1039,10 @@ func (r *EvalRunner) executeRun(ctx context.Context, tc *models.TestCase, runNum
 		})
 	}
 
-	// Execute
-	resp, err := r.engine.Execute(ctx, req)
+	// Execute with the eval/task timeout represented as a context deadline.
+	execCtx, cancelExec := context.WithTimeout(ctx, r.executionTimeout(tc))
+	resp, err := r.engine.Execute(execCtx, req)
+	cancelExec()
 	if err != nil {
 		return models.RunResult{
 			RunNumber:  runNum,
@@ -1161,11 +1163,6 @@ func (r *EvalRunner) buildExecutionRequest(tc *models.TestCase) (*execution.Exec
 	}
 
 	spec := r.cfg.Spec()
-	timeout := spec.Config.TimeoutSec
-	if tc.TimeoutSec != nil {
-		timeout = *tc.TimeoutSec
-	}
-
 	// Use task-level skill paths if specified, otherwise fall back to eval-level
 	skillPaths := spec.Config.FilteredSkillPaths()
 	if len(tc.SkillPaths) > 0 {
@@ -1184,9 +1181,16 @@ func (r *EvalRunner) buildExecutionRequest(tc *models.TestCase) (*execution.Exec
 		TaskDescription: tc.Summary,
 		SkillPaths:      resolvedSkillPaths,
 		NoSkills:        noSkills,
-		Timeout:         time.Duration(timeout) * time.Second,
 		MCPServers:      convertMCPServers(spec.Config.ServerConfigs),
 	}, nil
+}
+
+func (r *EvalRunner) executionTimeout(tc *models.TestCase) time.Duration {
+	timeout := r.cfg.Spec().Config.TimeoutSec
+	if tc.TimeoutSec != nil {
+		timeout = *tc.TimeoutSec
+	}
+	return time.Duration(timeout) * time.Second
 }
 
 func rejectRelativePathPromptWithEmptySandbox(tc *models.TestCase, resources []execution.ResourceFile) error {
@@ -1223,7 +1227,9 @@ func (r *EvalRunner) executeFollowUps(ctx context.Context, tc *models.TestCase, 
 			})
 		}
 
-		followResp, err := r.engine.Execute(ctx, followReq)
+		followCtx, cancelFollow := context.WithTimeout(ctx, r.executionTimeout(tc))
+		followResp, err := r.engine.Execute(followCtx, followReq)
+		cancelFollow()
 		if err != nil {
 			resp.ErrorMsg = fmt.Sprintf("follow-up %d/%d failed: %v", i+1, len(tc.Stimulus.FollowUps), err)
 			break

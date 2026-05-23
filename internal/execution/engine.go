@@ -3,7 +3,6 @@ package execution
 import (
 	"context"
 	"strings"
-	"time"
 
 	copilot "github.com/github/copilot-sdk/go"
 	"github.com/microsoft/waza/internal/copilotevents"
@@ -15,7 +14,8 @@ type AgentEngine interface {
 	// Initialize sets up the engine
 	Initialize(ctx context.Context) error
 
-	// Execute runs a test with the given stimulus
+	// Execute runs a test with the given stimulus. The caller controls
+	// cancellation and deadlines through ctx.
 	Execute(ctx context.Context, req *ExecutionRequest) (*ExecutionResponse, error)
 
 	// Shutdown cleans up resources. It is safe to call multiple times;
@@ -78,8 +78,6 @@ type ExecutionRequest struct {
 	SourceDir  string   // used when looking for workspace items via relative path, like skills.
 	SkillPaths []string // Directories to search for skills
 	NoSkills   bool     // When true, skip all skill loading
-
-	Timeout time.Duration
 
 	// MCPServers configures MCP servers for the session. Keys are server names,
 	// values follow the copilot SDK MCPServerConfig format (type/command/args).

@@ -1,11 +1,14 @@
 package orchestration
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/microsoft/waza/internal/config"
+	"github.com/microsoft/waza/internal/execution"
 	"github.com/microsoft/waza/internal/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -144,7 +147,6 @@ func TestBuildExecutionRequest_BasicFields(t *testing.T) {
 	// Verify basic fields
 	assert.Equal(t, "Hello world", req.Message)
 	assert.Equal(t, "my-skill", req.SkillName)
-	assert.Equal(t, float64(120), req.Timeout.Seconds())
 	assert.Equal(t, "value", req.Context["key"])
 }
 
@@ -204,11 +206,56 @@ func TestBuildExecutionRequest_TimeoutOverride(t *testing.T) {
 	}
 
 	runner := NewEvalRunner(cfg, nil)
-	req, err := runner.buildExecutionRequest(tc)
-	require.NoError(t, err)
+	assert.Equal(t, 300*time.Second, runner.executionTimeout(tc), "test case timeout should override spec timeout")
+}
 
-	// Verify timeout is overridden
-	assert.Equal(t, float64(300), req.Timeout.Seconds(), "test case timeout should override spec timeout")
+func TestExecuteRun_AppliesTimeoutContext(t *testing.T) {
+	spec := &models.EvalSpec{
+		SpecIdentity: models.SpecIdentity{Name: "test-benchmark"},
+		SkillName:    "my-skill",
+		Config: models.Config{
+			EngineType: "mock",
+			ModelID:    "gpt-4",
+			TimeoutSec: 120,
+		},
+	}
+	cfg := config.NewEvalConfig(spec)
+	engine := &deadlineCaptureEngine{}
+	runner := NewEvalRunner(cfg, engine, WithSkipGraders())
+
+	customTimeout := 300
+	tc := &models.TestCase{
+		TestID:      "test-001",
+		DisplayName: "Test Case",
+		Stimulus:    models.TaskStimulus{Message: "Hello world"},
+		TimeoutSec:  &customTimeout,
+	}
+
+	run := runner.executeRun(context.Background(), tc, 1)
+	require.Empty(t, run.ErrorMsg)
+	deadline, ok := engine.deadline, engine.hasDeadline
+	require.True(t, ok, "expected eval timeout to be applied to Execute context")
+	require.WithinDuration(t, time.Now().Add(300*time.Second), deadline, time.Second)
+}
+
+type deadlineCaptureEngine struct {
+	deadline    time.Time
+	hasDeadline bool
+}
+
+func (e *deadlineCaptureEngine) Initialize(context.Context) error { return nil }
+func (e *deadlineCaptureEngine) Shutdown(context.Context) error   { return nil }
+func (e *deadlineCaptureEngine) SessionUsage(string) *models.UsageStats {
+	return nil
+}
+
+func (e *deadlineCaptureEngine) Execute(ctx context.Context, _ *execution.ExecutionRequest) (*execution.ExecutionResponse, error) {
+	e.deadline, e.hasDeadline = ctx.Deadline()
+	return &execution.ExecutionResponse{
+		FinalOutput: "ok",
+		Success:     true,
+		SessionID:   "session-1",
+	}, nil
 }
 
 func TestBuildExecutionRequest_TaskLevelSkillPaths(t *testing.T) {
