@@ -31,6 +31,7 @@ type updateInstaller struct {
 	Name       string
 	ScriptURL  string
 	Candidates []string
+	Requires   []string
 	Args       []string
 	Env        []string
 	Async      bool
@@ -138,6 +139,11 @@ func runUpdateCommand(cmd *cobra.Command, opts updateCommandOptions, yes bool) e
 	if err != nil {
 		return missingInstallerError(installer)
 	}
+	for _, dependency := range installer.Requires {
+		if _, err := opts.LookPath(dependency); err != nil {
+			return missingDependencyError(dependency)
+		}
+	}
 
 	if _, err := fmt.Fprintf(out, "Updating waza with the %s installer...\n", installer.Name); err != nil {
 		return err
@@ -165,6 +171,7 @@ func installerForOS(goos string, opts updateCommandOptions) (updateInstaller, er
 			Name:       "Bash",
 			ScriptURL:  opts.BashInstallerURL,
 			Candidates: []string{"bash"},
+			Requires:   []string{"curl"},
 			Args:       []string{"-c", `set -euo pipefail; curl -fsSL "$1" | bash`, "waza-installer", opts.BashInstallerURL},
 		}, nil
 	case "windows":
@@ -220,4 +227,11 @@ func missingInstallerError(installer updateInstaller) error {
 		return fmt.Errorf("PowerShell is required to run the native Windows waza installer; install PowerShell or download the native Windows binary from %s", latestReleaseURL)
 	}
 	return fmt.Errorf("bash is required to run the waza installer; install bash or download a release binary from %s", latestReleaseURL)
+}
+
+func missingDependencyError(name string) error {
+	if name == "curl" {
+		return fmt.Errorf("curl is required to download the waza installer; install curl or download a release binary from %s", latestReleaseURL)
+	}
+	return fmt.Errorf("%s is required to run the waza installer", name)
 }

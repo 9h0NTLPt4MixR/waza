@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -21,8 +22,15 @@ func TestUpdateCommand_ConfirmedRunsInstaller(t *testing.T) {
 		BashInstallerURL: "https://example.com/install.sh",
 		GOOS:             "linux",
 		LookPath: func(name string) (string, error) {
-			require.Equal(t, "bash", name)
-			return "/usr/bin/bash", nil
+			switch name {
+			case "bash":
+				return "/usr/bin/bash", nil
+			case "curl":
+				return "/usr/bin/curl", nil
+			default:
+				t.Fatalf("unexpected lookup for %s", name)
+				return "", errors.New("unexpected lookup")
+			}
 		},
 		RunCommand: func(ctx context.Context, name string, args []string, env []string, stdin io.Reader, out, errOut io.Writer) error {
 			ran = true
@@ -73,7 +81,7 @@ func TestUpdateCommand_YesFlagSkipsConfirmation(t *testing.T) {
 	cmd := newUpdateCommandWithOptions(&updateCommandOptions{
 		GOOS: "linux",
 		LookPath: func(name string) (string, error) {
-			return "/usr/bin/bash", nil
+			return "/usr/bin/" + name, nil
 		},
 		RunCommand: func(context.Context, string, []string, []string, io.Reader, io.Writer, io.Writer) error {
 			ran = true
@@ -133,8 +141,15 @@ func TestUpdateCommand_DarwinUsesBashInstaller(t *testing.T) {
 		BashInstallerURL: "https://example.com/install.sh",
 		GOOS:             "darwin",
 		LookPath: func(name string) (string, error) {
-			assert.Equal(t, "bash", name)
-			return "/bin/bash", nil
+			switch name {
+			case "bash":
+				return "/bin/bash", nil
+			case "curl":
+				return "/usr/bin/curl", nil
+			default:
+				t.Fatalf("unexpected lookup for %s", name)
+				return "", errors.New("unexpected lookup")
+			}
 		},
 		RunCommand: func(ctx context.Context, name string, args []string, env []string, stdin io.Reader, out, errOut io.Writer) error {
 			ran = true
@@ -148,6 +163,28 @@ func TestUpdateCommand_DarwinUsesBashInstaller(t *testing.T) {
 
 	require.NoError(t, cmd.Execute())
 	assert.True(t, ran)
+}
+
+func TestUpdateCommand_MissingCurlReturnsGuidance(t *testing.T) {
+	cmd := newUpdateCommandWithOptions(&updateCommandOptions{
+		GOOS: "linux",
+		LookPath: func(name string) (string, error) {
+			if name == "bash" {
+				return "/usr/bin/bash", nil
+			}
+			return "", errors.New("not found")
+		},
+		RunCommand: func(context.Context, string, []string, []string, io.Reader, io.Writer, io.Writer) error {
+			t.Fatal("installer should not run when curl is missing")
+			return nil
+		},
+	})
+	cmd.SetArgs([]string{"--yes"})
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "curl is required")
+	assert.Contains(t, err.Error(), latestReleaseURL)
 }
 
 func TestUpdateCommand_WindowsUsesPowerShellInstaller(t *testing.T) {
@@ -177,7 +214,7 @@ func TestUpdateCommand_WindowsUsesPowerShellInstaller(t *testing.T) {
 			assert.Equal(t, "https://example.com/install.ps1", args[5])
 			require.Len(t, env, 2)
 			assert.Contains(t, env[0], "WAZA_UPDATE_PARENT_PID=")
-			assert.Equal(t, "WAZA_INSTALL_DIR=C:/tools", env[1])
+			assert.Equal(t, "WAZA_INSTALL_DIR="+filepath.Dir("C:/tools/waza.exe"), env[1])
 			return nil
 		},
 	})

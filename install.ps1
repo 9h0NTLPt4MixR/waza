@@ -34,9 +34,8 @@ function Get-InstallDirectory {
 }
 
 function Get-LatestReleaseTag {
-    $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases" -Headers @{ 'User-Agent' = 'waza-installer' }
-    $release = $releases | Where-Object { $_.tag_name -like 'v*' } | Select-Object -First 1
-    if (-not $release) {
+    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -Headers @{ 'User-Agent' = 'waza-installer' }
+    if (-not $release -or -not ($release.tag_name -like 'v*')) {
         throw 'Could not determine latest release.'
     }
     return $release.tag_name
