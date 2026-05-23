@@ -63,7 +63,7 @@ func TestUpdateCommand_DeclinedDoesNotRunInstaller(t *testing.T) {
 	cmd.SetErr(&stdout)
 
 	require.NoError(t, cmd.Execute())
-	assert.Contains(t, stdout.String(), "Update cancelled.")
+	assert.Contains(t, stdout.String(), "Update canceled.")
 }
 
 func TestUpdateCommand_YesFlagSkipsConfirmation(t *testing.T) {

@@ -127,7 +127,9 @@ func runUpdateCommand(cmd *cobra.Command, opts updateCommandOptions, yes bool) e
 			return err
 		}
 		if !ok {
-			fmt.Fprintln(out, "Update cancelled.")
+			if _, err := fmt.Fprintln(out, "Update canceled."); err != nil {
+				return err
+			}
 			return nil
 		}
 	}
@@ -137,15 +139,21 @@ func runUpdateCommand(cmd *cobra.Command, opts updateCommandOptions, yes bool) e
 		return missingInstallerError(installer)
 	}
 
-	fmt.Fprintf(out, "Updating waza with the %s installer...\n", installer.Name)
+	if _, err := fmt.Fprintf(out, "Updating waza with the %s installer...\n", installer.Name); err != nil {
+		return err
+	}
 	if err := opts.RunCommand(cmd.Context(), commandPath, installer.Args, installer.Env, cmd.InOrStdin(), out, errOut); err != nil {
 		return fmt.Errorf("running waza installer: %w", err)
 	}
 
 	if installer.Async {
-		fmt.Fprintln(out, "Update started. The installer will finish after this waza process exits.")
+		if _, err := fmt.Fprintln(out, "Update started. The installer will finish after this waza process exits."); err != nil {
+			return err
+		}
 	} else {
-		fmt.Fprintln(out, "Update complete.")
+		if _, err := fmt.Fprintln(out, "Update complete."); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -191,7 +199,9 @@ func lookPathAny(lookPath func(string) (string, error), names []string) (string,
 }
 
 func confirmUpdate(in io.Reader, out io.Writer, installer updateInstaller) (bool, error) {
-	fmt.Fprintf(out, "waza update will download and run the official %s installer:\n  %s\n\nContinue? [y/N]: ", installer.Name, installer.ScriptURL)
+	if _, err := fmt.Fprintf(out, "waza update will download and run the official %s installer:\n  %s\n\nContinue? [y/N]: ", installer.Name, installer.ScriptURL); err != nil {
+		return false, err
+	}
 	answer, err := bufio.NewReader(in).ReadString('\n')
 	if err != nil && !errors.Is(err, io.EOF) {
 		return false, fmt.Errorf("reading confirmation: %w", err)
