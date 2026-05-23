@@ -4,9 +4,9 @@ This guide explains how to run real integration tests using the GitHub Copilot S
 
 ## Prerequisites
 
-1. **Install the Copilot SDK dependency:**
+1. **Install waza:**
    ```bash
-   pip install copilot-sdk
+   curl -fsSL https://raw.githubusercontent.com/microsoft/waza/main/install.sh | bash
    ```
 
 2. **Authenticate with Copilot CLI:**
@@ -51,7 +51,7 @@ You can override the model and runtime options at launch:
 
 ```bash
 # Run with a different model
-waza run eval.yaml --model claude-sonnet-4.6
+waza run eval.yaml --model gpt-4o
 
 # Run with verbose output to see conversation in real-time
 waza run eval.yaml --model claude-sonnet-4.6 -v
@@ -152,11 +152,11 @@ Integration tests require authentication and are typically skipped in CI:
 ```yaml
 # .github/workflows/test.yaml
 - name: Run unit tests
-  run: waza run eval.yaml
+  run: waza run eval.mock.yaml
   
 - name: Run integration tests (manual only)
   if: github.event_name == 'workflow_dispatch'
-  run: waza run eval.yaml --model claude-sonnet-4.6
+  run: waza run eval.yaml
 ```
 
 ### Environment Variables
@@ -171,7 +171,7 @@ Integration tests require authentication and are typically skipped in CI:
 ### "Copilot SDK not installed"
 
 ```bash
-pip install copilot-sdk
+curl -fsSL https://raw.githubusercontent.com/microsoft/waza/main/install.sh | bash
 ```
 
 ### "Authentication failed"
