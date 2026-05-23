@@ -145,3 +145,36 @@ func TestUpdateOutcomeUsage_JSONIncludesPerRunAndSummaryUsage(t *testing.T) {
 	require.Equal(t, float64(20), summaryUsage["input_tokens"])
 	require.Equal(t, float64(43), summaryUsage["output_tokens"])
 }
+
+func TestUpdateOutcomeUsage_UpdatesBaselineOutcome(t *testing.T) {
+	outcome := &models.EvaluationOutcome{
+		TestOutcomes: []models.TestOutcome{
+			{
+				Runs: []models.RunResult{
+					{SessionDigest: models.SessionDigest{SessionID: "primary"}},
+				},
+			},
+		},
+		BaselineOutcome: &models.EvaluationOutcome{
+			TestOutcomes: []models.TestOutcome{
+				{
+					Runs: []models.RunResult{
+						{SessionDigest: models.SessionDigest{SessionID: "baseline"}},
+					},
+				},
+			},
+		},
+	}
+
+	UpdateOutcomeUsage(outcome, &stubUsageEngine{
+		usage: map[string]*models.UsageStats{
+			"primary":  {InputTokens: 7},
+			"baseline": {InputTokens: 11},
+		},
+	})
+
+	require.Equal(t, 7, outcome.TestOutcomes[0].Runs[0].Usage.InputTokens)
+	require.Equal(t, 11, outcome.BaselineOutcome.TestOutcomes[0].Runs[0].Usage.InputTokens)
+	require.Equal(t, 7, outcome.Digest.Usage.InputTokens)
+	require.Equal(t, 11, outcome.BaselineOutcome.Digest.Usage.InputTokens)
+}

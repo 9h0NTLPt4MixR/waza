@@ -27,6 +27,10 @@ func UpdateOutcomeUsage(outcome *models.EvaluationOutcome, engine AgentEngine) {
 		}
 	}
 
+	if outcome.BaselineOutcome != nil && outcome.BaselineOutcome != outcome {
+		UpdateOutcomeUsage(outcome.BaselineOutcome, engine)
+	}
+
 	// Re-aggregate usage across all runs
 	var allUsage []*models.UsageStats
 	for _, to := range outcome.TestOutcomes {
