@@ -167,14 +167,14 @@ See the **[Validators & Graders](../graders/)** guide for all 12 types and examp
 
 ## Mapping OpenAI Evals `modelgraded` YAML
 
-OpenAI Evals `modelgraded` specs usually collapse into Waza's `prompt` grader. The judge prompt carries the label semantics, while Waza handles execution and scoring.
+OpenAI Evals `modelgraded` specs usually collapse into Waza's `prompt` grader. The judge prompt carries the label semantics, while Waza handles execution and scoring; in independent mode the final score can be fractional, and in pairwise mode it reflects the winner selection.
 
 | OpenAI Evals field | Waza equivalent | Notes |
 | ------------------ | --------------- | ----- |
 | `prompt` | `graders[].config.prompt` | Put the judging instructions directly in the prompt |
-| `choice_strings` | prompt text | List the labels in the judge prompt; Waza's prompt grader is binary, so the label choice becomes pass/fail guidance |
+| `choice_strings` | prompt text | List the labels in the judge prompt and tell the judge how to map each label to pass/fail |
 | `choice_scores` | prompt text | Encode the scoring rule in the judge prompt; use `pairwise` mode when the comparison is relative |
-| `input_outputs` | `tasks:` entries | Turn each example into one Waza task with its own `inputs.prompt` and expected checks |
+| `input_outputs` | task files under `tasks/` | Turn each example into one Waza task file with its own `inputs.prompt` and expected checks |
 | `eval_type: cot_classify` | `type: prompt` | Use `mode: independent` for one-shot classification |
 | `battle.yaml` | `type: prompt` + `mode: pairwise` | Closest grader match for head-to-head comparison; `waza compare` is still the better run-level report |
 
@@ -182,7 +182,7 @@ OpenAI Evals `modelgraded` specs usually collapse into Waza's `prompt` grader. T
 
 #### `fact.yaml`
 
-OpenAI's registry uses this pattern for fixed-choice factual classification. In Waza, keep the evaluation as a single prompt grader and turn each input/output row into a task:
+OpenAI's registry uses this pattern for fixed-choice factual classification. In Waza, keep the evaluation as a single prompt grader and put each example in its own task file:
 
 ```yaml
 graders:
@@ -197,13 +197,18 @@ graders:
       continue_session: false
 
 tasks:
-  - id: fact-001
-    name: fact-001
-    inputs:
-      prompt: "Which answer is correct for the fact pattern?"
-    expected:
-      output_contains:
-        - "B"
+  - "tasks/*.yaml"
+```
+
+```yaml
+# tasks/fact-001.yaml
+id: fact-001
+name: fact-001
+inputs:
+  prompt: "Which answer is correct for the fact pattern?"
+expected:
+  output_contains:
+    - "B"
 ```
 
 #### `closedqa.yaml`
@@ -223,13 +228,18 @@ graders:
       model: claude-sonnet-4.5
 
 tasks:
-  - id: closedqa-001
-    name: closedqa-001
-    inputs:
-      prompt: "Answer the question using the provided context."
-    expected:
-      output_contains:
-        - "Y"
+  - "tasks/*.yaml"
+```
+
+```yaml
+# tasks/closedqa-001.yaml
+id: closedqa-001
+name: closedqa-001
+inputs:
+  prompt: "Answer the question using the provided context."
+expected:
+  output_contains:
+    - "Y"
 ```
 
 #### `battle.yaml`
@@ -237,9 +247,7 @@ tasks:
 Battle-style comparisons are the one place where the mapping is not 1:1. The nearest Waza translation is a pairwise prompt grader, but the run-level comparison report is usually better expressed with `waza compare`:
 
 ```yaml
-config:
-  baseline: true
-
+baseline: true
 graders:
   - type: prompt
     name: battle_judge
@@ -247,14 +255,20 @@ graders:
       mode: pairwise
       prompt: |
         Compare the two answers and decide which one is better.
-        Call set_waza_grade_pass if the skill run wins.
-        Call set_waza_grade_fail if the baseline run wins.
+        Call set_pairwise_winner with winner="skill" if the skill run wins.
+        Call set_pairwise_winner with winner="baseline" if the baseline run wins.
+        Use winner="tie" if neither answer is clearly better.
 
 tasks:
-  - id: battle-001
-    name: battle-001
-    inputs:
-      prompt: "Compare these two solutions and pick the better one."
+  - "tasks/*.yaml"
+```
+
+```yaml
+# tasks/battle-001.yaml
+id: battle-001
+name: battle-001
+inputs:
+  prompt: "Compare these two solutions and pick the better one."
 ```
 
 ## Tasks Section
