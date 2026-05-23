@@ -13,21 +13,30 @@ func UpdateOutcomeUsage(outcome *models.EvaluationOutcome, engine AgentEngine) {
 	for i := range outcome.TestOutcomes {
 		for j := range outcome.TestOutcomes[i].Runs {
 			run := &outcome.TestOutcomes[i].Runs[j]
+			usage := run.SessionDigest.Usage
 			if run.SessionDigest.SessionID == "" {
+				run.Usage = usage
 				continue
 			}
 			if usage := engine.SessionUsage(run.SessionDigest.SessionID); usage != nil {
 				run.SessionDigest.Usage = usage
+				run.Usage = usage
+				continue
 			}
+			run.Usage = usage
 		}
+	}
+
+	if outcome.BaselineOutcome != nil && outcome.BaselineOutcome != outcome {
+		UpdateOutcomeUsage(outcome.BaselineOutcome, engine)
 	}
 
 	// Re-aggregate usage across all runs
 	var allUsage []*models.UsageStats
 	for _, to := range outcome.TestOutcomes {
 		for _, run := range to.Runs {
-			if run.SessionDigest.Usage != nil {
-				allUsage = append(allUsage, run.SessionDigest.Usage)
+			if run.Usage != nil {
+				allUsage = append(allUsage, run.Usage)
 			}
 		}
 	}
