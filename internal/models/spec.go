@@ -177,8 +177,8 @@ func (g *GraderConfig) Validate() error {
 		if !ok {
 			return fmt.Errorf("skill_invocation grader %q: expected SkillInvocationGraderParameters, got %T", g.Identifier, g.Parameters)
 		}
-		if len(params.RequiredSkills) == 0 {
-			return fmt.Errorf("skill_invocation grader %q: must have at least one skill in config.required_skills", g.Identifier)
+		if len(params.RequiredSkills) == 0 && len(params.ForbiddenSkills) == 0 {
+			return fmt.Errorf("skill_invocation grader %q: must have at least one skill in config.required_skills or config.forbidden_skills", g.Identifier)
 		}
 
 	case GraderKindToolConstraint:
