@@ -50,7 +50,7 @@ tasks:
 | Field         | Type   | Required | Description                                                                                |
 | ------------- | ------ | -------- | ------------------------------------------------------------------------------------------ |
 | `name`        | string | ✓        | Eval suite name                                                                            |
-| `description` | string | ✓        | What the eval tests                                                                        |
+| `description` | string | ✗        | What the eval tests                                                                        |
 | `skill`       | string | ✓        | Associated skill or custom agent name (`SKILL.md` or `.agent.md`)                       |
 | `version`     | string | ✗        | Version number (e.g., "1.0")                                                               |
 | `inputs`      | object | ✗        | Key-value map of global template variables (see [Template Variables](#template-variables)) |
@@ -58,7 +58,7 @@ tasks:
 | `hooks`       | object | ✗        | Lifecycle hooks that run shell commands at specific points (see [Hooks](#hooks))           |
 | `baseline`    | bool   | ✗        | Mark this spec as a baseline for A/B comparison                                            |
 
-*`skill` is required.
+`skill` is required.
 
 ## Targeting Custom Agents
 
