@@ -33,9 +33,9 @@ func (r *blockingBenchmarkRunner) RunBenchmark(ctx context.Context) (*models.Eva
 	return nil, ctx.Err()
 }
 
-func TestRunCommand_CancelsOnInterrupt(t *testing.T) {
+func TestRunCommand_CancelsOnSIGTERM(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows: Process.Signal(SIGTERM) is not supported")
+		t.Skip("SIGTERM is not supported on Windows")
 	}
 	resetRunGlobals()
 
