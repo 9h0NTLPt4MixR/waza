@@ -129,21 +129,29 @@ func TestUpdateOutcomeUsage_JSONIncludesPerRunAndSummaryUsage(t *testing.T) {
 	data, err := json.Marshal(outcome)
 	require.NoError(t, err)
 
-	var payload map[string]any
+	var payload struct {
+		Tasks []struct {
+			Runs []struct {
+				Usage *models.UsageStats `json:"usage"`
+			} `json:"runs"`
+		} `json:"tasks"`
+		Summary struct {
+			Usage *models.UsageStats `json:"usage"`
+		} `json:"summary"`
+	}
 	require.NoError(t, json.Unmarshal(data, &payload))
 
-	tasks := payload["tasks"].([]any)
-	runs := tasks[0].(map[string]any)["runs"].([]any)
-	run1Usage := runs[0].(map[string]any)["usage"].(map[string]any)
-	run2Usage := runs[1].(map[string]any)["usage"].(map[string]any)
-	summaryUsage := payload["summary"].(map[string]any)["usage"].(map[string]any)
-
-	require.Equal(t, float64(12), run1Usage["input_tokens"])
-	require.Equal(t, float64(34), run1Usage["output_tokens"])
-	require.Equal(t, float64(8), run2Usage["input_tokens"])
-	require.Equal(t, float64(9), run2Usage["output_tokens"])
-	require.Equal(t, float64(20), summaryUsage["input_tokens"])
-	require.Equal(t, float64(43), summaryUsage["output_tokens"])
+	require.Len(t, payload.Tasks, 1)
+	require.Len(t, payload.Tasks[0].Runs, 2)
+	require.NotNil(t, payload.Tasks[0].Runs[0].Usage)
+	require.NotNil(t, payload.Tasks[0].Runs[1].Usage)
+	require.Equal(t, 12, payload.Tasks[0].Runs[0].Usage.InputTokens)
+	require.Equal(t, 34, payload.Tasks[0].Runs[0].Usage.OutputTokens)
+	require.Equal(t, 8, payload.Tasks[0].Runs[1].Usage.InputTokens)
+	require.Equal(t, 9, payload.Tasks[0].Runs[1].Usage.OutputTokens)
+	require.NotNil(t, payload.Summary.Usage)
+	require.Equal(t, 20, payload.Summary.Usage.InputTokens)
+	require.Equal(t, 43, payload.Summary.Usage.OutputTokens)
 }
 
 func TestUpdateOutcomeUsage_UpdatesBaselineOutcome(t *testing.T) {
