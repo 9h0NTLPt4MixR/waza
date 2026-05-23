@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,6 +43,99 @@ type CopilotEngine struct {
 
 	shutdownOnce sync.Once
 	shutdownErr  error
+
+	provider customProviderConfig
+}
+
+type customProviderConfig struct {
+	config *copilot.ProviderConfig
+	host   string
+	err    error
+}
+
+func (p customProviderConfig) enabled() bool {
+	return p.config != nil && p.err == nil
+}
+
+func (p customProviderConfig) sessionConfig() *copilot.ProviderConfig {
+	if p.config == nil {
+		return nil
+	}
+	clone := *p.config
+	return &clone
+}
+
+func (p customProviderConfig) applyToUsage(usage *models.UsageStats) {
+	if usage == nil || !p.enabled() {
+		return
+	}
+	usage.Provider = models.UsageProviderCustom
+	usage.ProviderHost = p.host
+}
+
+// providerFromEnv assembles a BYOK ProviderConfig from environment variables.
+// Returns an empty config when no custom provider base URL is set, leaving sessions on the
+// default Copilot MaaS path. When set, fields are populated only when the
+// matching env var is non-empty; the SDK supplies its own documented defaults
+// for unset fields, so the executor does not hardcode provider-specific
+// values.
+//
+// Each field accepts a short canonical name and a longer COPILOT_PROVIDER_*
+// alias for backward compatibility. The short name wins when both are set.
+//
+//	COPILOT_BASE_URL      or COPILOT_PROVIDER_BASE_URL        - endpoint URL.
+//	COPILOT_PROVIDER      or COPILOT_PROVIDER_TYPE            - provider type.
+//	COPILOT_WIRE_API      or COPILOT_PROVIDER_WIRE_API        - wire format.
+//	COPILOT_API_KEY       or COPILOT_PROVIDER_API_KEY         - API key.
+//	COPILOT_BEARER_TOKEN  or COPILOT_PROVIDER_BEARER_TOKEN    - bearer token.
+func providerFromEnv() customProviderConfig {
+	base := envFirst("COPILOT_BASE_URL", "COPILOT_PROVIDER_BASE_URL")
+	if base == "" {
+		return customProviderConfig{}
+	}
+	host, err := providerHost(base)
+	if err != nil {
+		return customProviderConfig{err: err}
+	}
+	p := &copilot.ProviderConfig{BaseURL: base}
+	if v := envFirst("COPILOT_PROVIDER", "COPILOT_PROVIDER_TYPE"); v != "" {
+		p.Type = v
+	}
+	if v := envFirst("COPILOT_WIRE_API", "COPILOT_PROVIDER_WIRE_API"); v != "" {
+		p.WireApi = v
+	}
+	if v := envFirst("COPILOT_API_KEY", "COPILOT_PROVIDER_API_KEY"); v != "" {
+		p.APIKey = v
+	}
+	if v := envFirst("COPILOT_BEARER_TOKEN", "COPILOT_PROVIDER_BEARER_TOKEN"); v != "" {
+		p.BearerToken = v
+	}
+	return customProviderConfig{
+		config: p,
+		host:   host,
+	}
+}
+
+func providerHost(base string) (string, error) {
+	u, err := url.Parse(base)
+	if err != nil {
+		return "", fmt.Errorf("invalid custom Copilot provider base URL: could not parse URL")
+	}
+	if u.Scheme == "" || u.Host == "" {
+		return "", fmt.Errorf("invalid custom Copilot provider base URL: must include scheme and host")
+	}
+	return u.Host, nil
+}
+
+// envFirst returns the value of the first non-empty environment variable
+// among the provided names, or "" when none are set.
+func envFirst(names ...string) string {
+	for _, name := range names {
+		if v := os.Getenv(name); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // CopilotEngineBuilder builds a CopilotEngine with options
@@ -76,6 +170,7 @@ func NewCopilotEngineBuilder(defaultModelID string, options *CopilotEngineBuilde
 	builder := &CopilotEngineBuilder{
 		engine: &CopilotEngine{
 			defaultModelID: defaultModelID,
+			provider:       providerFromEnv(),
 		},
 	}
 
@@ -97,6 +192,11 @@ func (e *CopilotEngine) Initialize(ctx context.Context) error {
 	var startErr error
 
 	e.startOnce.Do(func() {
+		if e.provider.err != nil {
+			startErr = e.provider.err
+			return
+		}
+
 		// NOTE: we _have_ to use context.Background() - the copilot SDK is using exec.CommandContext() to run
 		// the background process which means we _cannot_ cancel the context passed to this function or else
 		// it'll kill the copilot process.
@@ -104,6 +204,12 @@ func (e *CopilotEngine) Initialize(ctx context.Context) error {
 		startErr = e.client.Start(context.Background())
 
 		if startErr != nil {
+			return
+		}
+
+		// BYOK mode: a custom provider redirects model traffic away from
+		// GitHub Copilot MaaS, so the Copilot auth check is irrelevant.
+		if e.provider.enabled() {
 			return
 		}
 
@@ -209,6 +315,7 @@ func (e *CopilotEngine) Execute(ctx context.Context, req *ExecutionRequest) (*Ex
 			SystemMessage:    systemMessage,
 			Streaming:        req.Streaming,
 			MCPServers:       req.MCPServers,
+			Provider:         e.provider.sessionConfig(),
 		})
 
 		if err != nil {
@@ -227,6 +334,7 @@ func (e *CopilotEngine) Execute(ctx context.Context, req *ExecutionRequest) (*Ex
 			SystemMessage:    systemMessage,
 			Streaming:        req.Streaming,
 			MCPServers:       req.MCPServers,
+			Provider:         e.provider.sessionConfig(),
 		})
 
 		if err != nil {
@@ -327,6 +435,8 @@ func (e *CopilotEngine) Execute(ctx context.Context, req *ExecutionRequest) (*Ex
 	}
 
 	// Build response
+	usage := usageCollector.UsageStats()
+	e.provider.applyToUsage(usage)
 	resp := &ExecutionResponse{
 		FinalOutput:      joinStrings(eventsCollector.OutputParts()),
 		Events:           eventsCollector.SessionEvents(),
@@ -339,7 +449,7 @@ func (e *CopilotEngine) Execute(ctx context.Context, req *ExecutionRequest) (*Ex
 		WorkspaceDir:     workspaceDir,
 		WorkspaceFiles:   workspaceFiles,
 		SessionID:        sessionID,
-		Usage:            usageCollector.UsageStats(),
+		Usage:            usage,
 	}
 
 	return resp, nil
@@ -401,6 +511,9 @@ func (e *CopilotEngine) doShutdown(ctx context.Context) error {
 
 // SessionUsage returns the final usage stats for a session. Call after Shutdown()
 // to get data from session.shutdown events (ModelMetrics, TotalPremiumRequests).
+// When BYOK was active for this session, the returned stats include sanitized
+// provider metadata so downstream consumers can label PremiumRequests accurately
+// (custom endpoint vs Copilot MaaS).
 func (e *CopilotEngine) SessionUsage(sessionID string) *models.UsageStats {
 	e.usageCollectorsMu.RLock()
 	defer e.usageCollectorsMu.RUnlock()
@@ -408,6 +521,7 @@ func (e *CopilotEngine) SessionUsage(sessionID string) *models.UsageStats {
 	var usage *models.UsageStats
 	if u := e.usageCollectors[sessionID]; u != nil {
 		usage = u.UsageStats()
+		e.provider.applyToUsage(usage)
 	}
 	return usage
 }
