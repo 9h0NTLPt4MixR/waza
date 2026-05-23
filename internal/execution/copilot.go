@@ -521,8 +521,7 @@ func joinStrings(parts []string) string {
 }
 
 func allowAllTools(request copilot.PermissionRequest, invocation copilot.PermissionInvocation) (copilot.PermissionRequestResult, error) {
-	// value for 'Kind' came from the permissions_test.go in the Copilot SDK.
-	return copilot.PermissionRequestResult{Kind: "approved"}, nil
+	return copilot.PermissionRequestResult{Kind: copilot.PermissionRequestResultKindApproved}, nil
 }
 
 // skillDefinition holds the content extracted from a SKILL.md file.
