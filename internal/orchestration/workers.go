@@ -42,7 +42,7 @@ func ResolveWorkers(requested, jobs int, phase string, out io.Writer) int {
 
 	if requested > jobs {
 		if out != nil {
-			fmt.Fprintf(out, "workers=%d capped to %d (%s)\n", requested, jobs, phase)
+			_, _ = fmt.Fprintf(out, "workers=%d capped to %d (%s)\n", requested, jobs, phase)
 		}
 		return jobs
 	}
