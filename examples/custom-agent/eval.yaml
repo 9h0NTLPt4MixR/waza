@@ -4,7 +4,7 @@ skill: security-reviewer
 version: "1.0"
 
 config:
-  executor: mock
+  executor: copilot-sdk
   model: claude-sonnet-4
   trials_per_task: 1
   timeout_seconds: 120
@@ -29,7 +29,10 @@ graders:
     name: review_quality
     config:
       prompt: |
-        Score 1-5 how well the response identified security issues:
+        Score the response from 1 to 5 based on how well it identified security issues:
         5 - found all vulnerabilities with accurate severity and clear remediation
         3 - found most issues but missed some details
         1 - missed major vulnerabilities or wrong severity
+
+        If the response scores 4 or 5, call set_waza_grade_pass with a short reason.
+        Otherwise, call set_waza_grade_fail with a short reason.
